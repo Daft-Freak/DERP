@@ -61,7 +61,8 @@ private:
 
     Reg mapReg(Reg r) const
     {
-        // if r == Reg::SP && thread mode && control & 1 << 1 return PSP
+        if(r == Reg::SP && (cpsr & 0x3F) == 0 && control & (1 << 1))
+            return Reg::PSP;
 
         return r;
     }
@@ -115,6 +116,7 @@ private:
     // registers
     uint32_t regs[17]{};
     uint32_t cpsr;
+    uint32_t primask, control;
 
     Reg curSP = Reg::SP;
 

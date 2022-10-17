@@ -20,6 +20,7 @@ void ARMv6MCore::reset()
         reg = 0;
 
     cpsr = Flag_T;
+    primask = control = 0;
     curSP = Reg::MSP;
 
     halted = false;
@@ -1157,7 +1158,7 @@ int ARMv6MCore::doTHUMB32BitInstruction(uint16_t opcode, uint32_t pc)
         {
             auto srcReg = static_cast<Reg>((opcode32 >> 16) & 0xF);
             auto sysm = opcode32 & 0xFF;
-            bool isPrivileged = true; // TODO: handler mode || control & 1
+            bool isPrivileged = (cpsr & 0x3F) != 0 || control & (1 << 0);
 
             if((sysm >> 3) == 0)
             {
