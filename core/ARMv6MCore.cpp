@@ -813,6 +813,35 @@ int ARMv6MCore::doTHUMBMisc(uint16_t opcode, uint32_t pc)
         case 0x5:
             return doTHUMB14PushPop(opcode, pc);
 
+        case 0xA:
+        {
+            auto src = loReg(static_cast<Reg>((opcode >> 3) & 7));
+            auto dstReg = static_cast<Reg>(opcode & 7);
+
+            switch((opcode >> 6) & 3)
+            {
+                case 0x0: // REV
+                    loReg(dstReg) = src >> 24 | src << 24 | ((src << 8) & 0xFF0000) | ((src >> 8) & 0xFF00);
+                    break;
+                case 0x1: // REV16
+                    loReg(dstReg) = ((src >> 8) & 0x00FF00FF) | ((src << 8) & 0xFF00FF00);
+                    break;
+
+                case 0x2: 
+                    printf("Invalid opcode %04X @%08X\n", opcode, pc - 4);
+                    exit(1);
+                    break;
+
+                case 0x3: // REVSH
+                    loReg(dstReg) = ((src >> 8) & 0x00FF) | ((src << 8) & 0xFF00);
+                    if(src & 0x80)
+                        loReg(dstReg) |= 0xFFFF0000; // sign extend
+
+                    break;
+            }
+            return pcSCycles;
+        }
+
         case 0xC: // POP
         case 0xD:
             return doTHUMB14PushPop(opcode, pc);
