@@ -6,6 +6,8 @@
 enum MemoryRegion
 {
     Region_ROM      = 0x00,
+    Region_XIP      = 0x10,
+    Region_XIP_SSI  = 0x18,
     Region_SRAM     = 0x20
 };
 
@@ -41,6 +43,10 @@ T MemoryBus::read(uint32_t addr, int &cycles, bool sequential) const
         case Region_ROM:
             accessCycles(1);
             return doROMRead<T>(addr);
+
+        case Region_XIP_SSI:
+            accessCycles(1);
+            return doXIPSSIRead<T>(addr);
     }
 
     return doOpenRead<T>(addr);
@@ -58,6 +64,11 @@ void MemoryBus::write(uint32_t addr, T data, int &cycles, bool sequential)
     {
         case Region_ROM:
             accessCycles(1);
+            return;
+
+        case Region_XIP_SSI:
+            accessCycles(1);
+            doXIPSSIWrite<T>(addr, data);
             return;
     }
 }
@@ -125,6 +136,19 @@ T MemoryBus::doROMRead(uint32_t addr) const
 
     const size_t size = 0x4000;
     return *reinterpret_cast<const T *>(bootROM + (addr & (size - 1)));
+}
+
+template<class T>
+T MemoryBus::doXIPSSIRead(uint32_t addr) const
+{
+    printf("XIP SSI R %08X\n", addr);
+    return 0;
+}
+
+template<class T>
+void MemoryBus::doXIPSSIWrite(uint32_t addr, T data)
+{
+    printf("XIP SSI W %08X -> %08X\n", data, addr);
 }
 
 template<class T>

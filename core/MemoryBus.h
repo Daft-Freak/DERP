@@ -51,6 +51,11 @@ private:
     T doROMRead(uint32_t addr) const;
 
     template<class T>
+    T doXIPSSIRead(uint32_t addr) const;
+    template<class T>
+    void doXIPSSIWrite(uint32_t addr, T data);
+
+    template<class T>
     T doOpenRead(uint32_t addr) const;
 
     const uint8_t *bootROM = nullptr;
