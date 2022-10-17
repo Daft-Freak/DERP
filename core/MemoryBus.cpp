@@ -5,7 +5,8 @@
 
 enum MemoryRegion
 {
-    Region_ROM      = 0x0,
+    Region_ROM      = 0x00,
+    Region_SRAM     = 0x20
 };
 
 template uint8_t MemoryBus::read(uint32_t addr, int &cycles, bool sequential) const;
@@ -35,7 +36,7 @@ T MemoryBus::read(uint32_t addr, int &cycles, bool sequential) const
         cycles += c;
     };
 
-    switch(addr >> 28)
+    switch(addr >> 24)
     {
         case Region_ROM:
             accessCycles(1);
@@ -77,6 +78,21 @@ uint8_t *MemoryBus::mapAddress(uint32_t addr)
 {
     switch(addr >> 24)
     {
+        case Region_SRAM:
+        {
+            if(addr < 0x20040000)
+            {
+                // striped SRAM0-3
+            }
+            else
+            {
+                // SRAM4-5 (or OOB)
+                if(addr < 0x20042000)
+                    return sram + (addr & 0xFFFFF);
+            }
+
+            break;
+        }
     }
 
     return nullptr;

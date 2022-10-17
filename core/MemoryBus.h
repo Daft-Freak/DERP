@@ -55,5 +55,7 @@ private:
 
     const uint8_t *bootROM = nullptr;
 
+    uint8_t sram[264 * 1024];
+
     uint32_t dummy = 0xBADADD55;
 };
