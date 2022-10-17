@@ -5,10 +5,11 @@
 
 enum MemoryRegion
 {
-    Region_ROM      = 0x00,
-    Region_XIP      = 0x10,
-    Region_XIP_SSI  = 0x18,
-    Region_SRAM     = 0x20
+    Region_ROM       = 0x00,
+    Region_XIP       = 0x10,
+    Region_XIP_SSI   = 0x18,
+    Region_SRAM      = 0x20,
+    Region_AHBPeriph = 0x50,
 };
 
 template uint8_t MemoryBus::read(uint32_t addr, int &cycles, bool sequential) const;
@@ -51,6 +52,11 @@ T MemoryBus::read(uint32_t addr, int &cycles, bool sequential) const
         case Region_SRAM:
             accessCycles(1);
             return doSRAMRead<T>(addr);
+
+        case Region_AHBPeriph:
+            accessCycles(1);
+            return doAHBPeriphRead<T>(addr);
+
     }
 
     return doOpenRead<T>(addr);
@@ -70,15 +76,21 @@ void MemoryBus::write(uint32_t addr, T data, int &cycles, bool sequential)
             accessCycles(1);
             return;
 
-        case Region_SRAM:
-            accessCycles(1);
-            doSRAMWrite(addr, data);
-            return;
-
         case Region_XIP_SSI:
             accessCycles(1);
             doXIPSSIWrite<T>(addr, data);
             return;
+
+        case Region_SRAM:
+            accessCycles(1);
+            doSRAMWrite<T>(addr, data);
+            return;
+
+        case Region_AHBPeriph:
+            accessCycles(1);
+            doAHBPeriphWrite<T>(addr, data);
+            return;
+
     }
 }
 
@@ -187,6 +199,30 @@ void MemoryBus::doSRAMWrite(uint32_t addr, T data)
     }
 
     printf("SRAM W %08X\n", addr);
+}
+
+template<class T>
+T MemoryBus::doAHBPeriphRead(uint32_t addr) const
+{
+    // USB DPRAM
+    if(addr >= 0x50100000 && addr < 0x50101000)
+        return doRead<T>(usbDPRAM, addr);
+
+    printf("AHBP R %08X\n", addr);
+    return doOpenRead<T>(addr);
+}
+
+template<class T>
+void MemoryBus::doAHBPeriphWrite(uint32_t addr, T data)
+{
+    // USB DPRAM
+    if(addr >= 0x50100000 && addr < 0x50101000)
+    {
+        doWrite<T>(usbDPRAM, addr, data);
+        return;
+    }
+
+    printf("AHBP W %08X\n", addr);
 }
 
 template<class T>

@@ -61,11 +61,18 @@ private:
     void doSRAMWrite(uint32_t addr, T data);
 
     template<class T>
+    T doAHBPeriphRead(uint32_t addr) const;
+    template<class T>
+    void doAHBPeriphWrite(uint32_t addr, T data);
+
+    template<class T>
     T doOpenRead(uint32_t addr) const;
 
     const uint8_t *bootROM = nullptr;
 
     uint8_t sram[264 * 1024];
+
+    uint8_t usbDPRAM[4 * 1024];
 
     uint32_t dummy = 0xBADADD55;
 };
