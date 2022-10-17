@@ -781,7 +781,7 @@ int ARMv6MCore::doTHUMB1314(uint16_t opcode, uint32_t pc)
 {
     if(opcode & (1 << 10)) // format 14, push/pop
     {
-        assert(!(opcode & 0xA00)); // CPS/BKPT/hints
+        assert(!(opcode & 0x200)); // CPS/BKPT/hints
         return doTHUMB14PushPop(opcode, pc);
     }
     else // format 13, add offset to SP
