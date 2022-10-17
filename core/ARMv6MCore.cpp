@@ -815,6 +815,17 @@ int ARMv6MCore::doTHUMBMisc(uint16_t opcode, uint32_t pc)
         case 0x5:
             return doTHUMB14PushPop(opcode, pc);
 
+        case 0x6: // CPS
+        {
+            assert((opcode & 0xFFEF) == 0xB662);
+            bool isPrivileged = (cpsr & 0x3F) != 0 || !(control & (1 << 0));
+
+            if(isPrivileged)
+                primask = (opcode & (1 << 4)) ? 1 : 0;
+
+            return pcSCycles;
+        }
+
         case 0xA:
         {
             auto src = loReg(static_cast<Reg>((opcode >> 3) & 7));
