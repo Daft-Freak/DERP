@@ -858,6 +858,31 @@ int ARMv6MCore::doTHUMBMisc(uint16_t opcode, uint32_t pc)
         case 0xC: // POP
         case 0xD:
             return doTHUMB14PushPop(opcode, pc);
+
+        case 0xF: // hints
+        {
+            auto opA = (opcode >> 4) & 0xF;
+            auto opB = opcode & 0xF;
+            if(opB == 0)
+            {
+                switch(opA)
+                {
+                    case 0: // NOP
+                        return pcSCycles;
+
+                    case 1: // YIELD
+                        return pcSCycles;
+
+                    case 2: // WFE
+                        //halted = true; // TODO
+                        return pcSCycles * 2;
+                    
+                    case 3: // WFI
+                        // TODO
+                        return pcSCycles * 2;
+                }
+            }
+        }
     }
 
     printf("Unhandled opcode %04X @%08X\n", opcode, pc - 4);
