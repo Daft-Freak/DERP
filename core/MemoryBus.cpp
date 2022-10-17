@@ -125,6 +125,12 @@ uint8_t *MemoryBus::mapAddress(uint32_t addr)
 
             break;
         }
+
+        case Region_AHBPeriph:
+        {
+            if(addr >= 0x50100000 && addr < 0x50101000)
+                return usbDPRAM + (addr & 0xFFF);
+        }
     }
 
     return nullptr;
