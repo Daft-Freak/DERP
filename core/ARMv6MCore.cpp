@@ -1178,9 +1178,50 @@ int ARMv6MCore::doTHUMB32BitInstruction(uint16_t opcode, uint32_t pc)
             }
             else if((sysm >> 3) == 2)
             {
-                // CONTROL/PRIMASK
+                // PRIMASK/CONTROL
+                if(isPrivileged)
+                {
+                    if(sysm == 0x10)
+                        primask = reg(srcReg) & 1;
+                    else if(sysm == 0x14 && (cpsr & 0x3F) == 0)
+                        control = reg(srcReg) & 3;
+                }
+                return pcSCycles * 2 + 1;
             }
 
+            break;
+        }
+
+        case 0x3E: // MRS
+        case 0x3F:
+        {
+            auto dstReg = static_cast<Reg>((opcode32 >> 8) & 0xF);
+            auto sysm = opcode32 & 0xFF;
+
+            if((sysm >> 3) == 0)
+            {
+                // APSR
+            }
+            else if((sysm >> 3) == 1)
+            {
+                // MSP/PSP
+                if(sysm == 8)
+                    reg(dstReg) = loReg(Reg::MSP);
+                else if(sysm == 9)
+                    reg(dstReg) = loReg(Reg::PSP);
+
+                return pcSCycles * 2 + 1;
+            }
+            else if((sysm >> 3) == 2)
+            {
+                // PRIMASK/CONTROL
+                if(sysm == 0x10)
+                    reg(dstReg) = primask & 1;
+                else if(sysm == 0x14)
+                    reg(dstReg) = control & 3;
+
+                return pcSCycles * 2 + 1;
+            }
             break;
         }
     }
