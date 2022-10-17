@@ -566,6 +566,8 @@ int ARMv6MCore::doTHUMB05HiReg(uint16_t opcode, uint32_t pc)
         }
         case 3: // BX
         {
+            assert(!h1); // BLX
+
             assert(src & 1);
             updateTHUMBPC(src & ~1);
 
@@ -778,9 +780,15 @@ int ARMv6MCore::doTHUMB12LoadAddr(uint16_t opcode, uint32_t pc)
 int ARMv6MCore::doTHUMB1314(uint16_t opcode, uint32_t pc)
 {
     if(opcode & (1 << 10)) // format 14, push/pop
+    {
+        assert(!(opcode & 0xA00)); // CPS/BKPT/hints
         return doTHUMB14PushPop(opcode, pc);
+    }
     else // format 13, add offset to SP
+    {
+        assert(!(opcode & 0xF00)); // extend/rev
         return doTHUMB13SPOffset(opcode, pc);
+    }
 }
 
 int ARMv6MCore::doTHUMB13SPOffset(uint16_t opcode, uint32_t pc)
@@ -1024,6 +1032,8 @@ int ARMv6MCore::doTHUMB1617(uint16_t opcode, uint32_t pc)
 
 int ARMv6MCore::doTHUMB18UncondBranch(uint16_t opcode, uint32_t pc)
 {
+    assert(!(opcode & (1 << 11))); // 32 bit op
+
     uint32_t offset = static_cast<int16_t>(opcode << 5) >> 4; // sign extend and * 2
 
     updateTHUMBPC(pc + offset);
