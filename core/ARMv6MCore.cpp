@@ -175,7 +175,7 @@ int ARMv6MCore::executeTHUMBInstruction()
         case 0xE: // format 18, unconditional branch
             return doTHUMB18UncondBranch(opcode, pc);
         case 0xF: // format 19, long branch with link
-            return doTHUMB19LongBranchLink(opcode, pc);
+            return doTHUMB32BitInstruction(opcode, pc);
     }
 
     __builtin_unreachable();
@@ -1102,29 +1102,54 @@ int ARMv6MCore::doTHUMB18UncondBranch(uint16_t opcode, uint32_t pc)
     return pcSCycles * 2 + pcNCycles; // 2S + 1N
 }
 
-int ARMv6MCore::doTHUMB19LongBranchLink(uint16_t opcode, uint32_t pc)
+int ARMv6MCore::doTHUMB32BitInstruction(uint16_t opcode, uint32_t pc)
 {
-    bool high = opcode & (1 << 11);
-    uint32_t offset = opcode & 0x7FF;
+    // fetch second half
+    uint32_t opcode32 = opcode << 16 | decodeOp;
 
-    if(!high) // first half
-    {
-        offset <<= 12;
-        if(offset & (1 << 22))
-            offset |= 0xFF800000; //sign extend
-        loReg(Reg::LR) = pc + offset;
+    decodeOp = fetchOp;
 
-        return pcSCycles;
-    }
-    else // second half
+    pc += 2;
+    auto thumbPCPtr = reinterpret_cast<const uint16_t *>(pcPtr + pc);
+    assert(mem.verifyPointer(thumbPCPtr, pc));
+    fetchOp = *thumbPCPtr;
+
+    loReg(Reg::PC) = pc;
+
+    // decode
+    assert((opcode32 & 0x18008000) == 0x10008000);
+
+    //auto op1 = (opcode32 >> 20) & 0x7F;
+    auto op2 = (opcode32 >> 12) & 0x7;
+
+    if((op2 & 0b101) == 0b101) // BL
     {
-        auto newPC = loReg(Reg::LR) + (offset << 1);
+        auto imm11 = opcode32 & 0x7FF;
+        auto imm10 = (opcode32 >> 16) & 0x3FF;
+
+        auto s = opcode32 & (1 << 26);
+        auto i1 = (opcode32 >> 13) & 1;
+        auto i2 = (opcode32 >> 11) & 1;
+
+        if(!s)
+        {
+            i1 ^= 1;
+            i2 ^= 1;
+        }
+
+        uint32_t offset = imm11 << 1 | imm10 << 12 | i2 << 22 | i1 << 23;
+
+        if(s)
+            offset |= 0xFF000000; // sign extend
+
         loReg(Reg::LR) = (pc - 2) | 1; // magic switch to thumb bit...
+        updateTHUMBPC((pc - 2) + offset);
 
-        updateTHUMBPC(newPC);
-
-        return pcNCycles + pcSCycles * 2;
+        return pcNCycles + pcSCycles * 3;
     }
+
+    printf("Unhandled opcode %08X @%08X\n",opcode32, pc - 6);
+    exit(1);
 }
 
 void ARMv6MCore::updateTHUMBPC(uint32_t pc)
