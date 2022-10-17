@@ -1158,7 +1158,7 @@ int ARMv6MCore::doTHUMB32BitInstruction(uint16_t opcode, uint32_t pc)
         {
             auto srcReg = static_cast<Reg>((opcode32 >> 16) & 0xF);
             auto sysm = opcode32 & 0xFF;
-            bool isPrivileged = (cpsr & 0x3F) != 0 || control & (1 << 0);
+            bool isPrivileged = (cpsr & 0x3F) != 0 || !(control & (1 << 0));
 
             if((sysm >> 3) == 0)
             {
