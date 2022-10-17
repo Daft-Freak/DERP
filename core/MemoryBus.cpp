@@ -47,6 +47,10 @@ T MemoryBus::read(uint32_t addr, int &cycles, bool sequential) const
         case Region_XIP_SSI:
             accessCycles(1);
             return doXIPSSIRead<T>(addr);
+
+        case Region_SRAM:
+            accessCycles(1);
+            return doSRAMRead<T>(addr);
     }
 
     return doOpenRead<T>(addr);
@@ -64,6 +68,11 @@ void MemoryBus::write(uint32_t addr, T data, int &cycles, bool sequential)
     {
         case Region_ROM:
             accessCycles(1);
+            return;
+
+        case Region_SRAM:
+            accessCycles(1);
+            doSRAMWrite(addr, data);
             return;
 
         case Region_XIP_SSI:
@@ -149,6 +158,35 @@ template<class T>
 void MemoryBus::doXIPSSIWrite(uint32_t addr, T data)
 {
     printf("XIP SSI W %08X -> %08X\n", data, addr);
+}
+
+template<class T>
+T MemoryBus::doSRAMRead(uint32_t addr) const
+{
+    if(addr < 0x20040000)
+    {
+        // striped SRAM0-3
+    }
+    else if (addr < 0x20042000) // SRAM4-5
+        return *reinterpret_cast<const T *>(sram + (addr & 0xFFFFF));
+
+    printf("SRAM R %08X\n", addr);
+    return doOpenRead<T>(addr);
+}
+
+template<class T>
+void MemoryBus::doSRAMWrite(uint32_t addr, T data)
+{
+    if(addr < 0x20040000)
+    {
+        // striped SRAM0-3
+    }
+    else if (addr < 0x20042000) // SRAM4-5
+    {
+        *reinterpret_cast<T *>(sram + (addr & 0xFFFFF)) = data;
+    }
+
+    printf("SRAM W %08X\n", addr);
 }
 
 template<class T>
