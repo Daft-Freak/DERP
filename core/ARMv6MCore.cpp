@@ -564,9 +564,10 @@ int ARMv6MCore::doTHUMB05HiReg(uint16_t opcode, uint32_t pc)
 
             break;
         }
-        case 3: // BX
+        case 3: // BX/BLX
         {
-            assert(!h1); // BLX
+            if(h1) // BLX
+                loReg(Reg::LR) = (pc - 2) | 1; 
 
             assert(src & 1);
             updateTHUMBPC(src & ~1);
