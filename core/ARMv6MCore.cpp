@@ -1203,6 +1203,19 @@ int ARMv6MCore::doTHUMB32BitInstruction(uint16_t opcode, uint32_t pc)
             break;
         }
 
+        case 0x3B: // misc
+        {
+            auto op = (opcode32 >> 4) & 0xF;
+
+            if(op == 0x4 || op == 0x5) // DSB/DMB
+            {
+                //do something?
+                return pcSCycles * 2 + 1;
+            }
+
+            break;
+        }
+
         case 0x3E: // MRS
         case 0x3F:
         {
