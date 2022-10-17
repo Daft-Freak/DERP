@@ -784,6 +784,31 @@ int ARMv6MCore::doTHUMBMisc(uint16_t opcode, uint32_t pc)
         case 0x0: // add/sub imm to SP
             return doTHUMB13SPOffset(opcode, pc);
 
+        case 0x2:
+        {
+            auto src = loReg(static_cast<Reg>((opcode >> 3) & 7));
+            auto dstReg = static_cast<Reg>(opcode & 7);
+
+            switch((opcode >> 6) & 3)
+            {
+                case 0x0: // SXTH
+                    loReg(dstReg) = (src & 0x8000) ? src | 0xFFFF0000 : src & 0xFFFF;
+                    break;
+                case 0x1: // SXTB
+                    loReg(dstReg) = (src & 0x80) ? src | 0xFFFFFF00 : src & 0xFF;
+                    break;
+
+                case 0x2: // UXTH
+                    loReg(dstReg) = src & 0xFFFF;
+                    break;
+                case 0x3: // UXTB
+                    loReg(dstReg) = src & 0xFF;
+                    break;
+            }
+
+            return pcSCycles;
+        }
+
         case 0x4: // PUSH
         case 0x5:
             return doTHUMB14PushPop(opcode, pc);
