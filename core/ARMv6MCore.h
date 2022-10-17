@@ -99,7 +99,7 @@ private:
     int doTHUMB10LoadStoreHalf(uint16_t opcode, uint32_t pc);
     int doTHUMB11SPRelLoadStore(uint16_t opcode, uint32_t pc);
     int doTHUMB12LoadAddr(uint16_t opcode, uint32_t pc);
-    int doTHUMB1314(uint16_t opcode, uint32_t pc);
+    int doTHUMBMisc(uint16_t opcode, uint32_t pc);
     int doTHUMB13SPOffset(uint16_t opcode, uint32_t pc);
     int doTHUMB14PushPop(uint16_t opcode, uint32_t pc);
     int doTHUMB15MultiLoadStore(uint16_t opcode, uint32_t pc);

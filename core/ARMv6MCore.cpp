@@ -167,7 +167,7 @@ int ARMv6MCore::executeTHUMBInstruction()
         case 0xA: // format 12, load address
             return doTHUMB12LoadAddr(opcode, pc);
         case 0xB: // formats 13-14
-            return doTHUMB1314(opcode, pc);
+            return doTHUMBMisc(opcode, pc);
         case 0xC: // format 15, multiple load/store
             return doTHUMB15MultiLoadStore(opcode, pc);
         case 0xD: // formats 16-17
@@ -777,18 +777,24 @@ int ARMv6MCore::doTHUMB12LoadAddr(uint16_t opcode, uint32_t pc)
     return mem.prefetchTiming16(pcSCycles);
 }
 
-int ARMv6MCore::doTHUMB1314(uint16_t opcode, uint32_t pc)
+int ARMv6MCore::doTHUMBMisc(uint16_t opcode, uint32_t pc)
 {
-    if(opcode & (1 << 10)) // format 14, push/pop
+    switch((opcode >> 8) & 0xF)
     {
-        assert(!(opcode & 0x200)); // CPS/BKPT/hints
-        return doTHUMB14PushPop(opcode, pc);
+        case 0x0: // add/sub imm to SP
+            return doTHUMB13SPOffset(opcode, pc);
+
+        case 0x4: // PUSH
+        case 0x5:
+            return doTHUMB14PushPop(opcode, pc);
+
+        case 0xC: // POP
+        case 0xD:
+            return doTHUMB14PushPop(opcode, pc);
     }
-    else // format 13, add offset to SP
-    {
-        assert(!(opcode & 0xF00)); // extend/rev
-        return doTHUMB13SPOffset(opcode, pc);
-    }
+
+    printf("Unhandled opcode %04X @%08X\n", opcode, pc - 4);
+    exit(1);
 }
 
 int ARMv6MCore::doTHUMB13SPOffset(uint16_t opcode, uint32_t pc)
