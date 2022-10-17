@@ -26,10 +26,11 @@ void ARMv6MCore::reset()
 
     cycleCount = 0;
 
-
     mem.reset();
 
-    updateTHUMBPC(0); // TODO
+    int cycles;
+    reg(Reg::SP) = mem.read<uint32_t>(0, cycles, false); // MSP
+    updateTHUMBPC( mem.read<uint32_t>(4, cycles, false) & ~ 1); // Reset vector
 }
 
 void ARMv6MCore::run(int ms)
