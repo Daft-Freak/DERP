@@ -1119,7 +1119,7 @@ int ARMv6MCore::doTHUMB32BitInstruction(uint16_t opcode, uint32_t pc)
     // decode
     assert((opcode32 & 0x18008000) == 0x10008000);
 
-    //auto op1 = (opcode32 >> 20) & 0x7F;
+    auto op1 = (opcode32 >> 20) & 0x7F;
     auto op2 = (opcode32 >> 12) & 0x7;
 
     if((op2 & 0b101) == 0b101) // BL
@@ -1146,6 +1146,42 @@ int ARMv6MCore::doTHUMB32BitInstruction(uint16_t opcode, uint32_t pc)
         updateTHUMBPC((pc - 2) + offset);
 
         return pcNCycles + pcSCycles * 3;
+    }
+
+    assert((op2 & 0b101) == 0);
+
+    switch(op1)
+    {
+        case 0x38: // MSR
+        case 0x39:
+        {
+            auto srcReg = static_cast<Reg>((opcode32 >> 16) & 0xF);
+            auto sysm = opcode32 & 0xFF;
+            bool isPrivileged = true; // TODO: handler mode || control & 1
+
+            if((sysm >> 3) == 0)
+            {
+                // APSR
+            }
+            else if((sysm >> 3) == 1)
+            {
+                // write MSP/PSP
+                if(isPrivileged)
+                {
+                    if(sysm == 8)
+                        loReg(Reg::MSP) = reg(srcReg) & ~3;
+                    else if(sysm == 9)
+                        loReg(Reg::PSP) = reg(srcReg) & ~3;
+                }
+                return pcSCycles * 2 + 1;
+            }
+            else if((sysm >> 3) == 2)
+            {
+                // CONTROL/PRIMASK
+            }
+
+            break;
+        }
     }
 
     printf("Unhandled opcode %08X @%08X\n",opcode32, pc - 6);
