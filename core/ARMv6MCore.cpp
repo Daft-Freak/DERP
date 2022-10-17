@@ -19,9 +19,9 @@ void ARMv6MCore::reset()
     for(auto &reg: regs)
         reg = 0;
 
-    cpsr = Flag_I | Flag_F | 0x13 /*supervisor mode*/;
-    modeChanged();
-    
+    cpsr = Flag_T;
+    curSP = Reg::MSP;
+
     halted = false;
 
     cycleCount = 0;
@@ -864,7 +864,7 @@ int ARMv6MCore::doTHUMB14PushPop(uint16_t opcode, uint32_t pc)
 
         if(pclr)
         {
-            *ptr++ = loReg(curLR);
+            *ptr++ = loReg(Reg::LR);
             cycles += storeCycles;
         }
 
@@ -1041,14 +1041,14 @@ int ARMv6MCore::doTHUMB19LongBranchLink(uint16_t opcode, uint32_t pc)
         offset <<= 12;
         if(offset & (1 << 22))
             offset |= 0xFF800000; //sign extend
-        loReg(curLR) = pc + offset;
+        loReg(Reg::LR) = pc + offset;
 
         return pcSCycles;
     }
     else // second half
     {
-        auto newPC = loReg(curLR) + (offset << 1);
-        loReg(curLR) = (pc - 2) | 1; // magic switch to thumb bit...
+        auto newPC = loReg(Reg::LR) + (offset << 1);
+        loReg(Reg::LR) = (pc - 2) | 1; // magic switch to thumb bit...
 
         updateTHUMBPC(newPC);
 
