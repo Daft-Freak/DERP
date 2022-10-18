@@ -136,6 +136,9 @@ uint8_t *MemoryBus::mapAddress(uint32_t addr)
 {
     switch(addr >> 24)
     {
+        case Region_XIP:
+            return qspiFlash + (addr & 0xFFFFFF);
+
         case Region_SRAM:
         {
             if(addr < 0x20040000)
@@ -293,10 +296,7 @@ void MemoryBus::doXIPSSIWrite(uint32_t addr, T data)
             if(flashCmdOff)
             {
                 if(flashCmdOff >= 4)
-                {
-                    printf("XIP SSI read byte %08X\n", flashAddr + (flashCmdOff - 4));
-                    ssiRx.push(0); // TODO
-                }
+                    ssiRx.push(qspiFlash[flashAddr + (flashCmdOff - 4)]);
                 else
                 {
                     // get read addr

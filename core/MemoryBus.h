@@ -76,6 +76,8 @@ private:
 
     const uint8_t *bootROM = nullptr;
 
+    uint8_t qspiFlash[16 * 1024 * 1024]; // max
+
     uint8_t sram[264 * 1024];
 
     uint8_t usbDPRAM[4 * 1024];
