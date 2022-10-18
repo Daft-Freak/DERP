@@ -218,18 +218,77 @@ void MemoryBus::doSRAMWrite(uint32_t addr, T data)
     printf("SRAM W %08X\n", addr);
 }
 
+static const char *apbPeriphNames[]{
+    "SYSINFO",
+    "SYSCFG",
+    "CLOCKS",
+    "RESETS",
+    "PSM",
+    "IO_BANK0",
+    "IO_QSPI",
+    "PADS_BANK0",
+    "PADS_QSPI",
+    "XOSC",
+    "PLL_SYS",
+    "PLL_USB",
+    "BUSCTRL",
+    "UART0",
+    "UART1",
+    "SPI0",
+    "SPI1",
+    "I2C0",
+    "I2C1",
+    "ADC",
+    "PWM",
+    "TIMER",
+    "WATCHDOG",
+    "RTC",
+    "ROSC",
+    "VREG_AND_CHIP_RESET",
+    "68000",
+    "TBMAN"
+};
+
 template<class T>
 T MemoryBus::doAPBPeriphRead(uint32_t addr) const
 {
-    printf("APBP R %08X\n", addr);
-    
+    auto peripheral = (addr >> 14) & 0x1F;
+
+    switch(peripheral)
+    {
+        case 2: // CLOCKS
+        {
+            // boot hack
+            if(addr == 0x40008044)
+            {
+                printf("R CLK_SYS_SELECTED\n");
+                return 3; // 100% wrong
+            }
+            break;
+        }
+        case 3: // RESETS
+        {
+            // boot hack
+            if(addr == 0x4000C008)
+            {
+                printf("R RESET_DONE\n");
+                return ~0;
+            }
+            break;
+        }
+    }
+
+    printf("APBP R %s %04X\n", apbPeriphNames[peripheral], addr & 0x3FFF);
+
     return doOpenRead<T>(addr);
 }
 
 template<class T>
 void MemoryBus::doAPBPeriphWrite(uint32_t addr, T data)
 {
-    printf("APBP W %08X\n", addr);
+    auto peripheral = (addr >> 14) & 0x1F;
+
+    printf("APBP W %s %04X = %08X\n", apbPeriphNames[peripheral], addr & 0x3FFF, data);
 }
 
 template<class T>
