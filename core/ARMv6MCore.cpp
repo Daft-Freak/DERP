@@ -1155,9 +1155,17 @@ int ARMv6MCore::doTHUMB32BitInstruction(uint16_t opcode, uint32_t pc)
     decodeOp = fetchOp;
 
     pc += 2;
-    auto thumbPCPtr = reinterpret_cast<const uint16_t *>(pcPtr + pc);
-    assert(mem.verifyPointer(thumbPCPtr, pc));
-    fetchOp = *thumbPCPtr;
+    if(pcPtr)
+    {
+        auto thumbPCPtr = reinterpret_cast<const uint16_t *>(pcPtr + pc);
+        assert(mem.verifyPointer(thumbPCPtr, pc));
+        fetchOp = *thumbPCPtr;
+    }
+    else
+    {
+        int tmp;
+        fetchOp = mem.read<uint16_t>(pc, tmp, true);
+    }
 
     loReg(Reg::PC) = pc;
 
