@@ -75,10 +75,8 @@ private:
     uint32_t &loReg(Reg r) {return regs[static_cast<int>(r)];}
 
     uint8_t readMem8(uint32_t addr, int &cycles, bool sequential = false) const;
-    uint32_t readMem16(uint32_t addr, int &cycles, bool sequential = false);
-    uint16_t readMem16Aligned(uint32_t addr, int &cycles, bool sequential = false);
+    uint16_t readMem16(uint32_t addr, int &cycles, bool sequential = false);
     uint32_t readMem32(uint32_t addr, int &cycles, bool sequential = false);
-    uint32_t readMem32Aligned(uint32_t addr, int &cycles, bool sequential = false);
     void writeMem8(uint32_t addr, uint8_t data, int &cycles, bool sequential = false);
     void writeMem16(uint32_t addr, uint16_t data, int &cycles, bool sequential = false);
     void writeMem32(uint32_t addr, uint32_t data, int &cycles, bool sequential = false);

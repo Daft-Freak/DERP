@@ -44,36 +44,15 @@ uint8_t ARMv6MCore::readMem8(uint32_t addr, int &cycles, bool sequential) const
     return mem.read<uint8_t>(addr, cycles, sequential);
 }
 
-uint32_t ARMv6MCore::readMem16(uint32_t addr, int &cycles, bool sequential)
-{
-    if(!(addr & 1))
-        return readMem16Aligned(addr, cycles, sequential);
-
-    // this returns the 32-bit result of an unaligned 16-bit read
-    uint32_t val = mem.read<uint16_t>(addr, cycles, sequential);
-
-    return (val >> 8) | (val << 24);
-}
-
-uint16_t ARMv6MCore::readMem16Aligned(uint32_t addr, int &cycles, bool sequential)
+uint16_t ARMv6MCore::readMem16(uint32_t addr, int &cycles, bool sequential)
 {
     assert((addr & 1) == 0);
 
     return mem.read<uint16_t>(addr, cycles, sequential);
 }
 
+
 uint32_t ARMv6MCore::readMem32(uint32_t addr, int &cycles, bool sequential)
-{
-    if(!(addr & 3))
-        return readMem32Aligned(addr, cycles, sequential);
-
-    uint32_t val = mem.read<uint32_t>(addr, cycles, sequential);
-
-    int shift = (addr & 3) << 3;
-    return (val >> shift) | (val << (32 - shift));
-}
-
-uint32_t ARMv6MCore::readMem32Aligned(uint32_t addr, int &cycles, bool sequential)
 {
     assert((addr & 3) == 0);
 
