@@ -9,6 +9,7 @@ enum MemoryRegion
     Region_XIP       = 0x10,
     Region_XIP_SSI   = 0x18,
     Region_SRAM      = 0x20,
+    Region_APBPeriph = 0x40,
     Region_AHBPeriph = 0x50,
 };
 
@@ -53,6 +54,10 @@ T MemoryBus::read(uint32_t addr, int &cycles, bool sequential) const
             accessCycles(1);
             return doSRAMRead<T>(addr);
 
+        case Region_APBPeriph:
+            accessCycles(4);
+            return doAPBPeriphRead<T>(addr);
+
         case Region_AHBPeriph:
             accessCycles(1);
             return doAHBPeriphRead<T>(addr);
@@ -84,6 +89,11 @@ void MemoryBus::write(uint32_t addr, T data, int &cycles, bool sequential)
         case Region_SRAM:
             accessCycles(1);
             doSRAMWrite<T>(addr, data);
+            return;
+
+        case Region_APBPeriph:
+            accessCycles(5);
+            doAPBPeriphWrite<T>(addr, data);
             return;
 
         case Region_AHBPeriph:
@@ -202,9 +212,24 @@ void MemoryBus::doSRAMWrite(uint32_t addr, T data)
     else if (addr < 0x20042000) // SRAM4-5
     {
         *reinterpret_cast<T *>(sram + (addr & 0xFFFFF)) = data;
+        return;
     }
 
     printf("SRAM W %08X\n", addr);
+}
+
+template<class T>
+T MemoryBus::doAPBPeriphRead(uint32_t addr) const
+{
+    printf("APBP R %08X\n", addr);
+    
+    return doOpenRead<T>(addr);
+}
+
+template<class T>
+void MemoryBus::doAPBPeriphWrite(uint32_t addr, T data)
+{
+    printf("APBP W %08X\n", addr);
 }
 
 template<class T>

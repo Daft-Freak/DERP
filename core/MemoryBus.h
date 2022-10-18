@@ -61,6 +61,11 @@ private:
     void doSRAMWrite(uint32_t addr, T data);
 
     template<class T>
+    T doAPBPeriphRead(uint32_t addr) const;
+    template<class T>
+    void doAPBPeriphWrite(uint32_t addr, T data);
+
+    template<class T>
     T doAHBPeriphRead(uint32_t addr) const;
     template<class T>
     void doAHBPeriphWrite(uint32_t addr, T data);
