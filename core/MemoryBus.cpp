@@ -20,6 +20,14 @@ template void MemoryBus::write(uint32_t addr, uint8_t val, int &cycles, bool seq
 template void MemoryBus::write(uint32_t addr, uint16_t val, int &cycles, bool sequential);
 template void MemoryBus::write(uint32_t addr, uint32_t val, int &cycles, bool sequential);
 
+static inline uint32_t getStripedSRAMAddr(uint32_t addr)
+{
+    int bank = (addr >> 2) & 3;
+    int word = (addr >> 4) & 0xFFFF; // a few too many bits
+
+    return bank * 64 * 1024 + word * 4 + (addr & 3);
+}
+
 MemoryBus::MemoryBus() {}
 
 void MemoryBus::setBootROM(const uint8_t *rom)
@@ -120,10 +128,8 @@ const uint8_t *MemoryBus::mapAddress(uint32_t addr) const
 
         case Region_SRAM:
         {
-            if(addr < 0x20040000)
-            {
-                // striped SRAM0-3
-            }
+            if(addr < 0x20040000) // striped SRAM0-3
+                return nullptr;
             else
             {
                 // SRAM4-5 (or OOB)
@@ -148,10 +154,8 @@ uint8_t *MemoryBus::mapAddress(uint32_t addr)
 
         case Region_SRAM:
         {
-            if(addr < 0x20040000)
-            {
-                // striped SRAM0-3
-            }
+            if(addr < 0x20040000) // striped SRAM0-3
+                return nullptr; // can't map this for more than one word...
             else
             {
                 // SRAM4-5 (or OOB)
@@ -338,10 +342,8 @@ void MemoryBus::doXIPSSIWrite(uint32_t addr, T data)
 template<class T>
 T MemoryBus::doSRAMRead(uint32_t addr) const
 {
-    if(addr < 0x20040000)
-    {
-        // striped SRAM0-3
-    }
+    if(addr < 0x20040000) // striped SRAM0-3
+        return *reinterpret_cast<const T *>(sram + getStripedSRAMAddr(addr));
     else if (addr < 0x20042000) // SRAM4-5
         return *reinterpret_cast<const T *>(sram + (addr & 0xFFFFF));
 
@@ -352,9 +354,10 @@ T MemoryBus::doSRAMRead(uint32_t addr) const
 template<class T>
 void MemoryBus::doSRAMWrite(uint32_t addr, T data)
 {
-    if(addr < 0x20040000)
+    if(addr < 0x20040000) // striped SRAM0-3
     {
-        // striped SRAM0-3
+        *reinterpret_cast<T *>(sram + getStripedSRAMAddr(addr)) = data;
+        return;
     }
     else if (addr < 0x20042000) // SRAM4-5
     {
@@ -362,7 +365,7 @@ void MemoryBus::doSRAMWrite(uint32_t addr, T data)
         return;
     }
 
-    printf("SRAM W %08X\n", addr);
+    printf("SRAM W %08X = %08X\n", addr, data);
 }
 
 static const char *apbPeriphNames[]{
