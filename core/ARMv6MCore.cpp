@@ -867,6 +867,11 @@ int ARMv6MCore::doTHUMBMisc(uint16_t opcode, uint32_t pc)
         case 0xD:
             return doTHUMB14PushPop(opcode, pc);
 
+        case 0xE: // BKPT
+            printf("BKPT @%08X\n", pc - 4);
+            exit(1);
+            return pcSCycles;
+
         case 0xF: // hints
         {
             auto opA = (opcode >> 4) & 0xF;
