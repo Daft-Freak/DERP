@@ -46,6 +46,10 @@ T MemoryBus::read(uint32_t addr, int &cycles, bool sequential) const
             accessCycles(1);
             return doROMRead<T>(addr);
 
+        case Region_XIP:
+            accessCycles(1);
+            return doRead<T>(qspiFlash, addr);
+
         case Region_XIP_SSI:
             accessCycles(1);
             return doXIPSSIRead<T>(addr);
@@ -110,6 +114,9 @@ const uint8_t *MemoryBus::mapAddress(uint32_t addr) const
     {
         case Region_ROM:
             return bootROM ? bootROM + (addr & 0x3FFF) : nullptr;
+
+        case Region_XIP:
+            return qspiFlash + (addr & 0xFFFFFF);
 
         case Region_SRAM:
         {
@@ -270,6 +277,9 @@ T MemoryBus::doXIPSSIRead(uint32_t addr) const
             return 0;
         case 9: // RXFLR
             return ssiRx.size();
+
+        case 10: // SR
+            return 1 << 2; // tx empty
 
         case 24: // DR0
         {
