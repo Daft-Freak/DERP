@@ -11,7 +11,7 @@
 
 // FIXME: this still thinks it's an ARMv4T
 
-ARMv6MCore::ARMv6MCore() : mem()
+ARMv6MCore::ARMv6MCore(MemoryBus &mem) : mem(mem)
 {}
 
 void ARMv6MCore::reset()

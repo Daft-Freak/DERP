@@ -6,7 +6,7 @@
 class ARMv6MCore final
 {
 public:
-    ARMv6MCore();
+    ARMv6MCore(MemoryBus &mem);
 
     void reset();
 
@@ -134,5 +134,5 @@ private:
 
     uint32_t nextUpdateCycle = 0; // next cycle where something needs updated
 
-    MemoryBus mem;
+    MemoryBus &mem;
 };

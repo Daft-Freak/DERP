@@ -7,7 +7,8 @@
 
 static bool quit = false;
 
-static ARMv6MCore cpu;
+static MemoryBus mem;
+static ARMv6MCore cpu(mem);
 
 static uint8_t bootROM[0x4000];
 
