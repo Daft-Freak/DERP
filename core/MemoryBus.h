@@ -1,6 +1,7 @@
 #pragma once
 #include <cassert>
 #include <cstdint>
+#include <queue>
 
 class MemoryBus
 {
@@ -80,4 +81,13 @@ private:
     uint8_t usbDPRAM[4 * 1024];
 
     uint32_t dummy = 0xBADADD55;
+
+    // temp peripherals stuff
+    uint32_t ioQSPICtrl[6]{0};
+
+    mutable std::queue<uint32_t> ssiRx; //!
+
+    uint8_t flashCmd;
+    uint32_t flashAddr;
+    int flashCmdOff = 0;
 };

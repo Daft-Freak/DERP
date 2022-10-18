@@ -175,17 +175,138 @@ T MemoryBus::doROMRead(uint32_t addr) const
     return *reinterpret_cast<const T *>(bootROM + (addr & (size - 1)));
 }
 
+static const char *ssiRegNames[]
+{
+    "CTRLR0",
+    "CTRLR1",
+    "SSIENR",
+    "MWCR",
+    "SER",
+    "BAUDR",
+    "TXFTLR",
+    "RXFTLR",
+    "TXFLR",
+    "RXFLR",
+    "SR",
+    "IMR",
+    "ISR",
+    "RISR",
+    "TXOICR",
+    "RXOICR",
+    "RXUICR",
+    "MSTICR",
+    "ICR",
+    "DMACR",
+    "DMATDLR",
+    "DMARDLR",
+    "IDR",
+    "SSI_VERSION_ID",
+    "DR0",
+    "DR1",
+    "DR2",
+    "DR3",
+    "DR4",
+    "DR5",
+    "DR6",
+    "DR7",
+    "DR8",
+    "DR9",
+    "DR10",
+    "DR11",
+    "DR12",
+    "DR13",
+    "DR14",
+    "DR15",
+    "DR16",
+    "DR17",
+    "DR18",
+    "DR19",
+    "DR20",
+    "DR21",
+    "DR22",
+    "DR23",
+    "DR24",
+    "DR25",
+    "DR26",
+    "DR27",
+    "DR28",
+    "DR29",
+    "DR30",
+    "DR31",
+    "DR32",
+    "DR33",
+    "DR34",
+    "DR35",
+    "RX_SAMPLE_DLY",
+    "SPI_CTRLR0",
+    "TXD_DRIVE_EDGE",
+};
+
 template<class T>
 T MemoryBus::doXIPSSIRead(uint32_t addr) const
 {
-    printf("XIP SSI R %08X\n", addr);
+    switch((addr & 0xFF) / 4)
+    {
+        case 8: // TXFLR
+            return 0;
+        case 9: // RXFLR
+            return ssiRx.size();
+
+        case 24: // DR0
+        {
+            uint32_t v = 0;
+            if(!ssiRx.empty())
+            {
+                v = ssiRx.back();
+                ssiRx.pop();
+            }
+            return v;
+        }
+    }
+    printf("XIP SSI R %s (%08X)\n", ssiRegNames[(addr & 0xFF) / 4], addr);
     return 0;
 }
 
 template<class T>
 void MemoryBus::doXIPSSIWrite(uint32_t addr, T data)
 {
-    printf("XIP SSI W %08X -> %08X\n", data, addr);
+    switch((addr & 0xFF) / 4)
+    {
+        case 24: // DR0
+        {
+            if(flashCmdOff)
+            {
+                if(flashCmdOff >= 4)
+                {
+                    printf("XIP SSI read byte %08X\n", flashAddr + (flashCmdOff - 4));
+                    ssiRx.push(0); // TODO
+                }
+                else
+                {
+                    // get read addr
+                    flashAddr |= data << (24 - (flashCmdOff * 8));
+                    ssiRx.push(0);
+                }
+                flashCmdOff++;
+            }
+            else
+            {
+                flashCmd = data;
+                if(flashCmd == 3) // read
+                {
+                    flashAddr = 0;
+                    flashCmdOff++;
+                }
+                else
+                    printf("XIP SSI write %08X\n", data);
+
+                ssiRx.push(0); //
+            }
+
+            return;
+        }
+    }
+    printf("XIP SSI W %s (%08X) = %08X\n", ssiRegNames[(addr & 0xFF) / 4], addr, data);
 }
 
 template<class T>
@@ -253,6 +374,7 @@ template<class T>
 T MemoryBus::doAPBPeriphRead(uint32_t addr) const
 {
     auto peripheral = (addr >> 14) & 0x1F;
+    auto periphAddr = addr & 0x3FFF;
 
     switch(peripheral)
     {
@@ -276,6 +398,19 @@ T MemoryBus::doAPBPeriphRead(uint32_t addr) const
             }
             break;
         }
+
+        case 6: // IO_QSPI
+        {
+            if(periphAddr < 0x30)
+            {
+                int io = periphAddr / 8;
+                if(periphAddr & 4)
+                    return ioQSPICtrl[io];
+                else // STATUS
+                    return 0; // TODO
+            }
+            break;
+        }
     }
 
     printf("APBP R %s %04X\n", apbPeriphNames[peripheral], addr & 0x3FFF);
@@ -287,6 +422,27 @@ template<class T>
 void MemoryBus::doAPBPeriphWrite(uint32_t addr, T data)
 {
     auto peripheral = (addr >> 14) & 0x1F;
+    auto periphAddr = addr & 0x3FFF;
+
+    switch(peripheral)
+    {
+        case 6: // IO_QSPI
+        {
+            if(periphAddr < 0x30)
+            {
+                int io = periphAddr / 8;
+                if(periphAddr & 4) // CTRL
+                {
+                    if(io == 1 && ((ioQSPICtrl[io] >> 8) & 3) != 2 && ((data >> 8) & 3) == 2) // SS forced high -> low
+                        flashCmdOff = 0;
+
+                    ioQSPICtrl[io] = data;
+                    return;
+                }
+            }
+            break;
+        }
+    }
 
     printf("APBP W %s %04X = %08X\n", apbPeriphNames[peripheral], addr & 0x3FFF, data);
 }
@@ -312,7 +468,7 @@ void MemoryBus::doAHBPeriphWrite(uint32_t addr, T data)
         return;
     }
 
-    printf("AHBP W %08X\n", addr);
+    printf("AHBP W %08X = %08X\n", addr, data);
 }
 
 template<class T>
