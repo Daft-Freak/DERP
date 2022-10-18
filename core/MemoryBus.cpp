@@ -111,6 +111,22 @@ const uint8_t *MemoryBus::mapAddress(uint32_t addr) const
         case Region_ROM:
             return bootROM ? bootROM + (addr & 0x3FFF) : nullptr;
 
+        case Region_SRAM:
+        {
+            if(addr < 0x20040000)
+            {
+                // striped SRAM0-3
+            }
+            else
+            {
+                // SRAM4-5 (or OOB)
+                if(addr < 0x20042000)
+                    return sram + (addr & 0xFFFFF);
+            }
+
+            break;
+        }
+
     }
 
     return reinterpret_cast<const uint8_t *>(&dummy);
