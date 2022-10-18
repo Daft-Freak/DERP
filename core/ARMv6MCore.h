@@ -12,6 +12,9 @@ public:
 
     void run(int ms);
 
+    uint32_t readReg(uint32_t addr);
+    void writeReg(uint32_t addr, uint32_t data);
+
     MemoryBus &getMem() {return mem;}
 
     uint32_t getCycleCount() const {return cycleCount;}

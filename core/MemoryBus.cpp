@@ -82,7 +82,7 @@ T MemoryBus::read(ARMv6MCore &cpu, uint32_t addr, int &cycles, bool sequential) 
 
         case Region_CPUInternal:
             accessCycles(1);
-            return doCPUInternalRead<T>(addr);
+            return doCPUInternalRead<T>(cpu, addr);
     }
 
     return doOpenRead<T>(addr);
@@ -129,7 +129,7 @@ void MemoryBus::write(ARMv6MCore &cpu, uint32_t addr, T data, int &cycles, bool 
 
         case Region_CPUInternal:
             accessCycles(1);
-            doCPUInternalWrite<T>(addr, data);
+            doCPUInternalWrite<T>(cpu, addr, data);
             return;
     }
 }
@@ -590,16 +590,15 @@ void MemoryBus::doIOPORTWrite(uint32_t addr, T data)
 }
 
 template<class T>
-T MemoryBus::doCPUInternalRead(uint32_t addr) const
+T MemoryBus::doCPUInternalRead(ARMv6MCore &cpu, uint32_t addr) const
 {
-    printf("CPUI R %08X\n", addr);
-    return doOpenRead<T>(addr);
+    return cpu.readReg(addr);
 }
 
 template<class T>
-void MemoryBus::doCPUInternalWrite(uint32_t addr, T data)
+void MemoryBus::doCPUInternalWrite(ARMv6MCore &cpu, uint32_t addr, T data)
 {
-    printf("CPUI W %08X = %08X\n", addr, data);
+    cpu.writeReg(addr, data);
 }
 
 template<class T>

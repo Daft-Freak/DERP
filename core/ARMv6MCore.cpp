@@ -39,6 +39,17 @@ void ARMv6MCore::run(int ms)
     runCycles((clockSpeed * ms) / 1000);
 }
 
+uint32_t ARMv6MCore::readReg(uint32_t addr)
+{
+    printf("CPUI R %08X\n", addr);
+    return 0;
+}
+
+void ARMv6MCore::writeReg(uint32_t addr, uint32_t data)
+{
+    printf("CPUI W %08X = %08X\n", addr, data);
+}
+
 uint8_t ARMv6MCore::readMem8(uint32_t addr, int &cycles, bool sequential)
 {
     return mem.read<uint8_t>(*this, addr, cycles, sequential);

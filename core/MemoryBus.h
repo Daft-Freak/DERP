@@ -79,9 +79,9 @@ private:
     void doIOPORTWrite(uint32_t addr, T data);
 
     template<class T>
-    T doCPUInternalRead(uint32_t addr) const;
+    T doCPUInternalRead(ARMv6MCore &cpu, uint32_t addr) const;
     template<class T>
-    void doCPUInternalWrite(uint32_t addr, T data);
+    void doCPUInternalWrite(ARMv6MCore &cpu, uint32_t addr, T data);
 
     template<class T>
     T doOpenRead(uint32_t addr) const;
