@@ -410,10 +410,15 @@ T MemoryBus::doAPBPeriphRead(uint32_t addr) const
         case 2: // CLOCKS
         {
             // boot hack
-            if(addr == 0x40008044)
+            if(periphAddr == 0x38 || periphAddr == 0x44)
             {
-                printf("R CLK_SYS_SELECTED\n");
-                return 3; // 100% wrong
+                printf("R CLK_%s_SELECTED\n", periphAddr == 0x38 ? "REF" : "SYS");
+
+                // will eventually return the right one
+                static int i = 0;
+                int ret = 1 << i;
+                i = (i + 1) % 3;
+                return ret;
             }
             break;
         }
