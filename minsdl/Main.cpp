@@ -11,7 +11,23 @@ static ARMv6MCore cpu;
 
 static uint8_t bootROM[0x4000];
 
-static std::ifstream romFile;
+static std::ifstream uf2File;
+
+static const uint32_t uf2MagicStart0 = 0x0A324655, uf2MagicStart1 = 0x9E5D5157, uf2MagicEnd = 0x0AB16F30;
+
+struct UF2Block
+{
+    uint32_t magicStart[2];
+    uint32_t flags;
+    uint32_t addr;
+    uint32_t payloadSize;
+    uint32_t blockNo;
+    uint32_t numBlocks;
+    uint32_t familyIdSize;
+    uint8_t payload[476];
+    uint32_t magicEnd;
+};
+static_assert(sizeof(UF2Block) == 512);
 
 static void pollEvents()
 {
@@ -25,6 +41,29 @@ static void pollEvents()
                 break;
         }
     }
+}
+
+static bool parseUF2(std::ifstream &file)
+{
+    while(!file.eof())
+    {
+        UF2Block block;
+        file.read(reinterpret_cast<char *>(&block), sizeof(block));
+
+        if(block.magicStart[0] != uf2MagicStart0 || block.magicStart[1] != uf2MagicStart1 || block.magicEnd != uf2MagicEnd)
+        {
+            std::cerr << "Bad UF2 block magic!\n";
+            return false;
+        }
+
+        auto ptr = cpu.getMem().mapAddress(block.addr);
+        if(ptr)
+            memcpy(ptr, block.payload, block.payloadSize);
+        else
+            std::cerr << "Can't write UF2 payload to " << std::hex << block.addr << std::dec << "!\n";
+    }
+
+    return true;
 }
 
 int main(int argc, char *argv[])
@@ -63,11 +102,11 @@ int main(int argc, char *argv[])
 
     if(!romFilename.empty())
     {
-        romFile.open(romFilename);
+        uf2File.open(romFilename);
 
-        if(!romFile)
+        if(!uf2File || !parseUF2(uf2File))
         {
-            std::cerr << "Failed to open ROM \"" << romFilename << "\"\n";
+            std::cerr << "Failed to open UF2 \"" << romFilename << "\"\n";
             return 1;
         }
     }
