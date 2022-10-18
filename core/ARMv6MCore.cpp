@@ -140,9 +140,17 @@ int ARMv6MCore::executeTHUMBInstruction()
     decodeOp = fetchOp;
 
     pc += 2;
-    auto thumbPCPtr = reinterpret_cast<const uint16_t *>(pcPtr + pc);
-    assert(mem.verifyPointer(thumbPCPtr, pc));
-    fetchOp = *thumbPCPtr;
+    if(pcPtr)
+    {
+        auto thumbPCPtr = reinterpret_cast<const uint16_t *>(pcPtr + pc);
+        assert(mem.verifyPointer(thumbPCPtr, pc));
+        fetchOp = *thumbPCPtr;
+    }
+    else
+    {
+        int tmp;
+        fetchOp = mem.read<uint16_t>(pc, tmp, true);
+    }
 
     switch(opcode >> 12)
     {
@@ -1293,15 +1301,27 @@ void ARMv6MCore::updateTHUMBPC(uint32_t pc)
     }
     else
     {
-        pcPtr = std::as_const(mem).mapAddress(pc) - pc; // force const mapAddress
+        pcPtr = std::as_const(mem).mapAddress(pc); // force const mapAddress
+        if(pcPtr)
+            pcPtr -= pc;
         pcSCycles = mem.getAccessCycles(pc, 2, true);
         pcNCycles = mem.getAccessCycles(pc, 2, false);
     }
 
     // refill the pipeline
-    auto thumbPCPtr = reinterpret_cast<const uint16_t *>(pcPtr + pc);
-    decodeOp = *thumbPCPtr++;
-    fetchOp = *thumbPCPtr;
+    if(pcPtr)
+    {
+        auto thumbPCPtr = reinterpret_cast<const uint16_t *>(pcPtr + pc);
+        decodeOp = *thumbPCPtr++;
+        fetchOp = *thumbPCPtr;
+    }
+    else
+    {
+        // TODO: either fix the optimisation or remove it, this is messy
+        int tmp;
+        decodeOp = mem.read<uint16_t>(pc, tmp, true);
+        fetchOp = mem.read<uint16_t>(pc + 2, tmp, true);
+    }
 
     loReg(Reg::PC) = pc + 2; // pointing at last fetch
 }
