@@ -15,12 +15,12 @@ enum MemoryRegion
     Region_CPUInternal = 0xE0,
 };
 
-template uint8_t MemoryBus::read(uint32_t addr, int &cycles, bool sequential) const;
-template uint16_t MemoryBus::read(uint32_t addr, int &cycles, bool sequential) const;
-template uint32_t MemoryBus::read(uint32_t addr, int &cycles, bool sequential) const;
-template void MemoryBus::write(uint32_t addr, uint8_t val, int &cycles, bool sequential);
-template void MemoryBus::write(uint32_t addr, uint16_t val, int &cycles, bool sequential);
-template void MemoryBus::write(uint32_t addr, uint32_t val, int &cycles, bool sequential);
+template uint8_t MemoryBus::read(ARMv6MCore &cpu, uint32_t addr, int &cycles, bool sequential) const;
+template uint16_t MemoryBus::read(ARMv6MCore &cpu, uint32_t addr, int &cycles, bool sequential) const;
+template uint32_t MemoryBus::read(ARMv6MCore &cpu, uint32_t addr, int &cycles, bool sequential) const;
+template void MemoryBus::write(ARMv6MCore &cpu, uint32_t addr, uint8_t val, int &cycles, bool sequential);
+template void MemoryBus::write(ARMv6MCore &cpu, uint32_t addr, uint16_t val, int &cycles, bool sequential);
+template void MemoryBus::write(ARMv6MCore &cpu, uint32_t addr, uint32_t val, int &cycles, bool sequential);
 
 static inline uint32_t getStripedSRAMAddr(uint32_t addr)
 {
@@ -43,7 +43,7 @@ void MemoryBus::reset()
 }
 
 template<class T>
-T MemoryBus::read(uint32_t addr, int &cycles, bool sequential) const
+T MemoryBus::read(ARMv6MCore &cpu, uint32_t addr, int &cycles, bool sequential) const
 {
     auto accessCycles = [&cycles, this](int c)
     {
@@ -89,7 +89,7 @@ T MemoryBus::read(uint32_t addr, int &cycles, bool sequential) const
 }
 
 template<class T>
-void MemoryBus::write(uint32_t addr, T data, int &cycles, bool sequential)
+void MemoryBus::write(ARMv6MCore &cpu, uint32_t addr, T data, int &cycles, bool sequential)
 {
     auto accessCycles = [&cycles, this](int c)
     {

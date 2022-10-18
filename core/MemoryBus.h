@@ -3,6 +3,8 @@
 #include <cstdint>
 #include <queue>
 
+class ARMv6MCore;
+
 class MemoryBus
 {
 public:
@@ -13,9 +15,9 @@ public:
     void reset();
 
     template<class T>
-    T read(uint32_t addr, int &cycles, bool sequential) const;
+    T read(ARMv6MCore &cpu, uint32_t addr, int &cycles, bool sequential) const;
     template<class T>
-    void write(uint32_t addr, T data, int &cycles, bool sequential);
+    void write(ARMv6MCore &cpu, uint32_t addr, T data, int &cycles, bool sequential);
 
     const uint8_t *mapAddress(uint32_t addr) const;
     uint8_t *mapAddress(uint32_t addr);
@@ -35,10 +37,10 @@ public:
     // verify that pointer returns the same as a regular read to the address
     // without affecting prefetch (used for asserts)
     template<class T>
-    bool verifyPointer(const T *ptr, uint32_t addr)
+    bool verifyPointer(ARMv6MCore &cpu, const T *ptr, uint32_t addr)
     {
         int tmp;
-        bool ret = read<T>(addr, tmp, false) == *ptr;
+        bool ret = read<T>(cpu, addr, tmp, false) == *ptr;
         return ret;
     }
 

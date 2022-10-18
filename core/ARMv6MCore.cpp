@@ -30,8 +30,8 @@ void ARMv6MCore::reset()
     mem.reset();
 
     int cycles;
-    reg(Reg::SP) = mem.read<uint32_t>(0, cycles, false); // MSP
-    updateTHUMBPC( mem.read<uint32_t>(4, cycles, false) & ~ 1); // Reset vector
+    reg(Reg::SP) = mem.read<uint32_t>(*this, 0, cycles, false); // MSP
+    updateTHUMBPC( mem.read<uint32_t>(*this, 4, cycles, false) & ~ 1); // Reset vector
 }
 
 void ARMv6MCore::run(int ms)
@@ -39,16 +39,16 @@ void ARMv6MCore::run(int ms)
     runCycles((clockSpeed * ms) / 1000);
 }
 
-uint8_t ARMv6MCore::readMem8(uint32_t addr, int &cycles, bool sequential) const
+uint8_t ARMv6MCore::readMem8(uint32_t addr, int &cycles, bool sequential)
 {
-    return mem.read<uint8_t>(addr, cycles, sequential);
+    return mem.read<uint8_t>(*this, addr, cycles, sequential);
 }
 
 uint16_t ARMv6MCore::readMem16(uint32_t addr, int &cycles, bool sequential)
 {
     assert((addr & 1) == 0);
 
-    return mem.read<uint16_t>(addr, cycles, sequential);
+    return mem.read<uint16_t>(*this, addr, cycles, sequential);
 }
 
 
@@ -56,22 +56,22 @@ uint32_t ARMv6MCore::readMem32(uint32_t addr, int &cycles, bool sequential)
 {
     assert((addr & 3) == 0);
 
-    return mem.read<uint32_t>(addr, cycles, sequential);
+    return mem.read<uint32_t>(*this, addr, cycles, sequential);
 }
 
 void ARMv6MCore::writeMem8(uint32_t addr, uint8_t data, int &cycles, bool sequential)
 {
-    mem.write<uint8_t>(addr, data, cycles, sequential);
+    mem.write<uint8_t>(*this, addr, data, cycles, sequential);
 }
 
 void ARMv6MCore::writeMem16(uint32_t addr, uint16_t data, int &cycles, bool sequential)
 {
-    mem.write<uint16_t>(addr, data, cycles, sequential);
+    mem.write<uint16_t>(*this, addr, data, cycles, sequential);
 }
 
 void ARMv6MCore::writeMem32(uint32_t addr, uint32_t data, int &cycles, bool sequential)
 {
-    mem.write<uint32_t>(addr, data, cycles, sequential);
+    mem.write<uint32_t>(*this, addr, data, cycles, sequential);
 }
 
 int ARMv6MCore::runCycles(int cycles)
@@ -122,13 +122,13 @@ int ARMv6MCore::executeTHUMBInstruction()
     if(pcPtr)
     {
         auto thumbPCPtr = reinterpret_cast<const uint16_t *>(pcPtr + pc);
-        assert(mem.verifyPointer(thumbPCPtr, pc));
+        assert(mem.verifyPointer(*this, thumbPCPtr, pc));
         fetchOp = *thumbPCPtr;
     }
     else
     {
         int tmp;
-        fetchOp = mem.read<uint16_t>(pc, tmp, true);
+        fetchOp = mem.read<uint16_t>(*this, pc, tmp, true);
     }
 
     switch(opcode >> 12)
@@ -1146,13 +1146,13 @@ int ARMv6MCore::doTHUMB32BitInstruction(uint16_t opcode, uint32_t pc)
     if(pcPtr)
     {
         auto thumbPCPtr = reinterpret_cast<const uint16_t *>(pcPtr + pc);
-        assert(mem.verifyPointer(thumbPCPtr, pc));
+        assert(mem.verifyPointer(*this, thumbPCPtr, pc));
         fetchOp = *thumbPCPtr;
     }
     else
     {
         int tmp;
-        fetchOp = mem.read<uint16_t>(pc, tmp, true);
+        fetchOp = mem.read<uint16_t>(*this, pc, tmp, true);
     }
 
     loReg(Reg::PC) = pc;
@@ -1293,7 +1293,7 @@ void ARMv6MCore::updateTHUMBPC(uint32_t pc)
     {
         // memory region didn't change, skip recaclculating ptr/cycles
         [[maybe_unused]] auto thumbPCPtr = reinterpret_cast<const uint16_t *>(pcPtr + pc);
-        assert(mem.verifyPointer(thumbPCPtr, pc));
+        assert(mem.verifyPointer(*this, thumbPCPtr, pc));
     }
     else
     {
@@ -1315,8 +1315,8 @@ void ARMv6MCore::updateTHUMBPC(uint32_t pc)
     {
         // TODO: either fix the optimisation or remove it, this is messy
         int tmp;
-        decodeOp = mem.read<uint16_t>(pc, tmp, true);
-        fetchOp = mem.read<uint16_t>(pc + 2, tmp, true);
+        decodeOp = mem.read<uint16_t>(*this, pc, tmp, true);
+        fetchOp = mem.read<uint16_t>(*this, pc + 2, tmp, true);
     }
 
     loReg(Reg::PC) = pc + 2; // pointing at last fetch
