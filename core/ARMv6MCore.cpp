@@ -888,6 +888,10 @@ int ARMv6MCore::doTHUMBMisc(uint16_t opcode, uint32_t pc)
                     case 3: // WFI
                         // TODO
                         return pcSCycles * 2;
+
+                    case 4: // SEV
+                        // TODO
+                        return pcSCycles;
                 }
             }
         }
