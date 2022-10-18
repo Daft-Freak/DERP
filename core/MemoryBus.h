@@ -72,6 +72,16 @@ private:
     void doAHBPeriphWrite(uint32_t addr, T data);
 
     template<class T>
+    T doIOPORTRead(uint32_t addr) const;
+    template<class T>
+    void doIOPORTWrite(uint32_t addr, T data);
+
+    template<class T>
+    T doCPUInternalRead(uint32_t addr) const;
+    template<class T>
+    void doCPUInternalWrite(uint32_t addr, T data);
+
+    template<class T>
     T doOpenRead(uint32_t addr) const;
 
     const uint8_t *bootROM = nullptr;

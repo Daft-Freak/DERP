@@ -5,12 +5,14 @@
 
 enum MemoryRegion
 {
-    Region_ROM       = 0x00,
-    Region_XIP       = 0x10,
-    Region_XIP_SSI   = 0x18,
-    Region_SRAM      = 0x20,
-    Region_APBPeriph = 0x40,
-    Region_AHBPeriph = 0x50,
+    Region_ROM         = 0x00,
+    Region_XIP         = 0x10,
+    Region_XIP_SSI     = 0x18,
+    Region_SRAM        = 0x20,
+    Region_APBPeriph   = 0x40,
+    Region_AHBPeriph   = 0x50,
+    Region_IOPORT      = 0xD0,
+    Region_CPUInternal = 0xE0,
 };
 
 template uint8_t MemoryBus::read(uint32_t addr, int &cycles, bool sequential) const;
@@ -74,6 +76,13 @@ T MemoryBus::read(uint32_t addr, int &cycles, bool sequential) const
             accessCycles(1);
             return doAHBPeriphRead<T>(addr);
 
+        case Region_IOPORT:
+            accessCycles(1);
+            return doIOPORTRead<T>(addr);
+
+        case Region_CPUInternal:
+            accessCycles(1);
+            return doCPUInternalRead<T>(addr);
     }
 
     return doOpenRead<T>(addr);
@@ -113,6 +122,15 @@ void MemoryBus::write(uint32_t addr, T data, int &cycles, bool sequential)
             doAHBPeriphWrite<T>(addr, data);
             return;
 
+        case Region_IOPORT:
+            accessCycles(1);
+            doIOPORTWrite<T>(addr, data);
+            return;
+
+        case Region_CPUInternal:
+            accessCycles(1);
+            doCPUInternalWrite<T>(addr, data);
+            return;
     }
 }
 
@@ -503,6 +521,32 @@ void MemoryBus::doAHBPeriphWrite(uint32_t addr, T data)
     }
 
     printf("AHBP W %08X = %08X\n", addr, data);
+}
+
+template<class T>
+T MemoryBus::doIOPORTRead(uint32_t addr) const
+{
+    printf("IOPORT R %08X\n", addr);
+    return doOpenRead<T>(addr);
+}
+
+template<class T>
+void MemoryBus::doIOPORTWrite(uint32_t addr, T data)
+{
+    printf("IOPORT W %08X = %08X\n", addr, data);
+}
+
+template<class T>
+T MemoryBus::doCPUInternalRead(uint32_t addr) const
+{
+    printf("CPUI R %08X\n", addr);
+    return doOpenRead<T>(addr);
+}
+
+template<class T>
+void MemoryBus::doCPUInternalWrite(uint32_t addr, T data)
+{
+    printf("CPUI W %08X = %08X\n", addr, data);
 }
 
 template<class T>
