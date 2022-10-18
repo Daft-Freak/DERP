@@ -257,7 +257,7 @@ T MemoryBus::doXIPSSIRead(uint32_t addr) const
             uint32_t v = 0;
             if(!ssiRx.empty())
             {
-                v = ssiRx.back();
+                v = ssiRx.front();
                 ssiRx.pop();
             }
             return v;
