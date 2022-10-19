@@ -135,5 +135,10 @@ private:
 
     uint32_t nextUpdateCycle = 0; // next cycle where something needs updated
 
+    uint32_t sysTickRegs[4]; // E010-E01C
+    uint32_t nvicEnabled, nvicPending, nvicPriority[8];
+    uint32_t scbRegs[10]; // ED00-ED24
+    uint32_t mpuRegs[5]; // ED90-EDA0
+
     MemoryBus &mem;
 };

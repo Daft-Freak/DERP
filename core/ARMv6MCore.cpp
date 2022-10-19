@@ -27,6 +27,28 @@ void ARMv6MCore::reset()
 
     cycleCount = 0;
 
+    for(auto &reg : sysTickRegs)
+        reg = 0;
+
+    nvicEnabled = nvicPending = 0;
+    for(auto &reg : nvicPriority)
+        reg = 0;
+
+    for(auto &reg : scbRegs)
+        reg = 0;
+
+    for(auto &reg : mpuRegs)
+        reg = 0;
+
+    // CPUID
+    // TODO: maybe not harcoded M0+ if I ever reuse this...
+    scbRegs[0] = 0x41 << 24 | 0xC << 16/*ARMv6-M*/ | 0xC60 << 4/*Cortex-M0+*/ | 1;
+    // CCR
+    scbRegs[5] = 0x3F8;
+
+    // MPU_TYPE
+    mpuRegs[0] = 8 << 8;
+
     mem.reset();
 
     int cycles;
@@ -41,12 +63,106 @@ void ARMv6MCore::run(int ms)
 
 uint32_t ARMv6MCore::readReg(uint32_t addr)
 {
+    switch(addr & 0xFFFFFFF)
+    {
+        case 0xE010: // SYST_CSR
+        case 0xE014: // SYST_RVR
+        case 0xE018: // SYST_CVR
+        case 0xE01C: // SYST_CALIB
+            return sysTickRegs[(addr & 0xF) / 4];
+        
+        case 0xE100: // NVIC_ISER
+        case 0xE180: // NVIC_ICER
+            return nvicEnabled;
+        case 0xE200: // NVIC_ISPR
+        case 0xE280: // NVIC_IPCR
+            return nvicPending;
+        case 0xE400: // NVIC_IPR0
+        case 0xE404: // NVIC_IPR1
+        case 0xE408: // NVIC_IPR2
+        case 0xE40C: // NVIC_IPR3
+        case 0xE410: // NVIC_IPR4
+        case 0xE414: // NVIC_IPR5
+        case 0xE418: // NVIC_IPR6
+        case 0xE41C: // NVIC_IPR7
+            return nvicPriority[(addr & 0xFF) / 4];
+
+        case 0xED00: // CPUID
+        case 0xED04: // ICSR
+        case 0xED08: // VTOR
+        case 0xED0C: // AIRCR
+        case 0xED10: // SCR
+        case 0xED14: // CCR
+        case 0xED1C: // SHPR2
+        case 0xED20: // CHPR3
+        case 0xED24: // SHCSR
+            return scbRegs[(addr & 0xFF) / 4];
+
+        case 0xED90: // MPU_TYPE
+        case 0xED94: // MPU_CTRL
+        case 0xED98: // MPU_RNR
+        case 0xED9C: // MPU_RBAR
+        case 0xEDA0: // MPU_RASR
+            return mpuRegs[((addr & 0xFF) - 0x90) / 4];
+    }
+
     printf("CPUI R %08X\n", addr);
     return 0;
 }
 
 void ARMv6MCore::writeReg(uint32_t addr, uint32_t data)
 {
+    switch(addr & 0xFFFFFFF)
+    {
+        case 0xE010: // SYST_CSR
+        case 0xE014: // SYST_RVR
+            sysTickRegs[(addr & 0xF) / 4] = data;
+            return;
+        case 0xE018: // SYST_CVR
+            sysTickRegs[2] = 0;
+            return;
+        
+        case 0xE100: // NVIC_ISER
+            nvicEnabled |= data;
+            return;
+        case 0xE180: // NVIC_ICER
+            nvicEnabled &= ~data; //
+            return;
+        case 0xE200: // NVIC_ISPR
+            nvicPending |= data;
+            return;
+        case 0xE280: // NVIC_IPCR
+            nvicPending &= ~data;
+            return;
+        case 0xE400: // NVIC_IPR0
+        case 0xE404: // NVIC_IPR1
+        case 0xE408: // NVIC_IPR2
+        case 0xE40C: // NVIC_IPR3
+        case 0xE410: // NVIC_IPR4
+        case 0xE414: // NVIC_IPR5
+        case 0xE418: // NVIC_IPR6
+        case 0xE41C: // NVIC_IPR7
+            nvicPriority[(addr & 0xFF) / 4] = data;
+            return;
+
+        //case 0xED04: // ICSR
+        case 0xED08: // VTOR
+        //case 0xED0C: // AIRCR
+        case 0xED10: // SCR
+        case 0xED1C: // SHPR2
+        case 0xED20: // CHPR3
+        case 0xED24: // SHCSR
+            scbRegs[(addr & 0xFF) / 4] = data;
+            return;
+
+        case 0xED94: // MPU_CTRL
+        case 0xED98: // MPU_RNR
+        case 0xED9C: // MPU_RBAR
+        case 0xEDA0: // MPU_RASR
+            mpuRegs[((addr & 0xFF) - 0x90) / 4] = data;
+            return;
+    }
+
     printf("CPUI W %08X = %08X\n", addr, data);
 }
 
