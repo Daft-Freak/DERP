@@ -42,7 +42,7 @@ void MemoryBus::setBootROM(const uint8_t *rom)
 
 void MemoryBus::reset()
 {
-
+    clocks.reset();
 }
 
 template<class T>
