@@ -1,3 +1,4 @@
+#include <chrono> // timer hack
 #include <cstdio>
 #include <cstring>
 
@@ -464,6 +465,15 @@ T MemoryBus::doAPBPeriphRead(uint32_t addr) const
                     return 0; // TODO
             }
             break;
+        }
+
+        case 21: // TIMER
+        {
+            if(periphAddr == 0x24 || periphAddr == 0x28) // TIMERRAWH/L
+            {
+                auto time = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::high_resolution_clock::now().time_since_epoch()).count();
+                return periphAddr == 0x24 ? time >> 32 : time;
+            }
         }
     }
 
