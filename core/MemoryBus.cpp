@@ -536,7 +536,7 @@ void MemoryBus::doAHBPeriphWrite(uint32_t addr, T data)
 }
 
 template<class T>
-T MemoryBus::doIOPORTRead(uint32_t addr) const
+T MemoryBus::doIOPORTRead(uint32_t addr)
 {
     switch(addr & 0xFFF)
     {
@@ -549,6 +549,20 @@ T MemoryBus::doIOPORTRead(uint32_t addr) const
             printf("R GPIO_HI_IN\n");
             return 2;
         }
+
+        case 0x60: // DIV_UDIVIDEND
+        case 0x68: // DIV_SDIVIDEND
+            return dividend;
+        case 0x64: // DIV_UDIVISOR
+        case 0x6C: // DIV_SDIVISOR
+            return divisor;
+        case 0x70: // DIV_QUOTIENT
+            dividerDirty = false;
+            return divQuot;
+        case 0x74: // DIV_REMAINDER
+            return divRem;
+        case 0x78: // DIV_CSR
+            return (dividerDirty ? 2 : 0) | 1;
 
         case 0x100: // SPINLOCK0
         case 0x104:
@@ -598,6 +612,59 @@ T MemoryBus::doIOPORTRead(uint32_t addr) const
 template<class T>
 void MemoryBus::doIOPORTWrite(uint32_t addr, T data)
 {
+    auto doDiv = [this]()
+    {
+        // TODO: should take 8 cycles
+        if(!divisor)
+            return; // what should this do?
+
+        if(dividerSigned)
+        {
+            divQuot = static_cast<int32_t>(dividend) / divisor;
+            divRem = static_cast<int32_t>(dividend) % divisor;
+        }
+        else
+        {
+            divQuot = dividend / divisor;
+            divRem = dividend % divisor;
+        }
+    };
+
+    switch(addr & 0xFFF)
+    {
+        case 0x60: // DIV_UDIVIDEND
+            dividend = data;
+            dividerDirty = true;
+            dividerSigned = false;
+            doDiv();
+            return;
+        case 0x64: // DIV_UDIVISOR
+            divisor = data;
+            dividerDirty = true;
+            dividerSigned = false;
+            doDiv();
+            return;
+        case 0x68: // DIV_SDIVIDEND
+            dividend = data;
+            dividerDirty = true;
+            dividerSigned = true;
+            doDiv();
+            return;
+        case 0x6C: // DIV_SDIVISOR
+            divisor = data;
+            dividerDirty = true;
+            dividerSigned = true;
+            doDiv();
+            return;
+        case 0x70: // DIV_QUOTIENT
+            divQuot = data;
+            dividerDirty = true;
+            return;
+        case 0x74: // DIV_REMAINDER
+            divRem = data;
+            dividerDirty = true;
+            return;
+    }
     printf("IOPORT W %08X = %08X\n", addr, data);
 }
 

@@ -74,7 +74,7 @@ private:
     void doAHBPeriphWrite(uint32_t addr, T data);
 
     template<class T>
-    T doIOPORTRead(uint32_t addr) const;
+    T doIOPORTRead(uint32_t addr);
     template<class T>
     void doIOPORTWrite(uint32_t addr, T data);
 
@@ -104,4 +104,9 @@ private:
     uint8_t flashCmd;
     uint32_t flashAddr;
     int flashCmdOff = 0;
+
+    // TODO: there are two of these
+    uint32_t dividend, divisor;
+    uint32_t divQuot, divRem;
+    bool dividerSigned, dividerDirty = false;
 };
