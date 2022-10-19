@@ -3,6 +3,8 @@
 
 #include "MemoryBus.h"
 
+#include "ARMv6MCore.h"
+
 enum MemoryRegion
 {
     Region_ROM         = 0x00,
