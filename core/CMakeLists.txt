@@ -2,6 +2,7 @@ add_library(DERPCore INTERFACE)
 
 target_sources(DERPCore INTERFACE
     ARMv6MCore.cpp
+    Clocks.cpp
     MemoryBus.cpp
 )
 

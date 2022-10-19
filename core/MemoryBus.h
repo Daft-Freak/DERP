@@ -3,6 +3,8 @@
 #include <cstdint>
 #include <queue>
 
+#include "Clocks.h"
+
 class ARMv6MCore;
 
 class MemoryBus
@@ -64,7 +66,7 @@ private:
     void doSRAMWrite(uint32_t addr, T data);
 
     template<class T>
-    T doAPBPeriphRead(uint32_t addr) const;
+    T doAPBPeriphRead(uint32_t addr);
     template<class T>
     void doAPBPeriphWrite(uint32_t addr, T data);
 
@@ -95,6 +97,8 @@ private:
     uint8_t usbDPRAM[4 * 1024];
 
     uint32_t dummy = 0xBADADD55;
+
+    Clocks clocks;
 
     // temp peripherals stuff
     uint32_t ioQSPICtrl[6]{0};

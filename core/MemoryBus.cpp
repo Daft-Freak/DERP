@@ -421,7 +421,7 @@ static const char *apbPeriphNames[]{
 };
 
 template<class T>
-T MemoryBus::doAPBPeriphRead(uint32_t addr) const
+T MemoryBus::doAPBPeriphRead(uint32_t addr)
 {
     auto peripheral = (addr >> 14) & 0x1F;
     auto periphAddr = addr & 0x3FFF;
@@ -429,20 +429,8 @@ T MemoryBus::doAPBPeriphRead(uint32_t addr) const
     switch(peripheral)
     {
         case 2: // CLOCKS
-        {
-            // boot hack
-            if(periphAddr == 0x38 || periphAddr == 0x44)
-            {
-                printf("R CLK_%s_SELECTED\n", periphAddr == 0x38 ? "REF" : "SYS");
+            return clocks.regRead(periphAddr);
 
-                // will eventually return the right one
-                static int i = 0;
-                int ret = 1 << i;
-                i = (i + 1) % 3;
-                return ret;
-            }
-            break;
-        }
         case 3: // RESETS
         {
             // boot hack
@@ -490,6 +478,10 @@ void MemoryBus::doAPBPeriphWrite(uint32_t addr, T data)
 
     switch(peripheral)
     {
+        case 2: // CLOCKS
+            clocks.regWrite(periphAddr, data);
+            return;
+
         case 6: // IO_QSPI
         {
             if(periphAddr < 0x30)
