@@ -18,9 +18,9 @@ enum MemoryRegion
     Region_CPUInternal = 0xE0,
 };
 
-template uint8_t MemoryBus::read(ARMv6MCore &cpu, uint32_t addr, int &cycles, bool sequential) const;
-template uint16_t MemoryBus::read(ARMv6MCore &cpu, uint32_t addr, int &cycles, bool sequential) const;
-template uint32_t MemoryBus::read(ARMv6MCore &cpu, uint32_t addr, int &cycles, bool sequential) const;
+template uint8_t MemoryBus::read(ARMv6MCore &cpu, uint32_t addr, int &cycles, bool sequential);
+template uint16_t MemoryBus::read(ARMv6MCore &cpu, uint32_t addr, int &cycles, bool sequential);
+template uint32_t MemoryBus::read(ARMv6MCore &cpu, uint32_t addr, int &cycles, bool sequential);
 template void MemoryBus::write(ARMv6MCore &cpu, uint32_t addr, uint8_t val, int &cycles, bool sequential);
 template void MemoryBus::write(ARMv6MCore &cpu, uint32_t addr, uint16_t val, int &cycles, bool sequential);
 template void MemoryBus::write(ARMv6MCore &cpu, uint32_t addr, uint32_t val, int &cycles, bool sequential);
@@ -46,7 +46,7 @@ void MemoryBus::reset()
 }
 
 template<class T>
-T MemoryBus::read(ARMv6MCore &cpu, uint32_t addr, int &cycles, bool sequential) const
+T MemoryBus::read(ARMv6MCore &cpu, uint32_t addr, int &cycles, bool sequential)
 {
     auto accessCycles = [&cycles, this](int c)
     {
@@ -294,7 +294,7 @@ static const char *ssiRegNames[]
 };
 
 template<class T>
-T MemoryBus::doXIPSSIRead(uint32_t addr) const
+T MemoryBus::doXIPSSIRead(uint32_t addr)
 {
     switch((addr & 0xFF) / 4)
     {

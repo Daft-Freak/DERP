@@ -15,7 +15,7 @@ public:
     void reset();
 
     template<class T>
-    T read(ARMv6MCore &cpu, uint32_t addr, int &cycles, bool sequential) const;
+    T read(ARMv6MCore &cpu, uint32_t addr, int &cycles, bool sequential);
     template<class T>
     void write(ARMv6MCore &cpu, uint32_t addr, T data, int &cycles, bool sequential);
 
@@ -54,7 +54,7 @@ private:
     T doROMRead(uint32_t addr) const;
 
     template<class T>
-    T doXIPSSIRead(uint32_t addr) const;
+    T doXIPSSIRead(uint32_t addr);
     template<class T>
     void doXIPSSIWrite(uint32_t addr, T data);
 
@@ -99,7 +99,7 @@ private:
     // temp peripherals stuff
     uint32_t ioQSPICtrl[6]{0};
 
-    mutable std::queue<uint32_t> ssiRx; //!
+    std::queue<uint32_t> ssiRx;
 
     uint8_t flashCmd;
     uint32_t flashAddr;
