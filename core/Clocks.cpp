@@ -4,6 +4,18 @@
 
 static const char *clockNames[]{"GPOUT0", "GPOUT1", "GPOUT2", "GPOUT3", "REF", "SYS", "PERI", "USB", "ADC", "RTC"};
 
+static void updateReg(uint32_t &oldVal, uint32_t newVal, int atomic)
+{
+    if(atomic == 0)
+        oldVal = newVal;
+    else if(atomic == 1)
+        oldVal ^= newVal;
+    else if(atomic == 2)
+        oldVal |= newVal;
+    else
+        oldVal &= ~newVal;
+}
+
 void Clocks::reset()
 {
     for(auto &reg : ctrl)
@@ -11,6 +23,12 @@ void Clocks::reset()
 
     for(auto &reg : div)
         reg = 1 << 8;
+
+    pllSysCS = pllUSBCS = 1;
+    pllSysPWR = pllUSBPWR = 0b101101;
+    pllSysFBDIV = pllUSBFBDIV = 0;
+
+    pllSysPRIM = pllUSBPRIM = 7 << 16 | 7 << 12;
 }
 
 uint32_t Clocks::regRead(uint32_t addr)
@@ -48,18 +66,6 @@ void Clocks::regWrite(uint32_t addr, uint32_t data)
 
     static const char *op[]{" = ", " ^= ", " |= ", " &= ~"};
 
-    auto updateReg = [data, atomic](uint32_t &oldVal)
-    {
-        if(atomic == 0)
-            oldVal = data;
-        else if(atomic == 1)
-            oldVal ^= data;
-        else if(atomic == 2)
-            oldVal |= data;
-        else
-            oldVal &= ~data;
-    };
-
     if(addr < 0x78)
     {
         //ctrl,div,selected x10
@@ -67,9 +73,9 @@ void Clocks::regWrite(uint32_t addr, uint32_t data)
         int reg = addr / 4 % 3;
 
         if(reg == 0) // ctrl
-            updateReg(ctrl[clock]);
+            updateReg(ctrl[clock], data, atomic);
         else if(reg == 1) // div
-            updateReg(div[clock]);
+            updateReg(div[clock], data, atomic);
 
         int src = ctrl[clock] & 3;
         int frac = (div[clock] & 0xFF) * 1000 / 256;
@@ -98,4 +104,92 @@ void Clocks::regWrite(uint32_t addr, uint32_t data)
     }
     else
         printf("CLOCKS W %04X%s%08X\n", addr, op[atomic], data);
+}
+
+uint32_t Clocks::pllSysRegRead(uint32_t addr)
+{
+    switch(addr)
+    {
+        case 0x0: // CS
+            return pllSysCS | (1 << 31)/*LOCK*/;
+        case 0x4: // PWR
+            return pllSysPWR;
+        case 0x8: // FBDIV_INT
+            return pllSysFBDIV;
+        case 0xC: // PRIM
+            return pllSysPRIM;
+    }
+
+    return 0xBADADD55;
+}
+
+void  Clocks::pllSysRegWrite(uint32_t addr, uint32_t data)
+{
+    int atomic = addr >> 12;
+    addr &= 0xFFF;
+
+    switch(addr)
+    {
+        case 0x0: // CS
+            updateReg(pllSysCS, data & ~(1 << 31), atomic);
+            break;
+        case 0x4: // PWR
+            updateReg(pllSysPWR, data, atomic);
+            break;
+        case 0x8: // FBDIV_INT
+            updateReg(pllSysFBDIV, data, atomic);
+            break;
+        case 0xC: // PRIM
+            updateReg(pllSysPRIM, data, atomic);
+            break;
+    }
+
+    // (REF / REFDIV) * FBDIV / (POSTDIV1 * POSTDIV2)
+    int ref = 12 * 1000 * 1000; // assume 12MHz
+    int freq = (ref / (pllSysCS & 0x3F)) * pllSysFBDIV / (((pllSysPRIM >> 16) & 7) * ((pllSysPRIM >> 12) & 7));
+    printf("PLL_SYS = (%i / %i) * %i / (%i * %i) = %i\n", ref, pllSysCS & 0x3F, pllSysFBDIV, (pllSysPRIM >> 16) & 7, (pllSysPRIM >> 12) & 7, freq);
+}
+
+uint32_t Clocks::pllUSBRegRead(uint32_t addr)
+{
+    switch(addr)
+    {
+        case 0x0: // CS
+            return pllUSBCS | (1 << 31)/*LOCK*/;
+        case 0x4: // PWR
+            return pllUSBPWR;
+        case 0x8: // FBDIV_INT
+            return pllUSBFBDIV;
+        case 0xC: // PRIM
+            return pllUSBPRIM;
+    }
+
+    return 0xBADADD55;
+}
+
+void  Clocks::pllUSBRegWrite(uint32_t addr, uint32_t data)
+{
+    int atomic = addr >> 12;
+    addr &= 0xFFF;
+
+    switch(addr)
+    {
+        case 0x0: // CS
+            updateReg(pllUSBCS, data & ~(1 << 31), atomic);
+            break;
+        case 0x4: // PWR
+            updateReg(pllUSBPWR, data, atomic);
+            break;
+        case 0x8: // FBDIV_INT
+            updateReg(pllUSBFBDIV, data, atomic);
+            break;
+        case 0xC: // PRIM
+            updateReg(pllUSBPRIM, data, atomic);
+            break;
+    }
+
+    // (REF / REFDIV) * FBDIV / (POSTDIV1 * POSTDIV2)
+    int ref = 12 * 1000 * 1000; // assume 12MHz
+    int freq = (ref / (pllSysCS & 0x3F)) * pllUSBFBDIV / (((pllUSBPRIM >> 16) & 7) * ((pllUSBPRIM >> 12) & 7));
+    printf("PLL_USB = (%i / %i) * %i / (%i * %i) = %i\n", ref, pllUSBCS & 0x3F, pllUSBFBDIV, (pllUSBPRIM >> 16) & 7, (pllUSBPRIM >> 12) & 7, freq);
 }

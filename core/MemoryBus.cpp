@@ -455,6 +455,12 @@ T MemoryBus::doAPBPeriphRead(uint32_t addr)
             break;
         }
 
+        case 10: // PLL_SYS
+            return clocks.pllSysRegRead(periphAddr);
+
+        case 11: // PLL_USB
+            return clocks.pllUSBRegRead(periphAddr);
+
         case 21: // TIMER
         {
             if(periphAddr == 0x24 || periphAddr == 0x28) // TIMERRAWH/L
@@ -498,6 +504,15 @@ void MemoryBus::doAPBPeriphWrite(uint32_t addr, T data)
             }
             break;
         }
+
+        case 10: // PLL_SYS
+            clocks.pllSysRegWrite(periphAddr, data);
+            return;
+
+        case 11: // PLL_USB
+            clocks.pllUSBRegWrite(periphAddr, data);
+            return;
+
     }
 
     printf("APBP W %s %04X = %08X\n", apbPeriphNames[peripheral], addr & 0x3FFF, data);
