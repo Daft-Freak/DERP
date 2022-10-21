@@ -10,6 +10,9 @@ enum MemoryRegion
 {
     Region_ROM         = 0x00,
     Region_XIP         = 0x10,
+    Region_XIP_NoAlloc = 0x11,
+    Region_XIP_NoCache = 0x12,
+    Region_XIP_NoCNoA  = 0x13,
     Region_XIP_SSI     = 0x18,
     Region_SRAM        = 0x20,
     Region_APBPeriph   = 0x40,
@@ -60,6 +63,9 @@ T MemoryBus::read(ARMv6MCore &cpu, uint32_t addr, int &cycles, bool sequential)
             return doROMRead<T>(addr);
 
         case Region_XIP:
+        case Region_XIP_NoAlloc: // TODO: implement the cache
+        case Region_XIP_NoCache:
+        case Region_XIP_NoCNoA:
             accessCycles(1);
             return doRead<T>(qspiFlash, addr);
 
