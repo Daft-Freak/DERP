@@ -105,6 +105,12 @@ private:
     // temp peripherals stuff
     uint32_t ioQSPICtrl[6]{0};
 
+    uint32_t pwmCSR[8];
+    uint32_t pwmDIV[8];
+    uint32_t pwmCTR[8];
+    uint32_t pwmCC[8];
+    uint32_t pwmTOP[8];
+
     std::queue<uint32_t> ssiRx;
 
     uint8_t flashCmd;

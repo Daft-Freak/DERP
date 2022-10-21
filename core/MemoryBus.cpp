@@ -36,6 +36,18 @@ static inline uint32_t getStripedSRAMAddr(uint32_t addr)
     return bank * 64 * 1024 + word * 4 + (addr & 3);
 }
 
+static void updateReg(uint32_t &oldVal, uint32_t newVal, int atomic)
+{
+    if(atomic == 0)
+        oldVal = newVal;
+    else if(atomic == 1)
+        oldVal ^= newVal;
+    else if(atomic == 2)
+        oldVal |= newVal;
+    else
+        oldVal &= ~newVal;
+}
+
 MemoryBus::MemoryBus() {}
 
 void MemoryBus::setBootROM(const uint8_t *rom)
@@ -505,6 +517,28 @@ T MemoryBus::doAPBPeriphRead(uint32_t addr)
         case 11: // PLL_USB
             return clocks.pllUSBRegRead(periphAddr);
 
+        case 20: // PWM
+        {
+            if((periphAddr & 0xFFF) < 0xA0)
+            {
+                int chan = (periphAddr & 0xFFF) / 20;
+                int reg = (periphAddr / 4) % 5;
+
+                if(reg == 0)
+                    return pwmCSR[chan];
+                else if(reg == 1)
+                    return pwmDIV[chan];
+                else if(reg == 2)
+                    return pwmCTR[chan];
+                else if(reg == 3)
+                    return pwmCC[chan];
+                else
+                    return pwmTOP[chan];
+            }
+
+            break;
+        }
+
         case 21: // TIMER
         {
             if(periphAddr == 0x24 || periphAddr == 0x28) // TIMERRAWH/L
@@ -571,6 +605,28 @@ void MemoryBus::doAPBPeriphWrite(uint32_t addr, T data)
             clocks.pllUSBRegWrite(periphAddr, data);
             return;
 
+        case 20: // PWM
+        {
+            if((periphAddr & 0xFFF) < 0xA0)
+            {
+                int atomic = periphAddr >> 12;
+                int chan = (periphAddr & 0xFFF) / 20;
+                int reg = (periphAddr / 4) % 5;
+
+                if(reg == 0)
+                    return updateReg(pwmCSR[chan], data, atomic);
+                else if(reg == 1)
+                    return updateReg(pwmDIV[chan], data, atomic);
+                else if(reg == 2)
+                    return updateReg(pwmCTR[chan], data, atomic);
+                else if(reg == 3)
+                    return updateReg(pwmCC[chan], data, atomic);
+                else
+                    return updateReg(pwmTOP[chan], data, atomic);
+            }
+
+            break;
+        }
     }
 
     printf("APBP W %s %04X = %08X\n", apbPeriphNames[peripheral], addr & 0x3FFF, data);
