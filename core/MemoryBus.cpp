@@ -326,29 +326,67 @@ void MemoryBus::doXIPSSIWrite(uint32_t addr, T data)
 {
     switch((addr & 0xFF) / 4)
     {
+        case 2: // SSIENA
+        {
+            if(data == 0) // disabled
+            {
+                while(!ssiRx.empty())
+                    ssiRx.pop();
+            }
+            break;
+        }
         case 24: // DR0
         {
             if(flashCmdOff)
             {
-                if(flashCmdOff >= 4)
-                    ssiRx.push(qspiFlash[flashAddr + (flashCmdOff - 4)]);
+                if(flashCmdOff >= 4) // done addr
+                {
+                    if(flashCmd == 2) // write
+                    {
+                        qspiFlash[flashAddr + (flashCmdOff - 4)] = data & 0xFF;
+                        ssiRx.push(0);
+                    }
+                    else if(flashCmd == 3) // read
+                        ssiRx.push(qspiFlash[flashAddr + (flashCmdOff - 4)]);
+                }
                 else
                 {
-                    // get read addr
+                    // get addr
                     flashAddr |= data << (24 - (flashCmdOff * 8));
                     ssiRx.push(0);
                 }
                 flashCmdOff++;
+
+                if(flashCmdOff == 4)
+                {
+                    if(flashCmd == 0x20/*4k erase*/)
+                    {
+                        memset(qspiFlash + flashAddr, 0xFF, 4 * 1024);
+                        flashCmdOff = 0; // done
+                    }
+                }
             }
             else
             {
                 flashCmd = data;
-                if(flashCmd == 3) // read
+                if(flashCmd == 2) // write
                 {
                     flashAddr = 0;
                     flashCmdOff++;
                 }
-                else
+                else if(flashCmd == 3) // read
+                {
+                    flashAddr = 0;
+                    flashCmdOff++;
+                }
+                else if(flashCmd == 6) // write enable
+                {}
+                else if(flashCmd == 0x20) // 4k erase
+                {
+                    flashAddr = 0;
+                    flashCmdOff++;
+                }
+                else if(flashCmd)
                     printf("XIP SSI write %08X\n", data);
 
                 ssiRx.push(0); //
@@ -506,9 +544,9 @@ void MemoryBus::doAPBPeriphWrite(uint32_t addr, T data)
                     else
                         newVal = ioQSPICtrl[io] & ~data;
 
-                    if(io == 1 && ((ioQSPICtrl[io] >> 8) & 3) != 2) // SS forced high -> ...
+                    if(io == 1) // SS ...
                     {
-                        if(((newVal >> 8) & 3) == 2) // ... low
+                        if(((newVal >> 8) & 3) != 2) // ... forced high (deselected)
                             flashCmdOff = 0;
                     }
 
