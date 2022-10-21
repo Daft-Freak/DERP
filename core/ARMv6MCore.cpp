@@ -56,9 +56,9 @@ void ARMv6MCore::reset()
     updateTHUMBPC( mem.read<uint32_t>(*this, 4, cycles, false) & ~ 1); // Reset vector
 }
 
-void ARMv6MCore::run(int ms)
+void ARMv6MCore::runTo(uint32_t cycle)
 {
-    runCycles((clockSpeed * ms) / 1000);
+    runCycles(cycle - cycleCount);
 }
 
 uint32_t ARMv6MCore::readReg(uint32_t addr)

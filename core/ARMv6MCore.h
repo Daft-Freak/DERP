@@ -10,7 +10,7 @@ public:
 
     void reset();
 
-    void run(int ms);
+    void runTo(uint32_t cycle);
 
     uint32_t readReg(uint32_t addr);
     void writeReg(uint32_t addr, uint32_t data);
@@ -111,7 +111,6 @@ private:
 
     void updateTHUMBPC(uint32_t pc);
 
-    static const uint32_t clockSpeed = 16*1024*1024;
     static const uint32_t signBit = 0x80000000;
 
     // registers

@@ -46,6 +46,8 @@ public:
         return ret;
     }
 
+    Clocks &getClocks() {return clocks;}
+
 private:
     template<class T, size_t size>
     T doRead(const uint8_t (&mem)[size], uint32_t addr) const;

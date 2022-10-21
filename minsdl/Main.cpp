@@ -129,6 +129,8 @@ int main(int argc, char *argv[])
     }
 
     cpu.reset();
+
+    auto &clocks = mem.getClocks();
    
     // SDL init
     if(SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) != 0)
@@ -149,13 +151,44 @@ int main(int argc, char *argv[])
 
     auto lastTick = SDL_GetTicks();
 
+    auto lastFreqUpdate = lastTick;
+    uint32_t lastFreqCycles = 0;
+    uint32_t skippedTime = 0;
+
     while(!quit)
     {
         pollEvents();
 
         auto now = SDL_GetTicks();
 
-        cpu.run(now - lastTick);
+        // update freq info
+        if(now - lastFreqUpdate >= 1000)
+        {
+            auto newCycles = clocks.getClockVal(5);
+            
+            auto time = now - lastFreqUpdate;
+            int speedPercent = time * 100 / (time + skippedTime);
+            char buf[50];
+            
+            snprintf(buf, sizeof(buf), "DERP | SYS: %iMHz (%i%%)", (newCycles - lastFreqCycles) / (1000 * time), speedPercent);
+            SDL_SetWindowTitle(window, buf);
+
+            lastFreqCycles = newCycles;
+            lastFreqUpdate = now;
+            skippedTime = 0;
+        }
+
+        auto elapsed = now - lastTick;
+
+        // clamp if running behind
+        if(elapsed > 30)
+        {
+            skippedTime += elapsed - 30;
+            elapsed = 30;
+        }
+
+        clocks.update(elapsed);
+        cpu.runTo(clocks.getClockVal(5));
 
         lastTick = now;
 
