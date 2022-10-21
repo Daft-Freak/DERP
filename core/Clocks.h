@@ -7,6 +7,10 @@ class Clocks final
 public:
     void reset();
 
+    void update(int ms);
+
+    uint32_t getClockVal(int clock);
+
     uint32_t regRead(uint32_t addr);
     void regWrite(uint32_t addr, uint32_t data);
 
@@ -20,6 +24,8 @@ public:
 private:
     uint32_t ctrl[10];
     uint32_t div[10];
+
+    uint32_t clockVal[10];
 
     uint32_t pllSysCS, pllUSBCS;
     uint32_t pllSysPWR, pllUSBPWR;
