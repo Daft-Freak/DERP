@@ -115,4 +115,6 @@ private:
     uint32_t dividend, divisor;
     uint32_t divQuot, divRem;
     bool dividerSigned, dividerDirty = false;
+
+    uint32_t spinlocks = 0;
 };

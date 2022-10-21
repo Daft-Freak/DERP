@@ -662,10 +662,12 @@ T MemoryBus::doIOPORTRead(uint32_t addr)
         case 0x178:
         case 0x17C: // SPINLOCK31
         {
-            // boot hack
-            // ... but also we don't have two cores yet
             int lock = (addr & 0xFF) / 4;
-            printf("R SPINLOCK%i\n", lock);
+
+            if(spinlocks & (1 << lock))
+                return 0;
+
+            spinlocks |= 1 << lock;
             return T(1 << lock);
         }
     }
@@ -729,6 +731,45 @@ void MemoryBus::doIOPORTWrite(uint32_t addr, T data)
             divRem = data;
             dividerDirty = true;
             return;
+
+        case 0x100: // SPINLOCK0
+        case 0x104:
+        case 0x108:
+        case 0x10C:
+        case 0x110:
+        case 0x114:
+        case 0x118:
+        case 0x11C:
+        case 0x120:
+        case 0x124:
+        case 0x128:
+        case 0x12C:
+        case 0x130:
+        case 0x134:
+        case 0x138:
+        case 0x13C:
+        case 0x140:
+        case 0x144:
+        case 0x148:
+        case 0x14C:
+        case 0x150:
+        case 0x154:
+        case 0x158:
+        case 0x15C:
+        case 0x160:
+        case 0x164:
+        case 0x168:
+        case 0x16C:
+        case 0x170:
+        case 0x174:
+        case 0x178:
+        case 0x17C: // SPINLOCK31
+        {
+            int lock = (addr & 0xFF) / 4;
+
+            spinlocks &=  ~(1 << lock);
+            return;
+        }
     }
     printf("IOPORT W %08X = %08X\n", addr, data);
 }
