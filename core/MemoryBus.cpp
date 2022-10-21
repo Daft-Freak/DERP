@@ -614,6 +614,9 @@ T MemoryBus::doIOPORTRead(uint32_t addr)
         case 0: // CPUID
             return 0; // TODO: need to know which CPU is reading
 
+        case 4: // GPIO_IN
+            return 0; // TODO
+
         case 8:  // GPIO_HI_IN
         {
             // boot hack
