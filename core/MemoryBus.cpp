@@ -304,7 +304,7 @@ T MemoryBus::doXIPSSIRead(uint32_t addr)
             return ssiRx.size();
 
         case 10: // SR
-            return 1 << 2; // tx empty
+            return 1 << 1/*TFNF*/ | 1 << 2/*TFE*/ | (ssiRx.empty() ? 0 : 1 << 3/*RFNE*/);
 
         case 24: // DR0
         {
@@ -490,15 +490,29 @@ void MemoryBus::doAPBPeriphWrite(uint32_t addr, T data)
 
         case 6: // IO_QSPI
         {
-            if(periphAddr < 0x30)
+            if((periphAddr & 0xFFF) < 0x30)
             {
-                int io = periphAddr / 8;
+                int atomic = periphAddr >> 12;
+                int io = (periphAddr & 0xFFF) / 8;
                 if(periphAddr & 4) // CTRL
                 {
-                    if(io == 1 && ((ioQSPICtrl[io] >> 8) & 3) != 2 && ((data >> 8) & 3) == 2) // SS forced high -> low
-                        flashCmdOff = 0;
+                    uint32_t newVal;
+                    if(atomic == 0)
+                        newVal = data;
+                    else if(atomic == 1)
+                        newVal = ioQSPICtrl[io] ^ data;
+                    else if(atomic == 2)
+                        newVal = ioQSPICtrl[io] | data;
+                    else
+                        newVal = ioQSPICtrl[io] & ~data;
 
-                    ioQSPICtrl[io] = data;
+                    if(io == 1 && ((ioQSPICtrl[io] >> 8) & 3) != 2) // SS forced high -> ...
+                    {
+                        if(((newVal >> 8) & 3) == 2) // ... low
+                            flashCmdOff = 0;
+                    }
+
+                    ioQSPICtrl[io] = newVal;
                     return;
                 }
             }
