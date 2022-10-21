@@ -640,12 +640,16 @@ T MemoryBus::doAHBPeriphRead(uint32_t addr) const
         return doRead<T>(usbDPRAM, addr);
     else if(addr >= 0x50200000 && addr < 0x50300000)
     {
-        printf("PIO0 R %08X\n", addr);
-
+        if(addr == 0x50200004) // FSTAT
+            return T(0x0F000F00); // all FIFOs empty
         if(addr == 0x50200008) // FDEBUG
             return T(0xF << 24); // all TXSTALL
+
+        printf("PIO0 R %08X\n", addr);
     }
-    printf("AHBP R %08X\n", addr);
+    else
+        printf("AHBP R %08X\n", addr);
+
     return doOpenRead<T>(addr);
 }
 
@@ -658,8 +662,15 @@ void MemoryBus::doAHBPeriphWrite(uint32_t addr, T data)
         doWrite<T>(usbDPRAM, addr, data);
         return;
     }
-
-    printf("AHBP W %08X = %08X\n", addr, data);
+    else if(addr >= 0x50200000 && addr < 0x50300000)
+    {
+        if(addr == 0x50200010) // TXF0
+        {}
+        else
+            printf("PIO0 W %08X = %08X\n", addr, data);
+    }
+    else
+        printf("AHBP W %08X = %08X\n", addr, data);
 }
 
 template<class T>
