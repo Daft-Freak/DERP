@@ -538,7 +538,13 @@ T MemoryBus::doAHBPeriphRead(uint32_t addr) const
     // USB DPRAM
     if(addr >= 0x50100000 && addr < 0x50101000)
         return doRead<T>(usbDPRAM, addr);
+    else if(addr >= 0x50200000 && addr < 0x50300000)
+    {
+        printf("PIO0 R %08X\n", addr);
 
+        if(addr == 0x50200008) // FDEBUG
+            return T(0xF << 24); // all TXSTALL
+    }
     printf("AHBP R %08X\n", addr);
     return doOpenRead<T>(addr);
 }
