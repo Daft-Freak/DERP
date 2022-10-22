@@ -131,6 +131,8 @@ int main(int argc, char *argv[])
     cpu.reset();
 
     auto &clocks = mem.getClocks();
+
+    clocks.addClockTarget(5, cpu.getClock());
    
     // SDL init
     if(SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) != 0)
@@ -180,7 +182,6 @@ int main(int argc, char *argv[])
         if(elapsed > 30)
             elapsed = 30;
 
-        cpu.getClock().setClockScale(clocks.getClockScale(5)); // FIXME: need to set this when the clock changes
         cpuCycles += cpu.run(elapsed);
 
         // adjust timers to stay in range

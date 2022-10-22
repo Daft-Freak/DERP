@@ -1,6 +1,9 @@
 #pragma once
 
 #include <cstdint>
+#include <map>
+
+#include "ClockTarget.h"
 
 class Clocks final
 {
@@ -9,6 +12,8 @@ public:
 
     uint32_t getClockFrequency(int clock) const;
     uint64_t getClockScale(int clock) const;
+
+    void addClockTarget(int clock, ClockTarget &target);
 
     uint32_t regRead(uint32_t addr);
     void regWrite(uint32_t addr, uint32_t data);
@@ -32,4 +37,6 @@ private:
     uint32_t pllSysPWR, pllUSBPWR;
     uint32_t pllSysFBDIV, pllUSBFBDIV;
     uint32_t pllSysPRIM, pllUSBPRIM;
+
+    std::multimap<int, ClockTarget &> targets;
 };

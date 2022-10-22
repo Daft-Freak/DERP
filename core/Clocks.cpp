@@ -54,6 +54,11 @@ uint64_t Clocks::getClockScale(int clock) const
     return base / clockFreq[clock];
 }
 
+void Clocks::addClockTarget(int clock, ClockTarget &target)
+{
+    targets.emplace(clock, target);
+}
+
 uint32_t Clocks::regRead(uint32_t addr)
 {
     if(addr < 0x78)
@@ -335,7 +340,15 @@ void Clocks::calcFreq(int clock)
         }
     }
 
-    // debug
     if(clockFreq[clock] != oldFreq)
+    {
+        // update users of this clock
+        auto toUpdate = targets.equal_range(clock);
+
+        for(auto it = toUpdate.first; it != toUpdate.second; ++it)
+            it->second.setClockScale(getClockScale(clock));
+
+        // debug
         printf("CLK_%s: %i -> %iHz\n", clockNames[clock], oldFreq, clockFreq[clock]);
+    }
 }
