@@ -42,7 +42,12 @@ void Clocks::reset()
     calcFreq(5); // SYS
 }
 
-uint64_t Clocks::getClockScale(int clock)
+uint32_t Clocks::getClockFrequency(int clock) const
+{
+    return clockFreq[clock];
+}
+
+uint64_t Clocks::getClockScale(int clock) const
 {
     const uint64_t base = (1ull << 63) - 1;
 

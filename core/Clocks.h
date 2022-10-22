@@ -7,7 +7,8 @@ class Clocks final
 public:
     void reset();
 
-    uint64_t getClockScale(int clock);
+    uint32_t getClockFrequency(int clock) const;
+    uint64_t getClockScale(int clock) const;
 
     uint32_t regRead(uint32_t addr);
     void regWrite(uint32_t addr, uint32_t data);
