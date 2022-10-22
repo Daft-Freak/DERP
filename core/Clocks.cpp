@@ -115,31 +115,6 @@ void Clocks::regWrite(uint32_t addr, uint32_t data)
             else
                 clockFreq[clock] = 0;
         }
-
-        int src = ctrl[clock] & 3;
-        int frac = (div[clock] & 0xFF) * 1000 / 256;
-
-        if(clock == 4 && src != 1)
-            printf("CLK_%s = src %s / %i.%03i\n", clockNames[clock], src == 0 ? "ROSC" : "XOSC", div[clock] >> 8, frac);
-        else if(clock == 5 && src == 0)
-            printf("CLK_%s = src CLK_REF / %i.%03i\n", clockNames[clock], div[clock] >> 8, frac);
-        else
-        {
-            static const char *auxSrc[][11]
-            {
-                {"PLL_SYS", "GPIN0", "GPIN1", "PLL_USB", "ROSC_PH", "XOSC", "CLK_SYS", "CLK_USB", "CLK_ADC", "CLK_RTC", "CLK_REF"},
-                {"PLL_SYS", "GPIN0", "GPIN1", "PLL_USB", "ROSC_PH", "XOSC", "CLK_SYS", "CLK_USB", "CLK_ADC", "CLK_RTC", "CLK_REF"},
-                {"PLL_SYS", "GPIN0", "GPIN1", "PLL_USB", "ROSC_PH", "XOSC", "CLK_SYS", "CLK_USB", "CLK_ADC", "CLK_RTC", "CLK_REF"},
-                {"PLL_SYS", "GPIN0", "GPIN1", "PLL_USB", "ROSC_PH", "XOSC", "CLK_SYS", "CLK_USB", "CLK_ADC", "CLK_RTC", "CLK_REF"},
-                {"PLL_USB", "GPIN0", "GPIN1"},
-                {"PLL_SYS", "PLL_USB", "ROSC", "XOSC", "GPIN0", "GPIN1"},
-                {"CLK_SYS", "PLL_SYS", "PLL_USB", "ROSC_PH", "XOSC", "GPIN0", "GPIN1"},
-                {"PLL_USB", "PLL_SYS", "ROSC_PH", "XOSC", "GPIN0", "GPIN1"},
-                {"PLL_USB", "PLL_SYS", "ROSC_PH", "XOSC", "GPIN0", "GPIN1"},
-                {"PLL_USB", "PLL_SYS", "ROSC_PH", "XOSC", "GPIN0", "GPIN1"},
-            };
-            printf("CLK_%s = aux %s / %i.%03i\n", clockNames[clock], auxSrc[clock][(ctrl[clock] >> 5) & 0xF], div[clock] >> 8, frac);
-        }
     }
     else
         printf("CLOCKS W %04X%s%08X\n", addr, op[atomic], data);
