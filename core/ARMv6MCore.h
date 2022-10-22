@@ -10,14 +10,17 @@ public:
 
     void reset();
 
-    void runTo(uint32_t cycle);
+    unsigned int run(int ms);
 
     uint32_t readReg(uint32_t addr);
     void writeReg(uint32_t addr, uint32_t data);
 
     MemoryBus &getMem() {return mem;}
 
-    uint32_t getCycleCount() const {return cycleCount;}
+    uint64_t getEmulatedTime() const {return emuTime;}
+    void adjustEmulatedTime(uint64_t base);
+
+    void setClockScale(uint64_t clockScale);
 
 private:
     enum class Reg
@@ -84,8 +87,6 @@ private:
     void writeMem16(uint32_t addr, uint16_t data, int &cycles, bool sequential = false);
     void writeMem32(uint32_t addr, uint32_t data, int &cycles, bool sequential = false);
 
-    int runCycles(int cycles);
-
     int executeTHUMBInstruction();
 
     int doTHUMB01MoveShifted(uint16_t opcode, uint32_t pc);
@@ -129,7 +130,9 @@ private:
     // internal state
     bool halted;
 
-    uint32_t cycleCount = 0;
+    // "real" time for synchronisation/scheduling
+    uint64_t emuTime = 0;
+    uint64_t clockScale = 1;
 
     uint32_t sysTickRegs[4]; // E010-E01C
     uint32_t nvicEnabled, nvicPending, nvicPriority[8];

@@ -152,7 +152,7 @@ int main(int argc, char *argv[])
     auto lastTick = SDL_GetTicks();
 
     auto lastFreqUpdate = lastTick;
-    uint32_t lastFreqCycles = 0;
+    uint32_t cpuCycles = 0;
     uint32_t skippedTime = 0;
 
     while(!quit)
@@ -164,16 +164,14 @@ int main(int argc, char *argv[])
         // update freq info
         if(now - lastFreqUpdate >= 1000)
         {
-            auto newCycles = clocks.getClockVal(5);
-            
             auto time = now - lastFreqUpdate;
             int speedPercent = time * 100 / (time + skippedTime);
             char buf[50];
-            
-            snprintf(buf, sizeof(buf), "DERP | SYS: %iMHz (%i%%)", (newCycles - lastFreqCycles) / (1000 * time), speedPercent);
+
+            snprintf(buf, sizeof(buf), "DERP | SYS: %iMHz (%i%%)", cpuCycles / (1000 * time), speedPercent);
             SDL_SetWindowTitle(window, buf);
 
-            lastFreqCycles = newCycles;
+            cpuCycles = 0;
             lastFreqUpdate = now;
             skippedTime = 0;
         }
@@ -187,8 +185,14 @@ int main(int argc, char *argv[])
             elapsed = 30;
         }
 
-        clocks.update(elapsed);
-        cpu.runTo(clocks.getClockVal(5));
+        cpu.setClockScale(clocks.getClockScale(5)); // FIXME: need to set this when the clock changes
+        cpuCycles += cpu.run(elapsed);
+
+        // adjust timers to stay in range
+        // ... which is easy becuse there's only one
+        auto emuTime = cpu.getEmulatedTime();
+        if(emuTime & (1ull << 63))
+            cpu.adjustEmulatedTime(emuTime);
 
         lastTick = now;
 

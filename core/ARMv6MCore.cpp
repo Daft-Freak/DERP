@@ -25,7 +25,7 @@ void ARMv6MCore::reset()
 
     halted = false;
 
-    cycleCount = 0;
+    emuTime = 0;
 
     for(auto &reg : sysTickRegs)
         reg = 0;
@@ -56,9 +56,44 @@ void ARMv6MCore::reset()
     updateTHUMBPC( mem.read<uint32_t>(*this, 4, cycles, false) & ~ 1); // Reset vector
 }
 
-void ARMv6MCore::runTo(uint32_t cycle)
+unsigned int ARMv6MCore::run(int ms)
 {
-    runCycles(cycle - cycleCount);
+    auto targetTime = emuTime + (1ull << 63) / 1000 * ms;
+
+    unsigned int cycles = 0;
+
+    while(emuTime < targetTime)
+    {
+        uint32_t exec = 1;
+
+        if(!halted)
+        {
+            // CPU
+            exec = executeTHUMBInstruction();
+        }
+
+        // loop until not halted or DMA was triggered
+        do
+        {
+            // interrupts?
+
+            emuTime += exec * clockScale;
+            cycles += exec;
+
+            if(halted && emuTime < targetTime)
+            {
+                // skip ahead
+                exec = (targetTime - emuTime) / clockScale;
+
+                // TODO: limit
+
+                assert(exec > 0);
+            }
+        }
+        while(halted && emuTime < targetTime);
+    }
+
+    return cycles;
 }
 
 uint32_t ARMv6MCore::readReg(uint32_t addr)
@@ -166,6 +201,16 @@ void ARMv6MCore::writeReg(uint32_t addr, uint32_t data)
     printf("CPUI W %08X = %08X\n", addr, data);
 }
 
+void ARMv6MCore::adjustEmulatedTime(uint64_t base)
+{
+    emuTime -= base;
+}
+
+void ARMv6MCore::setClockScale(uint64_t clockScale)
+{
+    this->clockScale = clockScale;
+}
+
 uint8_t ARMv6MCore::readMem8(uint32_t addr, int &cycles, bool sequential)
 {
     return mem.read<uint8_t>(*this, addr, cycles, sequential);
@@ -199,42 +244,6 @@ void ARMv6MCore::writeMem16(uint32_t addr, uint16_t data, int &cycles, bool sequ
 void ARMv6MCore::writeMem32(uint32_t addr, uint32_t data, int &cycles, bool sequential)
 {
     mem.write<uint32_t>(*this, addr, data, cycles, sequential);
-}
-
-int ARMv6MCore::runCycles(int cycles)
-{
-    while(cycles > 0)
-    {
-        uint32_t exec = 1;
-
-        if(!halted)
-        {
-            // CPU
-            exec = executeTHUMBInstruction();
-        }
-
-        // loop until not halted or DMA was triggered
-        do
-        {
-            // interrupts?
-
-            cycles -= exec;
-            cycleCount += exec;
-
-            if(halted && cycles > 0)
-            {
-                // skip ahead
-                exec = cycles;
-
-                // TODO: limit
-
-                assert(exec > 0);
-            }
-        }
-        while(halted && cycles > 0);
-    }
-
-    return cycles;
 }
 
 int ARMv6MCore::executeTHUMBInstruction()

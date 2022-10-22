@@ -28,9 +28,6 @@ void Clocks::reset()
     for(auto &reg : div)
         reg = 1 << 8;
 
-    for(auto &clock : clockVal)
-        clock = 0;
-
     for(auto &clock : clockFreq)
         clock = 0;
 
@@ -45,17 +42,11 @@ void Clocks::reset()
     calcFreq(5); // SYS
 }
 
-void Clocks::update(int ms)
+uint64_t Clocks::getClockScale(int clock)
 {
-    // this is going to be wrong if the CPU reconfigures a clock
+    const uint64_t base = (1ull << 63) - 1;
 
-    for(int i = 0; i < 10; i++)
-        clockVal[i] += static_cast<uint64_t>(clockFreq[i]) * ms / 1000;
-}
-
-uint32_t Clocks::getClockVal(int clock)
-{
-    return clockVal[clock];
+    return base / clockFreq[clock];
 }
 
 uint32_t Clocks::regRead(uint32_t addr)
