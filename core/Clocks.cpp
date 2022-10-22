@@ -31,135 +31,26 @@ void Clocks::reset()
     for(auto &clock : clockVal)
         clock = 0;
 
+    for(auto &clock : clockFreq)
+        clock = 0;
+
     pllSysCS = pllUSBCS = 1;
     pllSysPWR = pllUSBPWR = 0b101101;
     pllSysFBDIV = pllUSBFBDIV = 0;
 
     pllSysPRIM = pllUSBPRIM = 7 << 16 | 7 << 12;
+
+    // calcutate always enabled clocks
+    calcFreq(4); // REF
+    calcFreq(5); // SYS
 }
 
 void Clocks::update(int ms)
 {
     // this is going to be wrong if the CPU reconfigures a clock
 
-    const int xoscFreq = 12 * 1000 * 1000;
-    const int roscFrec = 6 * 1000 * 1000; // ish
-
-    int pllSysFreq = 0, pllUSBFreq = 0;
-    
-    // TODO: bypass
-    if(!(pllSysPWR & 1))
-        pllSysFreq = (xoscFreq / (pllSysCS & 0x3F)) * pllSysFBDIV / (((pllSysPRIM >> 16) & 7) * ((pllSysPRIM >> 12) & 7));
-    if(!(pllUSBPWR & 1))
-        pllUSBFreq = (xoscFreq / (pllSysCS & 0x3F)) * pllUSBFBDIV / (((pllUSBPRIM >> 16) & 7) * ((pllUSBPRIM >> 12) & 7));
-
-    auto oldRef = clockVal[4];
-    auto oldSys = clockVal[5];
-
-    // REF
-    int src = ctrl[4] & 3;
-    int clkDiv = div[4] >> 8;
-    int freq = 0;
-
-    if(!clkDiv)
-        clkDiv = 1 << 16;
-
-    if(src == 0) // ROSC
-        freq = roscFrec;
-    else if(src == 1) // aux
-    {
-        int aux = (ctrl[4] >> 5) & 0x3;
-        if(aux == 0)
-            freq = pllUSBFreq;
-        // else gpin0/1
-    }
-    else if(src == 2)
-        freq = xoscFreq;
-
-    clockVal[4] += (freq / clkDiv) * ms / 1000;
-
-    // USB/ADC/RTC
-    for(int i = 7; i < 10; i++)
-    {
-        if(!(ctrl[i] & (1 << 11)/*ENABLE*/))
-            continue;
-
-        freq = 0;
-     
-        int aux = (ctrl[i] >> 5) & 0x7;
-
-        // TODO: RTC has fractional divider
-        clkDiv = div[i] >> 8;
-
-        if(!clkDiv)
-            clkDiv = 1 << 16;
-
-        if(aux == 0)
-            freq = pllUSBFreq;
-        else if(aux == 1)
-            freq = pllSysFreq;
-        else if(aux == 2)
-            freq = roscFrec;
-        else if(aux == 3)
-            freq = xoscFreq;
-        // else gpin0/1
-
-        clockVal[i] += (freq / clkDiv) * ms / 1000;
-    }
-
-    // SYS
-    src = ctrl[5] & 3;
-    clkDiv = div[5];
-
-    if(!(clkDiv >> 8))
-        clkDiv |= 1 << 24;
-
-    if(src == 0) // CLK_REF
-        clockVal[5] += static_cast<uint64_t>((clockVal[4] - oldRef) << 8) / clkDiv;
-    else // aux
-    {
-        int aux = (ctrl[5] >> 5) & 0x7;
-        freq = 0;
-
-        if(aux == 0)
-            freq = pllSysFreq;
-        else if(aux == 1)
-            freq = pllUSBFreq;
-        else if(aux == 2)
-            freq = roscFrec;
-        else if(aux == 3)
-            freq = xoscFreq;
-        // else gpin0/1
-
-        clockVal[5] += ((static_cast<uint64_t>(freq) << 8) / clkDiv) * ms / 1000;
-    }
-
-    // PERI
-    if(ctrl[6] & (1 << 11))
-    {
-        int aux = (ctrl[6] >> 5) & 0x7;
-        // no div
-
-        if(aux == 0)
-            clockVal[6] += clockVal[5] - oldSys;
-        else
-        {
-            freq = 0;
-            if(aux == 1)
-                freq = pllSysFreq;
-            else if(aux == 2)
-                freq = pllUSBFreq;
-            else if(aux == 3)
-                freq = roscFrec;
-            else if(aux == 4)
-                freq = xoscFreq;
-            // else gpin0/1
-
-            clockVal[6] += freq * ms / 1000;
-        }
-    }
-
-    // TODO: GPOUTx
+    for(int i = 0; i < 10; i++)
+        clockVal[i] += static_cast<uint64_t>(clockFreq[i]) * ms / 1000;
 }
 
 uint32_t Clocks::getClockVal(int clock)
@@ -208,10 +99,22 @@ void Clocks::regWrite(uint32_t addr, uint32_t data)
         int clock = addr / 12;
         int reg = addr / 4 % 3;
 
+        bool changed = false;
+
         if(reg == 0) // ctrl
-            updateReg(ctrl[clock], data, atomic);
+            changed = updateReg(ctrl[clock], data, atomic);
         else if(reg == 1) // div
-            updateReg(div[clock], data, atomic);
+            changed = updateReg(div[clock], data, atomic);
+
+        // update clock freq
+        if(changed)
+        {
+            bool enabled = clock == 4 || clock == 5 || (ctrl[clock] & (1 << 11)/*ENABLE*/);
+            if(enabled)
+                calcFreq(clock);
+            else
+                clockFreq[clock] = 0;
+        }
 
         int src = ctrl[clock] & 3;
         int frac = (div[clock] & 0xFF) * 1000 / 256;
@@ -259,7 +162,7 @@ uint32_t Clocks::pllSysRegRead(uint32_t addr)
     return 0xBADADD55;
 }
 
-void  Clocks::pllSysRegWrite(uint32_t addr, uint32_t data)
+void Clocks::pllSysRegWrite(uint32_t addr, uint32_t data)
 {
     int atomic = addr >> 12;
     addr &= 0xFFF;
@@ -303,7 +206,7 @@ uint32_t Clocks::pllUSBRegRead(uint32_t addr)
     return 0xBADADD55;
 }
 
-void  Clocks::pllUSBRegWrite(uint32_t addr, uint32_t data)
+void Clocks::pllUSBRegWrite(uint32_t addr, uint32_t data)
 {
     int atomic = addr >> 12;
     addr &= 0xFFF;
@@ -328,4 +231,140 @@ void  Clocks::pllUSBRegWrite(uint32_t addr, uint32_t data)
     int ref = 12 * 1000 * 1000; // assume 12MHz
     int freq = (ref / (pllSysCS & 0x3F)) * pllUSBFBDIV / (((pllUSBPRIM >> 16) & 7) * ((pllUSBPRIM >> 12) & 7));
     printf("PLL_USB = (%i / %i) * %i / (%i * %i) = %i\n", ref, pllUSBCS & 0x3F, pllUSBFBDIV, (pllUSBPRIM >> 16) & 7, (pllUSBPRIM >> 12) & 7, freq);
+}
+
+void Clocks::calcFreq(int clock)
+{
+    const int xoscFreq = 12 * 1000 * 1000;
+    const int roscFreq = 6 * 1000 * 1000; // ish
+
+    auto getPLLSysFreq = [this]()
+    {
+        // TODO: bypass
+        // TODO: cache?
+        if(!(pllSysPWR & 1))
+            return (xoscFreq / (pllSysCS & 0x3F)) * pllSysFBDIV / (((pllSysPRIM >> 16) & 7) * ((pllSysPRIM >> 12) & 7));
+
+        return 0u;
+    };
+
+    auto getPLLUSBFreq = [this]()
+    {
+        // TODO: bypass
+        // TODO: cache?
+        if(!(pllUSBPWR & 1))
+            return (xoscFreq / (pllSysCS & 0x3F)) * pllUSBFBDIV / (((pllUSBPRIM >> 16) & 7) * ((pllUSBPRIM >> 12) & 7));
+
+        return 0u;
+    };
+
+    auto divClock = [](uint32_t freq, uint32_t div) -> uint32_t
+    {
+        return (static_cast<uint64_t>(freq) << 8) / div;
+    };
+
+    auto oldFreq = clockFreq[clock];
+
+    switch(clock)
+    {
+        // TODO: GPOUT0-3
+
+        case 4: // REF
+        {
+            int src = ctrl[clock] & 3;
+            int clkDiv = div[clock] >> 8; // no frac
+            if(!clkDiv)
+                clkDiv = 1 << 16;
+
+            if(src == 0)
+                clockFreq[clock] = roscFreq / clkDiv;
+            else if(src == 1) // aux
+            {
+                int aux = (ctrl[4] >> 5) & 0x3;
+                if(aux == 0)
+                    clockFreq[clock] = getPLLUSBFreq() / clkDiv;
+                // else gpin0/1
+            }
+            else if(src == 2)
+                clockFreq[clock] = xoscFreq / clkDiv;
+
+            break;
+        }
+
+        case 5: // SYS
+        {
+            int src = ctrl[clock] & 3;
+            int clkDiv = div[clock];
+
+            if(!(clkDiv >> 8))
+                clkDiv |= 1 << 24;
+
+            if(src == 0)
+                clockFreq[clock] = divClock(clockFreq[4], clkDiv); // REF
+            else // aux
+            {
+                int aux = (ctrl[clock] >> 5) & 0x7;
+
+                if(aux == 0)
+                    clockFreq[clock] = divClock(getPLLSysFreq(), clkDiv);
+                else if(aux == 1)
+                    clockFreq[clock] = divClock(getPLLUSBFreq(), clkDiv);
+                else if(aux == 2)
+                    clockFreq[clock] = divClock(roscFreq, clkDiv);
+                else if(aux == 3)
+                    clockFreq[clock] = divClock(xoscFreq, clkDiv);
+                // else gpin0/1
+            }
+
+            break;
+        }
+
+        case 6: // PERI
+        {
+            int aux = (ctrl[clock] >> 5) & 0x7;
+            // no div
+
+            if(aux == 0)
+                clockFreq[clock] = clockFreq[5]; // SYS
+            else if(aux == 1)
+                clockFreq[clock] = getPLLSysFreq();
+            else if(aux == 2)
+                clockFreq[clock] = getPLLUSBFreq();
+            else if(aux == 3)
+                clockFreq[clock] = roscFreq;
+            else if(aux == 4)
+                clockFreq[clock] = xoscFreq;
+            // else gpin0/1
+
+            break;
+        }
+
+        case 7: // USB
+        case 8: // ADC
+        case 9: // RTC
+        {
+            int aux = (ctrl[clock] >> 5) & 0x7;
+
+            // TODO: RTC has fractional divider
+            int clkDiv = div[clock] >> 8;
+
+            if(!clkDiv)
+                clkDiv = 1 << 16;
+
+            if(aux == 0)
+                clockFreq[clock] = getPLLUSBFreq() / clkDiv;
+            else if(aux == 1)
+                clockFreq[clock] = getPLLSysFreq() / clkDiv;
+            else if(aux == 2)
+                clockFreq[clock] = roscFreq / clkDiv;
+            else if(aux == 3)
+                clockFreq[clock] = xoscFreq / clkDiv;
+            // else gpin0/1
+            break;
+        }
+    }
+
+    // debug
+    if(clockFreq[clock] != oldFreq)
+        printf("CLK_%s: %i -> %iHz\n", clockNames[clock], oldFreq, clockFreq[clock]);
 }
