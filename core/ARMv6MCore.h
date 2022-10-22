@@ -1,6 +1,7 @@
 #pragma once
 #include <cstdint>
 
+#include "ClockTarget.h"
 #include "MemoryBus.h"
 
 class ARMv6MCore final
@@ -17,10 +18,7 @@ public:
 
     MemoryBus &getMem() {return mem;}
 
-    uint64_t getEmulatedTime() const {return emuTime;}
-    void adjustEmulatedTime(uint64_t base);
-
-    void setClockScale(uint64_t clockScale);
+    ClockTarget &getClock() {return clock;}
 
 private:
     enum class Reg
@@ -131,8 +129,7 @@ private:
     bool halted;
 
     // "real" time for synchronisation/scheduling
-    uint64_t emuTime = 0;
-    uint64_t clockScale = 1;
+    ClockTarget clock;
 
     uint32_t sysTickRegs[4]; // E010-E01C
     uint32_t nvicEnabled, nvicPending, nvicPriority[8];

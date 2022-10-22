@@ -25,7 +25,7 @@ void ARMv6MCore::reset()
 
     halted = false;
 
-    emuTime = 0;
+    clock.reset();
 
     for(auto &reg : sysTickRegs)
         reg = 0;
@@ -58,11 +58,11 @@ void ARMv6MCore::reset()
 
 unsigned int ARMv6MCore::run(int ms)
 {
-    auto targetTime = emuTime + (1ull << 63) / 1000 * ms;
+    auto targetTime = clock.getTargetTime(ms);
 
     unsigned int cycles = 0;
 
-    while(emuTime < targetTime)
+    while(clock.getTime() < targetTime)
     {
         uint32_t exec = 1;
 
@@ -77,20 +77,20 @@ unsigned int ARMv6MCore::run(int ms)
         {
             // interrupts?
 
-            emuTime += exec * clockScale;
+            clock.addCycles(exec);
             cycles += exec;
 
-            if(halted && emuTime < targetTime)
+            if(halted && clock.getTime() < targetTime)
             {
                 // skip ahead
-                exec = (targetTime - emuTime) / clockScale;
+                exec = clock.getCyclesToTime(targetTime);
 
                 // TODO: limit
 
                 assert(exec > 0);
             }
         }
-        while(halted && emuTime < targetTime);
+        while(halted && clock.getTime() < targetTime);
     }
 
     return cycles;
@@ -199,16 +199,6 @@ void ARMv6MCore::writeReg(uint32_t addr, uint32_t data)
     }
 
     printf("CPUI W %08X = %08X\n", addr, data);
-}
-
-void ARMv6MCore::adjustEmulatedTime(uint64_t base)
-{
-    emuTime -= base;
-}
-
-void ARMv6MCore::setClockScale(uint64_t clockScale)
-{
-    this->clockScale = clockScale;
 }
 
 uint8_t ARMv6MCore::readMem8(uint32_t addr, int &cycles, bool sequential)

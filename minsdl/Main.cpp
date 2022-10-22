@@ -185,14 +185,14 @@ int main(int argc, char *argv[])
             elapsed = 30;
         }
 
-        cpu.setClockScale(clocks.getClockScale(5)); // FIXME: need to set this when the clock changes
+        cpu.getClock().setClockScale(clocks.getClockScale(5)); // FIXME: need to set this when the clock changes
         cpuCycles += cpu.run(elapsed);
 
         // adjust timers to stay in range
         // ... which is easy becuse there's only one
-        auto emuTime = cpu.getEmulatedTime();
+        auto emuTime = cpu.getClock().getTime();
         if(emuTime & (1ull << 63))
-            cpu.adjustEmulatedTime(emuTime);
+            cpu.getClock().adjustTime(emuTime);
 
         lastTick = now;
 
