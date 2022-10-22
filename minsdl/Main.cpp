@@ -153,7 +153,6 @@ int main(int argc, char *argv[])
 
     auto lastFreqUpdate = lastTick;
     uint32_t cpuCycles = 0;
-    uint32_t skippedTime = 0;
 
     while(!quit)
     {
@@ -165,7 +164,7 @@ int main(int argc, char *argv[])
         if(now - lastFreqUpdate >= 1000)
         {
             auto time = now - lastFreqUpdate;
-            int speedPercent = time * 100 / (time + skippedTime);
+            int speedPercent = static_cast<uint64_t>(cpuCycles) * 1000 / time * 100 / clocks.getClockFrequency(5);
             char buf[50];
 
             snprintf(buf, sizeof(buf), "DERP | SYS: %iMHz (%i%%)", cpuCycles / (1000 * time), speedPercent);
@@ -173,17 +172,13 @@ int main(int argc, char *argv[])
 
             cpuCycles = 0;
             lastFreqUpdate = now;
-            skippedTime = 0;
         }
 
         auto elapsed = now - lastTick;
 
         // clamp if running behind
         if(elapsed > 30)
-        {
-            skippedTime += elapsed - 30;
             elapsed = 30;
-        }
 
         cpu.getClock().setClockScale(clocks.getClockScale(5)); // FIXME: need to set this when the clock changes
         cpuCycles += cpu.run(elapsed);
