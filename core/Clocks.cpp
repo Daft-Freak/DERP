@@ -4,16 +4,20 @@
 
 static const char *clockNames[]{"GPOUT0", "GPOUT1", "GPOUT2", "GPOUT3", "REF", "SYS", "PERI", "USB", "ADC", "RTC"};
 
-static void updateReg(uint32_t &oldVal, uint32_t newVal, int atomic)
+static bool updateReg(uint32_t &curVal, uint32_t newVal, int atomic)
 {
+    auto oldVal = curVal;
+
     if(atomic == 0)
-        oldVal = newVal;
+        curVal = newVal;
     else if(atomic == 1)
-        oldVal ^= newVal;
+        curVal ^= newVal;
     else if(atomic == 2)
-        oldVal |= newVal;
+        curVal |= newVal;
     else
-        oldVal &= ~newVal;
+        curVal &= ~newVal;
+
+    return curVal != oldVal;
 }
 
 void Clocks::reset()
