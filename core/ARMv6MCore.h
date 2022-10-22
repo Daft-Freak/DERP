@@ -130,9 +130,6 @@ private:
     bool halted;
 
     uint32_t cycleCount = 0;
-    int lastExtraCycles = 0; // used to keep runFrame in sync
-
-    uint32_t nextUpdateCycle = 0; // next cycle where something needs updated
 
     uint32_t sysTickRegs[4]; // E010-E01C
     uint32_t nvicEnabled, nvicPending, nvicPriority[8];

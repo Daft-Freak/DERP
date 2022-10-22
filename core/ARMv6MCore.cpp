@@ -226,8 +226,7 @@ int ARMv6MCore::runCycles(int cycles)
                 // skip ahead
                 exec = cycles;
 
-                // limit to next update
-                exec = std::min(exec, nextUpdateCycle - cycleCount);
+                // TODO: limit
 
                 assert(exec > 0);
             }
