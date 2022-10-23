@@ -1378,7 +1378,19 @@ int ARMv6MCore::doTHUMB32BitInstruction(uint16_t opcode, uint32_t pc)
 
             if((sysm >> 3) == 0)
             {
-                // APSR
+                // xPSR
+                uint32_t mask = 0;
+                if(sysm & 1) // IPSR
+                    mask |= 0x1FF;
+
+                // if(sysm & 2) // T bit reads as 0 so do nothing
+
+                if(sysm & 4) // APSR
+                    mask |= 0xF8000000;
+
+                reg(dstReg) = cpsr & mask;
+
+                return pcSCycles * 2 + 1;
             }
             else if((sysm >> 3) == 1)
             {
