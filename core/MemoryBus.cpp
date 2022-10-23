@@ -146,9 +146,34 @@ void Timer::update(uint64_t target)
     auto ticks = watchdog.getTicks() - lastTicks;
     lastTicks = watchdog.getTicks();
 
-    time += ticks;
+    while(ticks)
+    {
+        auto inc = ticks;
+        uint32_t lowTime = time;
 
-    // TODO: alarms
+        // limit to next alarm
+        for(int i = 0; i < 4; i++)
+        {
+            if(armed & (1 << i))
+                inc = std::min(inc, alarms[i] - lowTime);
+        }
+
+        ticks -= inc;
+        time += inc;
+
+        // check for alarms
+        for(int i = 0; i < 4; i++)
+        {
+            if(!(armed & (1 << i)))
+                continue;
+            
+            if(alarms[i] == time)
+            {
+                printf("ALARM %i\n", i);
+                armed &= ~(1 << i);
+            }
+        }
+    }
 }
 
 uint32_t Timer::regRead(uint32_t addr)
