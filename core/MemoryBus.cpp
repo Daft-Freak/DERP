@@ -124,6 +124,98 @@ void Watchdog::regWrite(uint32_t addr, uint32_t data)
     }
 }
 
+Timer::Timer(Watchdog &watchdog) : watchdog(watchdog)
+{
+}
+
+void Timer::reset()
+{
+    time = 0;
+    lastTicks = 0;
+
+    for(auto &al : alarms)
+        al = 0;
+
+    armed = 0;
+}
+
+void Timer::update(uint64_t target)
+{
+    watchdog.update(target);
+
+    auto ticks = watchdog.getTicks() - lastTicks;
+    lastTicks = watchdog.getTicks();
+
+    time += ticks;
+
+    // TODO: alarms
+}
+
+uint32_t Timer::regRead(uint32_t addr)
+{
+    switch(addr)
+    {
+        case 8: // TIMEHR
+            return latchedHighTime;
+        case 0xC: // TIMELR
+            latchedHighTime = time >> 32;
+            return time & 0xFFFFFFFF;
+        case 0x10: // ALARM0
+        case 0x14:
+        case 0x18:
+        case 0x1C: // ALARM3
+            return alarms[(addr - 0x10) / 4];
+        case 0x20: // ARMED
+            return armed;
+        case 0x24: // TIMERAWH
+            return time >> 32;
+        case 0x28: // TIMERAWL
+            return time & 0xFFFFFFFF;
+    }
+
+    printf("TIMER R %04X\n", addr);
+    return 0;
+}
+
+void Timer::regWrite(uint32_t addr, uint32_t data)
+{
+    int atomic = addr >> 12;
+    addr &= 0xFFF;
+
+    switch(addr)
+    {
+        case 0: // TIMEHW
+        {
+            uint32_t h = time;
+            updateReg(h, data, atomic);
+            time = static_cast<uint64_t>(h) << 32 | writeLowTime;
+            return;
+        }
+        case 4: // TIMELW
+            updateReg(writeLowTime, data, atomic);
+            return;
+        case 0x10: // ALARM0
+        case 0x14:
+        case 0x18:
+        case 0x1C: // ALARM3
+        {
+            int alarm = (addr - 0x10) / 4;
+            updateReg(alarms[alarm], data, atomic);
+            armed |= 1 << alarm;
+            return;
+        }
+        case 0x20: // ARMED
+            // what does atomic + WC do?
+            if(!atomic)
+            {
+                armed &= ~data;
+                return;
+            }
+    }
+
+    printf("TIMER W %04X = %08X\n", addr, data);
+}
+
 enum MemoryRegion
 {
     Region_ROM         = 0x00,
@@ -154,7 +246,7 @@ static inline uint32_t getStripedSRAMAddr(uint32_t addr)
     return bank * 64 * 1024 + word * 4 + (addr & 3);
 }
 
-MemoryBus::MemoryBus()
+MemoryBus::MemoryBus() : timer(watchdog)
 {
     clocks.addClockTarget(4/*REF*/, watchdog.getClock());
 }
@@ -167,6 +259,7 @@ void MemoryBus::setBootROM(const uint8_t *rom)
 void MemoryBus::reset()
 {
     clocks.reset();
+    timer.reset();
     watchdog.reset();
 }
 
@@ -333,6 +426,7 @@ int MemoryBus::getAccessCycles(uint32_t addr, int width, bool sequential) const
 void MemoryBus::peripheralUpdate(uint64_t target)
 {
     watchdog.update(target);
+    timer.update(target);
 }
 
 template<class T, size_t size>
@@ -655,14 +749,8 @@ T MemoryBus::doAPBPeriphRead(ARMv6MCore &cpu, uint32_t addr)
         }
 
         case 21: // TIMER
-        {
-            if(periphAddr == 0x24 || periphAddr == 0x28) // TIMERRAWH/L
-            {
-                auto time = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::high_resolution_clock::now().time_since_epoch()).count();
-                return periphAddr == 0x24 ? time >> 32 : time;
-            }
-            break;
-        }
+            timer.update(cpu.getClock().getTime());
+            return timer.regRead(periphAddr);
 
         case 22: // WATCHDOG
             watchdog.update(cpu.getClock().getTime());
@@ -747,6 +835,11 @@ void MemoryBus::doAPBPeriphWrite(ARMv6MCore &cpu, uint32_t addr, T data)
 
             break;
         }
+
+        case 21: // TIMER
+            timer.update(cpu.getClock().getTime());
+            timer.regWrite(periphAddr, data);
+            return;
 
         case 22: // WATCHDOG
             watchdog.update(cpu.getClock().getTime());
