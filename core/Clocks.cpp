@@ -42,6 +42,30 @@ void Clocks::reset()
     calcFreq(5); // SYS
 }
 
+void Clocks::adjustClocks()
+{
+    uint64_t minTime = ~0ull;
+    uint64_t maxTime = 0;
+
+    for(auto &clock : targets)
+    {
+        auto time = clock.second.getTime();
+
+        if(time < minTime)
+            minTime = time;
+        
+        if(time > maxTime)
+            maxTime = time;
+    }
+
+    // don't do anything until the highest bit is set somewhere  
+    if(!(maxTime & (1ull << 63)))
+        return;
+
+    for(auto &clock : targets)
+        clock.second.adjustTime(minTime);
+}
+
 uint32_t Clocks::getClockFrequency(int clock) const
 {
     return clockFreq[clock];

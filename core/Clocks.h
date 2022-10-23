@@ -10,6 +10,8 @@ class Clocks final
 public:
     void reset();
 
+    void adjustClocks();
+
     uint32_t getClockFrequency(int clock) const;
     uint64_t getClockScale(int clock) const;
 

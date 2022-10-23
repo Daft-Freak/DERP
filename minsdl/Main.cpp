@@ -185,10 +185,7 @@ int main(int argc, char *argv[])
         cpuCycles += cpu.run(elapsed);
 
         // adjust timers to stay in range
-        // ... which is easy becuse there's only one
-        auto emuTime = cpu.getClock().getTime();
-        if(emuTime & (1ull << 63))
-            cpu.getClock().adjustTime(emuTime);
+        clocks.adjustClocks();
 
         lastTick = now;
 
