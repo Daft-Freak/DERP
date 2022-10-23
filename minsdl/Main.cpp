@@ -183,6 +183,8 @@ int main(int argc, char *argv[])
             elapsed = 30;
 
         cpuCycles += cpu.run(elapsed);
+        // sync peripherals
+        mem.peripheralUpdate(cpu.getClock().getTime());
 
         // adjust timers to stay in range
         clocks.adjustClocks();

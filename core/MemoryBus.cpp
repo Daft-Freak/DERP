@@ -6,6 +6,124 @@
 
 #include "ARMv6MCore.h"
 
+static void updateReg(uint32_t &oldVal, uint32_t newVal, int atomic)
+{
+    if(atomic == 0)
+        oldVal = newVal;
+    else if(atomic == 1)
+        oldVal ^= newVal;
+    else if(atomic == 2)
+        oldVal |= newVal;
+    else
+        oldVal &= ~newVal;
+}
+
+Watchdog::Watchdog()
+{
+}
+
+void Watchdog::reset()
+{
+    ctrl = 7 << 24;
+    tick = 1 << 9;
+
+    clock.reset();
+
+    timer = 0;
+    tickCounter = 0;
+    ticks = 0;
+}
+
+void Watchdog::update(uint64_t target)
+{
+    // TODO: actual watchdog
+
+    auto passed = clock.getCyclesToTime(target);
+
+    if(!(tick & (1 << 9)))
+    {
+        clock.addCycles(passed);
+        return;
+    }
+
+    int tickCycles = tick & 0x1FF;
+
+    if(!tickCycles)
+        ticks += passed;
+    else
+    {
+        tickCounter -= passed;
+        while(tickCounter < 0)
+        {
+            tickCounter += tickCycles;
+            ticks++;
+        }
+    }
+
+    clock.addCycles(passed);
+}
+
+uint32_t Watchdog::getTicks()
+{
+    return ticks;
+}
+
+uint32_t Watchdog::regRead(uint32_t addr)
+{
+    switch(addr)
+    {
+        case 0: // CTRL
+            return ctrl | timer;
+        case 4: // LOAD
+            return 0;
+        case 8: // REASON
+            return 0;
+        case 0x0C: // SCRATCH0
+        case 0x10:
+        case 0x14:
+        case 0x18:
+        case 0x1C:
+        case 0x20:
+        case 0x24:
+        case 0x28: // SCRATCH7
+            return scratch[addr / 4 - 3];
+        case 0x2C: // TICK
+            return tick | (1 << 10) | tickCounter << 11;
+    }
+    return 0;
+}
+
+void Watchdog::regWrite(uint32_t addr, uint32_t data)
+{
+    int atomic = addr >> 12;
+    addr &= 0xFFF;
+
+    switch(addr)
+    {
+        case 0: // CTRL
+            updateReg(ctrl, data & 0xC7000000, atomic);
+            return;
+        case 4: // LOAD
+            timer = data & 0xFFFFFF;
+            return;
+        case 8: // REASON
+            return;
+        case 0x0C: // SCRATCH0
+        case 0x10:
+        case 0x14:
+        case 0x18:
+        case 0x1C:
+        case 0x20:
+        case 0x24:
+        case 0x28: // SCRATCH7
+            scratch[addr / 4 - 3] = data;
+            return;
+        case 0x2C: // TICK
+            updateReg(tick, data & 0x3FF, atomic);
+            return;
+    }
+}
+
 enum MemoryRegion
 {
     Region_ROM         = 0x00,
@@ -36,19 +154,10 @@ static inline uint32_t getStripedSRAMAddr(uint32_t addr)
     return bank * 64 * 1024 + word * 4 + (addr & 3);
 }
 
-static void updateReg(uint32_t &oldVal, uint32_t newVal, int atomic)
+MemoryBus::MemoryBus()
 {
-    if(atomic == 0)
-        oldVal = newVal;
-    else if(atomic == 1)
-        oldVal ^= newVal;
-    else if(atomic == 2)
-        oldVal |= newVal;
-    else
-        oldVal &= ~newVal;
+    clocks.addClockTarget(4/*REF*/, watchdog.getClock());
 }
-
-MemoryBus::MemoryBus() {}
 
 void MemoryBus::setBootROM(const uint8_t *rom)
 {
@@ -91,7 +200,7 @@ T MemoryBus::read(ARMv6MCore &cpu, uint32_t addr, int &cycles, bool sequential)
 
         case Region_APBPeriph:
             accessCycles(4);
-            return doAPBPeriphRead<T>(addr);
+            return doAPBPeriphRead<T>(cpu, addr);
 
         case Region_AHBPeriph:
             accessCycles(1);
@@ -135,7 +244,7 @@ void MemoryBus::write(ARMv6MCore &cpu, uint32_t addr, T data, int &cycles, bool 
 
         case Region_APBPeriph:
             accessCycles(5);
-            doAPBPeriphWrite<T>(addr, data);
+            doAPBPeriphWrite<T>(cpu, addr, data);
             return;
 
         case Region_AHBPeriph:
@@ -218,6 +327,11 @@ uint8_t *MemoryBus::mapAddress(uint32_t addr)
 int MemoryBus::getAccessCycles(uint32_t addr, int width, bool sequential) const
 {
     return 1;
+}
+
+void MemoryBus::peripheralUpdate(uint64_t target)
+{
+    watchdog.update(target);
 }
 
 template<class T, size_t size>
@@ -477,7 +591,7 @@ static const char *apbPeriphNames[]{
 };
 
 template<class T>
-T MemoryBus::doAPBPeriphRead(uint32_t addr)
+T MemoryBus::doAPBPeriphRead(ARMv6MCore &cpu, uint32_t addr)
 {
     auto peripheral = (addr >> 14) & 0x1F;
     auto periphAddr = addr & 0x3FFF;
@@ -546,7 +660,12 @@ T MemoryBus::doAPBPeriphRead(uint32_t addr)
                 auto time = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::high_resolution_clock::now().time_since_epoch()).count();
                 return periphAddr == 0x24 ? time >> 32 : time;
             }
+            break;
         }
+
+        case 22: // WATCHDOG
+            watchdog.update(cpu.getClock().getTime());
+            return watchdog.regRead(periphAddr);
     }
 
     printf("APBP R %s %04X\n", apbPeriphNames[peripheral], addr & 0x3FFF);
@@ -555,7 +674,7 @@ T MemoryBus::doAPBPeriphRead(uint32_t addr)
 }
 
 template<class T>
-void MemoryBus::doAPBPeriphWrite(uint32_t addr, T data)
+void MemoryBus::doAPBPeriphWrite(ARMv6MCore &cpu, uint32_t addr, T data)
 {
     auto peripheral = (addr >> 14) & 0x1F;
     auto periphAddr = addr & 0x3FFF;
@@ -627,6 +746,11 @@ void MemoryBus::doAPBPeriphWrite(uint32_t addr, T data)
 
             break;
         }
+
+        case 22: // WATCHDOG
+            watchdog.update(cpu.getClock().getTime());
+            watchdog.regWrite(periphAddr, data);
+            return;
     }
 
     printf("APBP W %s %04X = %08X\n", apbPeriphNames[peripheral], addr & 0x3FFF, data);

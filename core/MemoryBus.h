@@ -7,6 +7,35 @@
 
 class ARMv6MCore;
 
+
+class Watchdog final
+{
+public:
+    Watchdog();
+
+    void reset();
+
+    void update(uint64_t target);
+
+    uint32_t getTicks();
+
+    uint32_t regRead(uint32_t addr);
+    void regWrite(uint32_t addr, uint32_t data);
+
+    ClockTarget &getClock() {return clock;}
+
+private:
+    uint32_t ctrl;
+    uint32_t scratch[8];
+    uint32_t tick;
+
+    ClockTarget clock;
+
+    int timer;
+    int tickCounter;
+    uint32_t ticks;
+};
+
 class MemoryBus
 {
 public:
@@ -46,6 +75,8 @@ public:
         return ret;
     }
 
+    void peripheralUpdate(uint64_t target);
+
     Clocks &getClocks() {return clocks;}
 
 private:
@@ -68,9 +99,9 @@ private:
     void doSRAMWrite(uint32_t addr, T data);
 
     template<class T>
-    T doAPBPeriphRead(uint32_t addr);
+    T doAPBPeriphRead(ARMv6MCore &cpu, uint32_t addr);
     template<class T>
-    void doAPBPeriphWrite(uint32_t addr, T data);
+    void doAPBPeriphWrite(ARMv6MCore &cpu, uint32_t addr, T data);
 
     template<class T>
     T doAHBPeriphRead(uint32_t addr) const;
@@ -101,6 +132,8 @@ private:
     uint32_t dummy = 0xBADADD55;
 
     Clocks clocks;
+
+    Watchdog watchdog;
 
     // temp peripherals stuff
     uint32_t ioQSPICtrl[6]{0};
