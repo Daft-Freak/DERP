@@ -1031,6 +1031,13 @@ int ARMv6MCore::doTHUMB14PushPop(uint16_t opcode, uint32_t pc)
     bool pclr = opcode & (1 << 8); // store LR/load PC
     uint8_t regList = opcode & 0xFF;
 
+    int numRegs = pclr ? 1 : 0;
+    for(uint8_t t = regList; t; t >>= 1)
+    {
+        if(t & 1)
+            numRegs++;
+    }
+
     int cycles = 0;
 
     if(isLoad) // POP
@@ -1039,13 +1046,14 @@ int ARMv6MCore::doTHUMB14PushPop(uint16_t opcode, uint32_t pc)
         auto ptr = reinterpret_cast<uint32_t *>(mem.mapAddress(addr & ~3));
         auto loadCycles = mem.getAccessCycles(addr, 4, true);
 
+        loReg(curSP) = addr + numRegs * 4;
+
         int i = 0;
         for(; regList; regList >>= 1, i++)
         {
             if(regList & 1)
             {
                 regs[i] = *ptr++;
-                addr += 4;
                 cycles += loadCycles;
             }
         }
@@ -1053,27 +1061,16 @@ int ARMv6MCore::doTHUMB14PushPop(uint16_t opcode, uint32_t pc)
         if(pclr)
         {
             updateTHUMBPC(*ptr++ & ~1); /*ignore thumb bit*/
-            addr += 4;
-
             cycles += loadCycles; // TODO
         }
 
         cycles++; // I cycle
 
-        loReg(curSP) = addr;
-
         return mem.iCycle(cycles) + mem.prefetchTiming16(pcSCycles, pcNCycles);
     }
     else // PUSH
     {
-        auto addr = loReg(curSP) - (pclr ? 4 : 0);
-
-        // offset
-        for(uint8_t t = regList; t; t >>= 1)
-        {
-            if(t & 1)
-                addr -= 4;
-        }
+        auto addr = loReg(curSP) - numRegs * 4;
         loReg(curSP) = addr;
 
         auto ptr = reinterpret_cast<uint32_t *>(mem.mapAddress(addr & ~3));
