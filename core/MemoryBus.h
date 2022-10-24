@@ -7,6 +7,7 @@
 
 class ARMv6MCore;
 
+class MemoryBus;
 
 class Watchdog final
 {
@@ -39,7 +40,7 @@ private:
 class Timer final
 {
 public:
-    Timer(Watchdog &watchdog);
+    Timer(MemoryBus &mem);
 
     void reset();
 
@@ -49,7 +50,7 @@ public:
     void regWrite(uint32_t addr, uint32_t data);
 
 private:
-    Watchdog &watchdog;
+    MemoryBus &mem;
 
     uint64_t time;
     uint32_t latchedHighTime, writeLowTime;
@@ -66,6 +67,8 @@ public:
     MemoryBus();
 
     void setBootROM(const uint8_t *rom);
+
+    void setCPU(ARMv6MCore *cpu);
 
     void reset();
 
@@ -101,7 +104,10 @@ public:
 
     void peripheralUpdate(uint64_t target);
 
+    void setPendingIRQ(int n);
+
     Clocks &getClocks() {return clocks;}
+    Watchdog &getWatchdog() {return watchdog;}
 
 private:
     template<class T, size_t size>
@@ -154,6 +160,8 @@ private:
     uint8_t usbDPRAM[4 * 1024];
 
     uint32_t dummy = 0xBADADD55;
+
+    ARMv6MCore *cpu = nullptr; // TODO: cpus
 
     Clocks clocks;
 

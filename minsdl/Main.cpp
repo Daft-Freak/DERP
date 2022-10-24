@@ -113,7 +113,7 @@ int main(int argc, char *argv[])
     }
 
     // emu init
-    auto &mem = cpu.getMem();
+    mem.setCPU(&cpu);
 
     std::ifstream bootROMFile(basePath + "bootrom.bin");
     if(bootROMFile)

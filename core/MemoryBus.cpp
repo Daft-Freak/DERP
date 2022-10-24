@@ -124,7 +124,7 @@ void Watchdog::regWrite(uint32_t addr, uint32_t data)
     }
 }
 
-Timer::Timer(Watchdog &watchdog) : watchdog(watchdog)
+Timer::Timer(MemoryBus &mem) : mem(mem)
 {
 }
 
@@ -141,6 +141,7 @@ void Timer::reset()
 
 void Timer::update(uint64_t target)
 {
+    auto &watchdog = mem.getWatchdog();
     watchdog.update(target);
 
     auto ticks = watchdog.getTicks() - lastTicks;
@@ -271,7 +272,7 @@ static inline uint32_t getStripedSRAMAddr(uint32_t addr)
     return bank * 64 * 1024 + word * 4 + (addr & 3);
 }
 
-MemoryBus::MemoryBus() : timer(watchdog)
+MemoryBus::MemoryBus() : timer(*this)
 {
     clocks.addClockTarget(4/*REF*/, watchdog.getClock());
 }
@@ -279,6 +280,11 @@ MemoryBus::MemoryBus() : timer(watchdog)
 void MemoryBus::setBootROM(const uint8_t *rom)
 {
     bootROM = rom;
+}
+
+void MemoryBus::setCPU(ARMv6MCore *cpu)
+{
+    this->cpu = cpu;
 }
 
 void MemoryBus::reset()
