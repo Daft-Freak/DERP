@@ -480,6 +480,12 @@ void MemoryBus::peripheralUpdate(uint64_t target)
     timer.update(target);
 }
 
+void MemoryBus::setPendingIRQ(int n)
+{
+    // TODO: and the other one
+    cpu->setPendingIRQ(n);
+}
+
 template<class T, size_t size>
 T MemoryBus::doRead(const uint8_t (&mem)[size], uint32_t addr) const
 {
