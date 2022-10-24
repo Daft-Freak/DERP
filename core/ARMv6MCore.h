@@ -131,7 +131,7 @@ private:
     uint32_t fetchOp = 0, decodeOp = 0;
 
     // internal state
-    bool halted;
+    bool sleeping, eventFlag;
 
     // exceptions
     uint64_t exceptionPending, exceptionActive;

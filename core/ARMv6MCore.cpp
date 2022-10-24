@@ -23,7 +23,8 @@ void ARMv6MCore::reset()
     primask = control = 0;
     curSP = Reg::MSP;
 
-    halted = false;
+    sleeping = false;
+    eventFlag = false;
 
     clock.reset();
 
@@ -68,7 +69,7 @@ unsigned int ARMv6MCore::run(int ms)
     {
         uint32_t exec = 1;
 
-        if(!halted)
+        if(!sleeping)
         {
             // CPU
             exec = executeTHUMBInstruction();
@@ -88,17 +89,16 @@ unsigned int ARMv6MCore::run(int ms)
             clock.addCycles(exec);
             cycles += exec;
 
-            if(halted && clock.getTime() < targetTime)
+            mem.peripheralUpdate(clock.getTime()); // TODO: should only update things that might cause interrupts
+
+            if(sleeping && clock.getTime() < targetTime)
             {
                 // skip ahead
-                exec = clock.getCyclesToTime(targetTime);
-
-                // TODO: limit
-
-                assert(exec > 0);
+                auto target = mem.getNextInterruptTime(targetTime);
+                exec = std::max(UINT32_C(1), clock.getCyclesToTime(target));
             }
         }
-        while(halted && clock.getTime() < targetTime);
+        while(sleeping && clock.getTime() < targetTime);
     }
 
     return cycles;
@@ -1009,11 +1009,15 @@ int ARMv6MCore::doTHUMBMisc(uint16_t opcode, uint32_t pc)
                         return pcSCycles;
 
                     case 2: // WFE
-                        //halted = true; // TODO
+                        if(eventFlag)
+                            eventFlag = false;
+                        else
+                            sleeping = true;
+
                         return pcSCycles * 2;
                     
                     case 3: // WFI
-                        // TODO
+                        // TODO: a bit different
                         return pcSCycles * 2;
 
                     case 4: // SEV
@@ -1569,7 +1573,10 @@ int ARMv6MCore::handleException()
     exceptionActive |= 1ull << newException;
     exceptionPending &= ~(1ull << newException);
 
-    // TODO: set event/wake up
+    // set event/wake up
+    eventFlag = true;
+    if(sleeping)
+        sleeping = false;
 
     auto vtor = scbRegs[2];
     auto addr = readMem32(vtor + newException * 4, cycles);
@@ -1605,7 +1612,10 @@ int ARMv6MCore::handleExceptionReturn(uint32_t excRet)
 
     cpsr = newPSR & 0xF100003F;
 
-    // TODO: set event
+    // set event
+    eventFlag = true;
+    if(sleeping)
+        sleeping = false;
 
     // TODO: sleep on exit
 
