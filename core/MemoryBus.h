@@ -58,6 +58,9 @@ private:
     uint32_t alarms[4];
     uint32_t armed;
 
+    uint32_t interrupts;
+    uint32_t interruptEnables;
+
     uint32_t lastTicks;
 };
 

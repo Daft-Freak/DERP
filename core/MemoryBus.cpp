@@ -137,6 +137,9 @@ void Timer::reset()
         al = 0;
 
     armed = 0;
+
+    interrupts = 0;
+    interruptEnables = 0;
 }
 
 void Timer::update(uint64_t target)
@@ -170,7 +173,11 @@ void Timer::update(uint64_t target)
             
             if(alarms[i] == time)
             {
-                printf("ALARM %i\n", i);
+                interrupts |= (1 << i);
+
+                if(interruptEnables & (1 << i))
+                    mem.setPendingIRQ(i); // TODO: should stay pending if not cleared?
+
                 armed &= ~(1 << i);
             }
         }
@@ -197,6 +204,8 @@ uint32_t Timer::regRead(uint32_t addr)
             return time >> 32;
         case 0x28: // TIMERAWL
             return time & 0xFFFFFFFF;
+        case 0x38: // INTE
+            return interruptEnables;
     }
 
     printf("TIMER R %04X\n", addr);
@@ -237,6 +246,17 @@ void Timer::regWrite(uint32_t addr, uint32_t data)
                 armed &= ~data;
                 return;
             }
+            break;
+        case 0x34: // INTR
+            if(!atomic)
+            {
+                interrupts &= ~data;
+                return;
+            }
+            break;
+        case 0x38: // INTE
+            updateReg(interruptEnables, data, atomic);
+            return;
     }
 
     printf("TIMER W %04X = %08X\n", addr, data);
