@@ -170,7 +170,7 @@ void Timer::update(uint64_t target)
             if(!(armed & (1 << i)))
                 continue;
             
-            if(alarms[i] == time)
+            if(alarms[i] == (time & 0xFFFFFFFF))
             {
                 interrupts |= (1 << i);
 
