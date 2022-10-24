@@ -13,6 +13,8 @@ public:
 
     unsigned int run(int ms);
 
+    void setPendingIRQ(int n);
+
     uint32_t readReg(uint32_t addr);
     void writeReg(uint32_t addr, uint32_t data);
 
@@ -110,6 +112,9 @@ private:
 
     void updateTHUMBPC(uint32_t pc);
 
+    int handleException();
+    int handleExceptionReturn(uint32_t excRet);
+
     static const uint32_t signBit = 0x80000000;
 
     // registers
@@ -128,11 +133,14 @@ private:
     // internal state
     bool halted;
 
+    // exceptions
+    uint64_t exceptionPending, exceptionActive;
+
     // "real" time for synchronisation/scheduling
     ClockTarget clock;
 
     uint32_t sysTickRegs[4]; // E010-E01C
-    uint32_t nvicEnabled, nvicPending, nvicPriority[8];
+    uint32_t nvicEnabled, nvicPriority[8];
     uint32_t scbRegs[10]; // ED00-ED24
     uint32_t mpuRegs[5]; // ED90-EDA0
 

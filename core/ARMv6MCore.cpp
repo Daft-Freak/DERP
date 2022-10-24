@@ -27,10 +27,12 @@ void ARMv6MCore::reset()
 
     clock.reset();
 
+    exceptionActive = exceptionPending = 0;
+
     for(auto &reg : sysTickRegs)
         reg = 0;
 
-    nvicEnabled = nvicPending = 0;
+    nvicEnabled = 0;
     for(auto &reg : nvicPriority)
         reg = 0;
 
@@ -77,6 +79,12 @@ unsigned int ARMv6MCore::run(int ms)
         {
             // interrupts?
 
+            if(!(primask & 1) && exceptionPending)
+            {
+                // TODO: mask disabled
+                exec += handleException();
+            }
+
             clock.addCycles(exec);
             cycles += exec;
 
@@ -96,6 +104,11 @@ unsigned int ARMv6MCore::run(int ms)
     return cycles;
 }
 
+void ARMv6MCore::setPendingIRQ(int n)
+{
+    exceptionPending |= 1ull << (n + 16);
+}
+
 uint32_t ARMv6MCore::readReg(uint32_t addr)
 {
     switch(addr & 0xFFFFFFF)
@@ -111,7 +124,7 @@ uint32_t ARMv6MCore::readReg(uint32_t addr)
             return nvicEnabled;
         case 0xE200: // NVIC_ISPR
         case 0xE280: // NVIC_IPCR
-            return nvicPending;
+            return exceptionPending >> 16;
         case 0xE400: // NVIC_IPR0
         case 0xE404: // NVIC_IPR1
         case 0xE408: // NVIC_IPR2
@@ -164,10 +177,10 @@ void ARMv6MCore::writeReg(uint32_t addr, uint32_t data)
             nvicEnabled &= ~data; //
             return;
         case 0xE200: // NVIC_ISPR
-            nvicPending |= data;
+            exceptionPending |= static_cast<uint64_t>(data) << 16;
             return;
         case 0xE280: // NVIC_IPCR
-            nvicPending &= ~data;
+            exceptionPending &= ~(static_cast<uint64_t>(data) << 16);
             return;
         case 0xE400: // NVIC_IPR0
         case 0xE404: // NVIC_IPR1
@@ -683,9 +696,14 @@ int ARMv6MCore::doTHUMB05HiReg(uint16_t opcode, uint32_t pc)
                 loReg(Reg::LR) = (pc - 2) | 1; 
 
             assert(src & 1);
-            updateTHUMBPC(src & ~1);
+            int cycles = pcSCycles * 2 + pcNCycles;
 
-            return pcSCycles * 2 + pcNCycles;
+            if(src >> 28 == 0xF)
+                cycles += handleExceptionReturn(src);
+            else
+                updateTHUMBPC(src & ~1);
+
+            return cycles;
         }
 
         default:
@@ -1060,7 +1078,12 @@ int ARMv6MCore::doTHUMB14PushPop(uint16_t opcode, uint32_t pc)
 
         if(pclr)
         {
-            updateTHUMBPC(*ptr++ & ~1); /*ignore thumb bit*/
+            auto newPC = *ptr++;
+            if(newPC >> 28 == 0xF)
+                cycles += handleExceptionReturn(newPC);
+            else
+                updateTHUMBPC(newPC & ~1); /*ignore thumb bit*/
+
             cycles += loadCycles; // TODO
         }
 
@@ -1454,4 +1477,139 @@ void ARMv6MCore::updateTHUMBPC(uint32_t pc)
     }
 
     loReg(Reg::PC) = pc + 2; // pointing at last fetch
+}
+
+int ARMv6MCore::handleException()
+{
+    auto getExceptionPriority = [this](int exception) -> int
+    {
+        switch(exception)
+        {
+            case 0: // thread/no exception
+                return 4;
+
+            case 2: // NMI
+                return -2;
+            
+            case 3: // HardFault
+                return -1;
+
+            case 11: // SVCall
+                return scbRegs[7]/*SHPR2*/ >> 30;
+            case 14: // PendSV
+                return  (scbRegs[8]/*SHPR3*/ >> 22) & 3;
+            case 15: // SysTick
+                return scbRegs[8]/*SHPR3*/ >> 30;
+            
+            default:
+                assert(exception >= 16);
+                // external interrupt
+                int shift = 6 + (exception & 3) * 8;
+                return (nvicPriority[(exception - 16) / 4] >> shift) & 3;
+        }
+    };
+
+    // get cur priority
+    int curException = cpsr & 0x3F;
+    int curPrio = getExceptionPriority(curException);
+
+    // find highest priority pending exception
+    int newException = 0;
+    int newPrio = 4;
+
+    for(int i = 2; i < 48 && newPrio; i++)
+    {
+        // skip not pending
+        if(!(exceptionPending & (1ull << i)))
+            continue;
+
+        // skip not enabled external interrupt
+        if(i >= 16 && !(nvicEnabled & (1 << (i - 16))))
+            continue;
+
+        int prio = getExceptionPriority(i);
+
+        if(prio < newPrio)
+        {
+            newPrio = prio;
+            newException = i;
+        }
+    }
+
+    // no higher priority exception
+    if(newPrio >= curPrio && newException >= curException)
+        return 0;
+
+    // push to stack
+    auto &sp = reg(Reg::SP);
+    auto spAlign = sp & 4;
+    sp = (sp - 0x20) & ~4;
+
+    int cycles = 0;
+    writeMem32(sp +  0, loReg(Reg::R0 ), cycles);
+    writeMem32(sp +  4, loReg(Reg::R1 ), cycles, true);
+    writeMem32(sp +  8, loReg(Reg::R2 ), cycles, true);
+    writeMem32(sp + 12, loReg(Reg::R3 ), cycles, true);
+    writeMem32(sp + 16, loReg(Reg::R12), cycles, true);
+    writeMem32(sp + 20, loReg(Reg::LR ), cycles, true);
+
+    writeMem32(sp + 24, loReg(Reg::PC) - 2, cycles, true);
+    writeMem32(sp + 28, cpsr | spAlign << 7, cycles, true);
+
+    if(cpsr & 0x3F) // in handler
+        loReg(Reg::LR) = 0xFFFFFFF1;
+    else if(control & (1 << 1)/*SPSEL*/)
+        loReg(Reg::LR) = 0xFFFFFFFD;
+    else
+        loReg(Reg::LR) = 0xFFFFFFF9;
+
+    // take exception
+    cpsr = (cpsr & ~0x3F) | newException;
+
+    exceptionActive |= 1ull << newException;
+    exceptionPending &= ~(1ull << newException);
+
+    // TODO: set event/wake up
+
+    auto vtor = scbRegs[2];
+    auto addr = readMem32(vtor + newException * 4, cycles);
+
+    assert(addr & 1);
+    updateTHUMBPC(addr & ~1);
+
+    return cycles + pcSCycles * 2 + pcNCycles;
+}
+
+int ARMv6MCore::handleExceptionReturn(uint32_t excRet)
+{
+    assert((excRet & 0xFFFFFF0) == 0xFFFFFF0);
+
+    int exception = cpsr & 0x3F;
+    auto &sp = loReg((excRet & 0xF) == 0xD ? Reg::PSP : Reg::MSP);
+
+    exceptionActive &= ~(1ull << exception);
+
+    // pop from stack
+    int cycles = 0;
+    loReg(Reg::R0)  = readMem32(sp +  0, cycles);
+    loReg(Reg::R1)  = readMem32(sp +  4, cycles, true);
+    loReg(Reg::R2)  = readMem32(sp +  8, cycles, true);
+    loReg(Reg::R3)  = readMem32(sp + 12, cycles, true);
+    loReg(Reg::R12) = readMem32(sp + 16, cycles, true);
+    loReg(Reg::LR)  = readMem32(sp + 20, cycles, true);
+    
+    auto newPC = readMem32(sp + 24, cycles, true);
+    auto newPSR = readMem32(sp + 28, cycles, true);
+
+    sp = (sp + 0x20) | (newPSR & (1 << 9)) >> 7;
+
+    cpsr = newPSR & 0xF100003F;
+
+    // TODO: set event
+
+    // TODO: sleep on exit
+
+    updateTHUMBPC(newPC & ~1);
+
+    return cycles; // caller should handle the branch
 }
