@@ -67,6 +67,13 @@ uint32_t Watchdog::getTicks()
     return ticks;
 }
 
+uint64_t Watchdog::getTickTarget(uint32_t numTicks)
+{
+    int tickCycles = tick & 0x1FF;
+    uint32_t cycles = numTicks * tickCycles - tickCounter;
+    return clock.getTimeToCycles(cycles);
+}
+
 uint32_t Watchdog::regRead(uint32_t addr)
 {
     switch(addr)
@@ -181,6 +188,29 @@ void Timer::update(uint64_t target)
             }
         }
     }
+}
+
+uint64_t Timer::getNextInterruptTime(uint64_t target)
+{
+    if(!armed || !interruptEnables)
+        return target;
+
+    // assumes watchdog is up to date
+
+    for(int i = 0; i < 4; i++)
+    {
+        if(!(armed & (1 << i)) || !(interruptEnables & (1 << i)))
+            continue;
+
+        int ticksToIntr = alarms[i] - (time & 0xFFFFFFFF);
+
+        auto tickTarget = mem.getWatchdog().getTickTarget(ticksToIntr);
+
+        if(tickTarget < target)
+            target = tickTarget;
+    }
+
+    return target;
 }
 
 uint32_t Timer::regRead(uint32_t addr)
@@ -477,6 +507,16 @@ void MemoryBus::peripheralUpdate(uint64_t target)
 {
     watchdog.update(target);
     timer.update(target);
+}
+
+uint64_t MemoryBus::getNextInterruptTime(uint64_t target)
+{
+    // clamp to when there might be an interrupt
+    // TODO: check cpu enabled mask
+
+    target = timer.getNextInterruptTime(target);
+
+    return target;
 }
 
 void MemoryBus::setPendingIRQ(int n)

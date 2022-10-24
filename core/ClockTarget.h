@@ -35,6 +35,11 @@ public:
         return (targetTime - emuTime) / clockScale;
     }
 
+    uint64_t getTimeToCycles(uint32_t cycles) const
+    {
+        return emuTime + cycles * clockScale;
+    }
+
     void setClockScale(uint64_t clockScale)
     {
         this->clockScale = clockScale;
