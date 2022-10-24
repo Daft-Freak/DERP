@@ -1,4 +1,3 @@
-#include <chrono> // timer hack
 #include <cstdio>
 #include <cstring>
 
