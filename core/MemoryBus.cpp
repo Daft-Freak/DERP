@@ -339,6 +339,7 @@ void MemoryBus::setCPU(ARMv6MCore *cpu)
 void MemoryBus::reset()
 {
     clocks.reset();
+    gpio.reset();
     timer.reset();
     watchdog.reset();
 }
@@ -803,6 +804,9 @@ T MemoryBus::doAPBPeriphRead(ARMv6MCore &cpu, uint32_t addr)
             break;
         }
 
+        case 5: // IO_BANK0
+            return gpio.regRead(periphAddr);
+
         case 6: // IO_QSPI
         {
             if(periphAddr < 0x30)
@@ -815,6 +819,9 @@ T MemoryBus::doAPBPeriphRead(ARMv6MCore &cpu, uint32_t addr)
             }
             break;
         }
+
+        case 7: // PADS_BANK0
+            return gpio.padsRegRead(periphAddr);
 
         case 10: // PLL_SYS
             return clocks.pllSysRegRead(periphAddr);
@@ -870,6 +877,10 @@ void MemoryBus::doAPBPeriphWrite(ARMv6MCore &cpu, uint32_t addr, T data)
             clocks.regWrite(periphAddr, data);
             return;
 
+        case 5: // IO_BANK0
+            gpio.regWrite(periphAddr, data);
+            return;
+
         case 6: // IO_QSPI
         {
             if((periphAddr & 0xFFF) < 0x30)
@@ -900,6 +911,10 @@ void MemoryBus::doAPBPeriphWrite(ARMv6MCore &cpu, uint32_t addr, T data)
             }
             break;
         }
+
+        case 7: // PADS_BANK0
+            gpio.padsRegWrite(periphAddr, data);
+            return;
 
         case 10: // PLL_SYS
             clocks.pllSysRegWrite(periphAddr, data);

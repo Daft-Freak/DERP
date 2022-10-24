@@ -4,6 +4,7 @@
 #include <queue>
 
 #include "Clocks.h"
+#include "GPIO.h"
 
 class ARMv6MCore;
 
@@ -172,6 +173,8 @@ private:
     ARMv6MCore *cpu = nullptr; // TODO: cpus
 
     Clocks clocks;
+
+    GPIO gpio;
 
     Watchdog watchdog;
 
