@@ -24,4 +24,12 @@ private:
     MemoryBus &mem;
 
     ClockTarget clock;
+
+    static const int numChannels = 12;
+    uint32_t readAddr[numChannels];
+    uint32_t writeAddr[numChannels];
+    uint32_t transferCount[numChannels], transferCountReload[numChannels];
+    uint32_t ctrl[numChannels];
+
+    uint32_t channelTriggered;
 };
