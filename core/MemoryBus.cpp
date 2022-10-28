@@ -383,11 +383,11 @@ T MemoryBus::read(ARMv6MCore &cpu, uint32_t addr, int &cycles, bool sequential)
 
         case Region_APBPeriph:
             accessCycles(4);
-            return doAPBPeriphRead<T>(cpu, addr);
+            return doAPBPeriphRead<T>(cpu.getClock(), addr);
 
         case Region_AHBPeriph:
             accessCycles(1);
-            return doAHBPeriphRead<T>(cpu, addr);
+            return doAHBPeriphRead<T>(cpu.getClock(), addr);
 
         case Region_IOPORT:
             accessCycles(1);
@@ -427,12 +427,12 @@ void MemoryBus::write(ARMv6MCore &cpu, uint32_t addr, T data, int &cycles, bool 
 
         case Region_APBPeriph:
             accessCycles(5);
-            doAPBPeriphWrite<T>(cpu, addr, data);
+            doAPBPeriphWrite<T>(cpu.getClock(), addr, data);
             return;
 
         case Region_AHBPeriph:
             accessCycles(1);
-            doAHBPeriphWrite<T>(cpu, addr, data);
+            doAHBPeriphWrite<T>(cpu.getClock(), addr, data);
             return;
 
         case Region_IOPORT:
@@ -793,7 +793,7 @@ static const char *apbPeriphNames[]{
 };
 
 template<class T>
-T MemoryBus::doAPBPeriphRead(ARMv6MCore &cpu, uint32_t addr)
+T MemoryBus::doAPBPeriphRead(ClockTarget &masterClock, uint32_t addr)
 {
     auto peripheral = (addr >> 14) & 0x1F;
     auto periphAddr = addr & 0x3FFF;
@@ -862,11 +862,11 @@ T MemoryBus::doAPBPeriphRead(ARMv6MCore &cpu, uint32_t addr)
         }
 
         case 21: // TIMER
-            timer.update(cpu.getClock().getTime());
+            timer.update(masterClock.getTime());
             return timer.regRead(periphAddr);
 
         case 22: // WATCHDOG
-            watchdog.update(cpu.getClock().getTime());
+            watchdog.update(masterClock.getTime());
             return watchdog.regRead(periphAddr);
     }
 
@@ -876,7 +876,7 @@ T MemoryBus::doAPBPeriphRead(ARMv6MCore &cpu, uint32_t addr)
 }
 
 template<class T>
-void MemoryBus::doAPBPeriphWrite(ARMv6MCore &cpu, uint32_t addr, T data)
+void MemoryBus::doAPBPeriphWrite(ClockTarget &masterClock, uint32_t addr, T data)
 {
     auto peripheral = (addr >> 14) & 0x1F;
     auto periphAddr = addr & 0x3FFF;
@@ -973,12 +973,12 @@ void MemoryBus::doAPBPeriphWrite(ARMv6MCore &cpu, uint32_t addr, T data)
         }
 
         case 21: // TIMER
-            timer.update(cpu.getClock().getTime());
+            timer.update(masterClock.getTime());
             timer.regWrite(periphAddr, data);
             return;
 
         case 22: // WATCHDOG
-            watchdog.update(cpu.getClock().getTime());
+            watchdog.update(masterClock.getTime());
             watchdog.regWrite(periphAddr, data);
             return;
     }
@@ -987,11 +987,11 @@ void MemoryBus::doAPBPeriphWrite(ARMv6MCore &cpu, uint32_t addr, T data)
 }
 
 template<class T>
-T MemoryBus::doAHBPeriphRead(ARMv6MCore &cpu, uint32_t addr)
+T MemoryBus::doAHBPeriphRead(ClockTarget &masterClock, uint32_t addr)
 {
     if(addr < 0x50100000) // DMA
     {
-        dma.update(cpu.getClock().getTime());
+        dma.update(masterClock.getTime());
         return dma.regRead(addr & 0xFFFF);
     }
     else if(addr < 0x50101000) // USB DPRAM
@@ -1012,11 +1012,11 @@ T MemoryBus::doAHBPeriphRead(ARMv6MCore &cpu, uint32_t addr)
 }
 
 template<class T>
-void MemoryBus::doAHBPeriphWrite(ARMv6MCore &cpu, uint32_t addr, T data)
+void MemoryBus::doAHBPeriphWrite(ClockTarget &masterClock, uint32_t addr, T data)
 {
     if(addr < 0x50100000) // DMA
     {
-        dma.update(cpu.getClock().getTime());
+        dma.update(masterClock.getTime());
         dma.regWrite(addr & 0xFFFF, data);
         return;
     }

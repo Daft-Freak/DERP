@@ -142,14 +142,14 @@ private:
     void doSRAMWrite(uint32_t addr, T data);
 
     template<class T>
-    T doAPBPeriphRead(ARMv6MCore &cpu, uint32_t addr);
+    T doAPBPeriphRead(ClockTarget &masterClock, uint32_t addr);
     template<class T>
-    void doAPBPeriphWrite(ARMv6MCore &cpu, uint32_t addr, T data);
+    void doAPBPeriphWrite(ClockTarget &masterClock, uint32_t addr, T data);
 
     template<class T>
-    T doAHBPeriphRead(ARMv6MCore &cpu, uint32_t addr);
+    T doAHBPeriphRead(ClockTarget &masterClock, uint32_t addr);
     template<class T>
-    void doAHBPeriphWrite(ARMv6MCore &cpu, uint32_t addr, T data);
+    void doAHBPeriphWrite(ClockTarget &masterClock, uint32_t addr, T data);
 
     template<class T>
     T doIOPORTRead(uint32_t addr);
