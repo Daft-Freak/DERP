@@ -4,6 +4,7 @@
 #include <queue>
 
 #include "Clocks.h"
+#include "DMA.h"
 #include "GPIO.h"
 
 class ARMv6MCore;
@@ -144,9 +145,9 @@ private:
     void doAPBPeriphWrite(ARMv6MCore &cpu, uint32_t addr, T data);
 
     template<class T>
-    T doAHBPeriphRead(uint32_t addr) const;
+    T doAHBPeriphRead(ARMv6MCore &cpu, uint32_t addr);
     template<class T>
-    void doAHBPeriphWrite(uint32_t addr, T data);
+    void doAHBPeriphWrite(ARMv6MCore &cpu, uint32_t addr, T data);
 
     template<class T>
     T doIOPORTRead(uint32_t addr);
@@ -180,6 +181,8 @@ private:
     Watchdog watchdog;
 
     Timer timer; // depends on watchdog
+
+    DMA dma;
 
     // temp peripherals stuff
     uint32_t ioQSPICtrl[6]{0};

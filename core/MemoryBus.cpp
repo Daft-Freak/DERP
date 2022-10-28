@@ -321,9 +321,11 @@ static inline uint32_t getStripedSRAMAddr(uint32_t addr)
     return bank * 64 * 1024 + word * 4 + (addr & 3);
 }
 
-MemoryBus::MemoryBus() : gpio(*this), timer(*this)
+MemoryBus::MemoryBus() : gpio(*this), timer(*this), dma(*this)
 {
     clocks.addClockTarget(4/*REF*/, watchdog.getClock());
+
+    clocks.addClockTarget(5/*SYS*/, dma.getClock());
 }
 
 void MemoryBus::setBootROM(const uint8_t *rom)
@@ -342,6 +344,8 @@ void MemoryBus::reset()
     gpio.reset();
     timer.reset();
     watchdog.reset();
+
+    dma.reset();
 }
 
 template<class T>
@@ -379,7 +383,7 @@ T MemoryBus::read(ARMv6MCore &cpu, uint32_t addr, int &cycles, bool sequential)
 
         case Region_AHBPeriph:
             accessCycles(1);
-            return doAHBPeriphRead<T>(addr);
+            return doAHBPeriphRead<T>(cpu, addr);
 
         case Region_IOPORT:
             accessCycles(1);
@@ -424,7 +428,7 @@ void MemoryBus::write(ARMv6MCore &cpu, uint32_t addr, T data, int &cycles, bool 
 
         case Region_AHBPeriph:
             accessCycles(1);
-            doAHBPeriphWrite<T>(addr, data);
+            doAHBPeriphWrite<T>(cpu, addr, data);
             return;
 
         case Region_IOPORT:
@@ -508,6 +512,8 @@ void MemoryBus::peripheralUpdate(uint64_t target)
 {
     watchdog.update(target);
     timer.update(target);
+
+    dma.update(target);
 }
 
 uint64_t MemoryBus::getNextInterruptTime(uint64_t target)
@@ -962,10 +968,14 @@ void MemoryBus::doAPBPeriphWrite(ARMv6MCore &cpu, uint32_t addr, T data)
 }
 
 template<class T>
-T MemoryBus::doAHBPeriphRead(uint32_t addr) const
+T MemoryBus::doAHBPeriphRead(ARMv6MCore &cpu, uint32_t addr)
 {
-    // USB DPRAM
-    if(addr >= 0x50100000 && addr < 0x50101000)
+    if(addr < 0x50100000) // DMA
+    {
+        dma.update(cpu.getClock().getTime());
+        return dma.regRead(addr & 0xFFFF);
+    }
+    else if(addr < 0x50101000) // USB DPRAM
         return doRead<T>(usbDPRAM, addr);
     else if(addr >= 0x50200000 && addr < 0x50300000)
     {
@@ -983,10 +993,15 @@ T MemoryBus::doAHBPeriphRead(uint32_t addr) const
 }
 
 template<class T>
-void MemoryBus::doAHBPeriphWrite(uint32_t addr, T data)
+void MemoryBus::doAHBPeriphWrite(ARMv6MCore &cpu, uint32_t addr, T data)
 {
-    // USB DPRAM
-    if(addr >= 0x50100000 && addr < 0x50101000)
+    if(addr < 0x50100000) // DMA
+    {
+        dma.update(cpu.getClock().getTime());
+        dma.regWrite(addr & 0xFFFF, data);
+        return;
+    }
+    else if(addr < 0x50101000) // USB DPRAM
     {
         doWrite<T>(usbDPRAM, addr, data);
         return;
