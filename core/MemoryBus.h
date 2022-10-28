@@ -116,6 +116,7 @@ public:
     void setPendingIRQ(int n);
 
     Clocks &getClocks() {return clocks;}
+    GPIO &getGPIO() {return gpio;}
     Watchdog &getWatchdog() {return watchdog;}
 
 private:

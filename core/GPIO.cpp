@@ -2,6 +2,8 @@
 
 #include "GPIO.h"
 
+#include "MemoryBus.h"
+
 static bool updateReg(uint32_t &curVal, uint32_t newVal, int atomic)
 {
     auto oldVal = curVal;
@@ -18,6 +20,10 @@ static bool updateReg(uint32_t &curVal, uint32_t newVal, int atomic)
     return curVal != oldVal;
 }
 
+GPIO::GPIO(MemoryBus &mem) : mem(mem)
+{
+}
+
 void GPIO::reset()
 {
     for(auto &reg : ctrl)
@@ -28,6 +34,55 @@ void GPIO::reset()
 
     for(auto &reg : proc0InterruptEnables)
         reg = 0;
+
+    inputs = 0;
+}
+
+void GPIO::setInputs(uint32_t inputs)
+{
+    // TODO: handle floating inputs?
+
+    uint32_t changed = inputs ^ this->inputs;
+
+    if(changed)
+    {
+        for(int i = 0; i < 32; i++)
+        {
+            if(!(changed & (1 << i)))
+                continue;
+
+            // TODO: proc1
+            auto p0IntEn = (proc0InterruptEnables[i / 8] >> ((i % 8) * 4)) & 0xF;
+
+            // no enabled interrupts
+            if(!p0IntEn)
+                continue;
+
+            bool intr = false;
+
+            bool newState = inputs & (1 << i);
+            bool oldState = this->inputs & (1 << i);
+
+            // TODO: level should stick
+            if(!newState && (p0IntEn & (1 << 0))) // LEVEL_LOW
+                intr = true;
+            else if(newState && (p0IntEn & (1 << 1))) // LEVEL_HIGH
+                intr = true;
+            else if(!newState && oldState && (p0IntEn & (1 << 2))) // EDGE_LOW
+                intr = true;
+            else if(newState && !oldState && (p0IntEn & (1 << 3))) // EDGE_HIGH
+                intr = true;
+
+            if(intr)
+            {
+                interrupts[i / 8] |= 1 << ((i % 8) * 4);
+                // TODO: only to one core
+                mem.setPendingIRQ(13);// IO_IRQ_BANK0
+            }
+        }
+    }
+
+    this->inputs = inputs;
 }
 
 uint32_t GPIO::regRead(uint32_t addr)

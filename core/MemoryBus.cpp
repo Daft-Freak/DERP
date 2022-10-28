@@ -321,7 +321,7 @@ static inline uint32_t getStripedSRAMAddr(uint32_t addr)
     return bank * 64 * 1024 + word * 4 + (addr & 3);
 }
 
-MemoryBus::MemoryBus() : timer(*this)
+MemoryBus::MemoryBus() : gpio(*this), timer(*this)
 {
     clocks.addClockTarget(4/*REF*/, watchdog.getClock());
 }
@@ -1011,7 +1011,7 @@ T MemoryBus::doIOPORTRead(uint32_t addr)
             return 0; // TODO: need to know which CPU is reading
 
         case 4: // GPIO_IN
-            return 0; // TODO
+            return gpio.getInputs();
 
         case 8:  // GPIO_HI_IN
         {
