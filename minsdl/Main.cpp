@@ -127,13 +127,12 @@ int main(int argc, char *argv[])
         std::cerr << "bootrom.bin not found \n";
         return 1;
     }
-
-    cpu.reset();
-
     auto &clocks = mem.getClocks();
 
     clocks.addClockTarget(5, cpu.getClock());
-   
+
+    cpu.reset();
+
     // SDL init
     if(SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) != 0)
     {
