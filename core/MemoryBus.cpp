@@ -5,16 +5,20 @@
 
 #include "ARMv6MCore.h"
 
-static void updateReg(uint32_t &oldVal, uint32_t newVal, int atomic)
+bool updateReg(uint32_t &curVal, uint32_t newVal, int atomic)
 {
+    auto oldVal = curVal;
+
     if(atomic == 0)
-        oldVal = newVal;
+        curVal = newVal;
     else if(atomic == 1)
-        oldVal ^= newVal;
+        curVal ^= newVal;
     else if(atomic == 2)
-        oldVal |= newVal;
+        curVal |= newVal;
     else
-        oldVal &= ~newVal;
+        curVal &= ~newVal;
+
+    return curVal != oldVal;
 }
 
 Watchdog::Watchdog()
@@ -939,15 +943,30 @@ void MemoryBus::doAPBPeriphWrite(ARMv6MCore &cpu, uint32_t addr, T data)
                 int reg = (periphAddr / 4) % 5;
 
                 if(reg == 0)
-                    return updateReg(pwmCSR[chan], data, atomic);
+                {
+                    updateReg(pwmCSR[chan], data, atomic);
+                    return;
+                }
                 else if(reg == 1)
-                    return updateReg(pwmDIV[chan], data, atomic);
+                {
+                    updateReg(pwmDIV[chan], data, atomic);
+                    return;
+                }
                 else if(reg == 2)
-                    return updateReg(pwmCTR[chan], data, atomic);
+                {
+                    updateReg(pwmCTR[chan], data, atomic);
+                    return;
+                }
                 else if(reg == 3)
-                    return updateReg(pwmCC[chan], data, atomic);
+                {
+                    updateReg(pwmCC[chan], data, atomic);
+                    return;
+                }
                 else
-                    return updateReg(pwmTOP[chan], data, atomic);
+                {
+                    updateReg(pwmTOP[chan], data, atomic);
+                    return;
+                }
             }
 
             break;

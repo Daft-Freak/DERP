@@ -11,6 +11,8 @@ class ARMv6MCore;
 
 class MemoryBus;
 
+bool updateReg(uint32_t &curVal, uint32_t newVal, int atomic);
+
 class Watchdog final
 {
 public:

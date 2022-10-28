@@ -2,23 +2,9 @@
 
 #include "Clocks.h"
 
+#include "MemoryBus.h"
+
 static const char *clockNames[]{"GPOUT0", "GPOUT1", "GPOUT2", "GPOUT3", "REF", "SYS", "PERI", "USB", "ADC", "RTC"};
-
-static bool updateReg(uint32_t &curVal, uint32_t newVal, int atomic)
-{
-    auto oldVal = curVal;
-
-    if(atomic == 0)
-        curVal = newVal;
-    else if(atomic == 1)
-        curVal ^= newVal;
-    else if(atomic == 2)
-        curVal |= newVal;
-    else
-        curVal &= ~newVal;
-
-    return curVal != oldVal;
-}
 
 void Clocks::reset()
 {
