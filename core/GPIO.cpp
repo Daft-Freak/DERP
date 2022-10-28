@@ -91,6 +91,12 @@ uint32_t GPIO::regRead(uint32_t addr)
         return interrupts[(addr - 0xF0) / 4];
     else if(addr < 0x110) // PROC0_INTE0-3
         return proc0InterruptEnables[(addr - 0x100) / 4];
+    else if(addr >= 0x120 && addr < 0x130) // PROC0_INTS0-3
+    {
+        int index = (addr - 0x120) / 4;
+        // TODO: force
+        return interrupts[index] & proc0InterruptEnables[index];
+    }
 
     printf("IO_BANK0 R %04X\n", addr);
 
