@@ -52,30 +52,24 @@ void GPIO::setInputs(uint32_t inputs)
                 continue;
 
             // TODO: proc1
-            auto p0IntEn = (proc0InterruptEnables[i / 8] >> ((i % 8) * 4)) & 0xF;
-
-            // no enabled interrupts
-            if(!p0IntEn)
-                continue;
-
-            bool intr = false;
+            int ioShift = i % 8 * 4;
+            auto p0IntEn = (proc0InterruptEnables[i / 8] >> ioShift) & 0xF;
 
             bool newState = inputs & (1 << i);
             bool oldState = this->inputs & (1 << i);
 
             // TODO: level should stick
             if(!newState && (p0IntEn & (1 << 0))) // LEVEL_LOW
-                intr = true;
+                interrupts[i / 8] |= 1 << (ioShift + 0);
             else if(newState && (p0IntEn & (1 << 1))) // LEVEL_HIGH
-                intr = true;
+                interrupts[i / 8] |= 1 << (ioShift + 1);
             else if(!newState && oldState && (p0IntEn & (1 << 2))) // EDGE_LOW
-                intr = true;
+                interrupts[i / 8] |= 1 << (ioShift + 2);
             else if(newState && !oldState && (p0IntEn & (1 << 3))) // EDGE_HIGH
-                intr = true;
+                interrupts[i / 8] |= 1 << (ioShift + 3);
 
-            if(intr)
+            if(interrupts[i / 8] & proc0InterruptEnables[i / 8])
             {
-                interrupts[i / 8] |= 1 << ((i % 8) * 4);
                 // TODO: only to one core
                 mem.setPendingIRQ(13);// IO_IRQ_BANK0
             }
