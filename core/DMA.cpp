@@ -30,6 +30,9 @@ void DMA::reset()
     for(auto &reg : ctrl)
         reg = 0;
 
+    interrupts = 0;
+    interruptEnables[0] = interruptEnables[1] = 0;
+
     channelTriggered = 0;
 }
 
@@ -72,7 +75,16 @@ void DMA::update(uint64_t target)
                 writeAddr[curChannel] += transferSize;
 
             if(--transferCount[curChannel] == 0)
+            {
                 channelTriggered &= ~(1 << curChannel); // done
+
+                interrupts |= (1 << curChannel);
+            
+                if(interruptEnables[0] & (1 << curChannel))
+                    mem.setPendingIRQ(11); // DMA_IRQ_0
+                if(interruptEnables[1] & (1 << curChannel))
+                    mem.setPendingIRQ(12); // DMA_IRQ_1
+            }
             break;
         }
     }
@@ -112,7 +124,22 @@ uint32_t DMA::regRead(uint32_t addr)
         }
     }
     else
+    {
+        switch(addr)
+        {
+            case 0x400: // INTR
+                return interrupts;
+            case 0x404: // INTE0
+                return interruptEnables[0];
+            case 0x40C: // INTS0
+                return interrupts & interruptEnables[0]; // TODO: force
+            case 0x414: // INTE1
+                return interruptEnables[1];
+            case 0x41C: // INTS1
+                return interrupts & interruptEnables[1]; // TODO: force
+        }
         printf("DMA R %08X\n", addr);
+    }
     return 0xBADADD55;
 }
 
@@ -158,11 +185,43 @@ void DMA::regWrite(uint32_t addr, uint32_t data)
 
         if((addr & 0xF) == 0xC && (ctrl[ch] & 1/*EN*/)) // *_TRIG
         {
-            printf("DMA trig %i (%08X -> %08X x %i ctrl %08X)\n", ch, readAddr[ch], writeAddr[ch], transferCountReload[ch], ctrl[ch]);
             transferCount[ch] = transferCountReload[ch];
             channelTriggered |= 1 << ch;
         }
     }
     else
+    {
+        switch(addr)
+        {
+            case 0x404: // INTE0
+                updateReg(interruptEnables[0], data, atomic);
+                return;
+            case 0x40C: // INTS0
+            case 0x41C: // INTS1
+            {
+                if(atomic == 0)
+                {
+                    interrupts &= ~data;
+                    return;
+                }
+                else
+                {
+                    // DMA atomic does an actual read
+                    // anything using this is probably buggy
+                    // https://github.com/raspberrypi/pico-sdk/issues/974
+
+                    auto oldVal = regRead(addr);
+                    updateReg(oldVal, data, atomic);
+                    interrupts &= ~oldVal;
+                    return;
+                }
+                break;
+            }
+            case 0x414: // INTE1
+                updateReg(interruptEnables[1], data, atomic);
+                return;
+        }
+
         printf("DMA W %03X%s%08X\n", addr, op[atomic], data);
+    }
 }

@@ -33,5 +33,8 @@ private:
     uint32_t transferCount[numChannels], transferCountReload[numChannels];
     uint32_t ctrl[numChannels];
 
+    uint32_t interrupts;
+    uint32_t interruptEnables[2];
+
     uint32_t channelTriggered;
 };
