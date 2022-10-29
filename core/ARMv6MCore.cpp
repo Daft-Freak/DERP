@@ -89,7 +89,7 @@ unsigned int ARMv6MCore::run(int ms)
             clock.addCycles(exec);
             cycles += exec;
 
-            mem.peripheralUpdate(clock.getTime()); // TODO: should only update things that might cause interrupts
+            mem.peripheralUpdate(clock.getTime(), sleeping ? ~0ull : nvicEnabled);
 
             if(sleeping && clock.getTime() < targetTime)
             {

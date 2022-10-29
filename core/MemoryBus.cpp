@@ -530,6 +530,17 @@ void MemoryBus::peripheralUpdate(uint64_t target)
     dma.update(target);
 }
 
+void MemoryBus::peripheralUpdate(uint64_t target, uint64_t irqMask)
+{
+    // only update things that might cause interrupts
+    
+    if(irqMask & (0xF << 16)/*TIMER_IRQ0-3*/)
+        timer.update(target);
+
+    if(irqMask & (1 << (11 + 16)/*DMA_IRQ_0*/ | 1 << (12 + 16)/*DMA_IRQ_1*/))
+        dma.update(target);
+}
+
 uint64_t MemoryBus::getNextInterruptTime(uint64_t target)
 {
     // clamp to when there might be an interrupt

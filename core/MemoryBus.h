@@ -117,6 +117,7 @@ public:
     }
 
     void peripheralUpdate(uint64_t target);
+    void peripheralUpdate(uint64_t target, uint64_t irqMask);
     uint64_t getNextInterruptTime(uint64_t target);
 
     void setPendingIRQ(int n);
