@@ -2,6 +2,7 @@
 #include <cassert>
 #include <cstdint>
 #include <queue>
+#include <variant>
 
 #include "Clocks.h"
 #include "DMA.h"
@@ -72,6 +73,8 @@ private:
     uint32_t lastTicks;
 };
 
+using BusMasterPtr = std::variant<ARMv6MCore *, DMA *>;
+
 class MemoryBus
 {
 public:
@@ -84,9 +87,9 @@ public:
     void reset();
 
     template<class T>
-    T read(ARMv6MCore &cpu, uint32_t addr, int &cycles, bool sequential);
+    T read(BusMasterPtr master, uint32_t addr, int &cycles, bool sequential);
     template<class T>
-    void write(ARMv6MCore &cpu, uint32_t addr, T data, int &cycles, bool sequential);
+    void write(BusMasterPtr master, uint32_t addr, T data, int &cycles, bool sequential);
 
     const uint8_t *mapAddress(uint32_t addr) const;
     uint8_t *mapAddress(uint32_t addr);
@@ -109,7 +112,7 @@ public:
     bool verifyPointer(ARMv6MCore &cpu, const T *ptr, uint32_t addr)
     {
         int tmp;
-        bool ret = read<T>(cpu, addr, tmp, false) == *ptr;
+        bool ret = read<T>(&cpu, addr, tmp, false) == *ptr;
         return ret;
     }
 

@@ -310,12 +310,12 @@ enum MemoryRegion
     Region_CPUInternal = 0xE0,
 };
 
-template uint8_t MemoryBus::read(ARMv6MCore &cpu, uint32_t addr, int &cycles, bool sequential);
-template uint16_t MemoryBus::read(ARMv6MCore &cpu, uint32_t addr, int &cycles, bool sequential);
-template uint32_t MemoryBus::read(ARMv6MCore &cpu, uint32_t addr, int &cycles, bool sequential);
-template void MemoryBus::write(ARMv6MCore &cpu, uint32_t addr, uint8_t val, int &cycles, bool sequential);
-template void MemoryBus::write(ARMv6MCore &cpu, uint32_t addr, uint16_t val, int &cycles, bool sequential);
-template void MemoryBus::write(ARMv6MCore &cpu, uint32_t addr, uint32_t val, int &cycles, bool sequential);
+template uint8_t MemoryBus::read(BusMasterPtr master, uint32_t addr, int &cycles, bool sequential);
+template uint16_t MemoryBus::read(BusMasterPtr master, uint32_t addr, int &cycles, bool sequential);
+template uint32_t MemoryBus::read(BusMasterPtr master, uint32_t addr, int &cycles, bool sequential);
+template void MemoryBus::write(BusMasterPtr master, uint32_t addr, uint8_t val, int &cycles, bool sequential);
+template void MemoryBus::write(BusMasterPtr master, uint32_t addr, uint16_t val, int &cycles, bool sequential);
+template void MemoryBus::write(BusMasterPtr master, uint32_t addr, uint32_t val, int &cycles, bool sequential);
 
 static inline uint32_t getStripedSRAMAddr(uint32_t addr)
 {
@@ -353,8 +353,12 @@ void MemoryBus::reset()
 }
 
 template<class T>
-T MemoryBus::read(ARMv6MCore &cpu, uint32_t addr, int &cycles, bool sequential)
+T MemoryBus::read(BusMasterPtr master, uint32_t addr, int &cycles, bool sequential)
 {
+    auto masterClock = std::holds_alternative<ARMv6MCore *>(master) ?
+        std::get<ARMv6MCore *>(master)->getClock() :
+        std::get<DMA *>(master)->getClock();
+
     auto accessCycles = [&cycles, this](int c)
     {
         cycles += c;
@@ -383,11 +387,11 @@ T MemoryBus::read(ARMv6MCore &cpu, uint32_t addr, int &cycles, bool sequential)
 
         case Region_APBPeriph:
             accessCycles(4);
-            return doAPBPeriphRead<T>(cpu.getClock(), addr);
+            return doAPBPeriphRead<T>(masterClock, addr);
 
         case Region_AHBPeriph:
             accessCycles(1);
-            return doAHBPeriphRead<T>(cpu.getClock(), addr);
+            return doAHBPeriphRead<T>(masterClock, addr);
 
         case Region_IOPORT:
             accessCycles(1);
@@ -395,15 +399,20 @@ T MemoryBus::read(ARMv6MCore &cpu, uint32_t addr, int &cycles, bool sequential)
 
         case Region_CPUInternal:
             accessCycles(1);
-            return doCPUInternalRead<T>(cpu, addr);
+            assert(std::holds_alternative<ARMv6MCore *>(master));
+            return doCPUInternalRead<T>(*std::get<ARMv6MCore *>(master), addr);
     }
 
     return doOpenRead<T>(addr);
 }
 
 template<class T>
-void MemoryBus::write(ARMv6MCore &cpu, uint32_t addr, T data, int &cycles, bool sequential)
+void MemoryBus::write(BusMasterPtr master, uint32_t addr, T data, int &cycles, bool sequential)
 {
+    auto masterClock = std::holds_alternative<ARMv6MCore *>(master) ?
+        std::get<ARMv6MCore *>(master)->getClock() :
+        std::get<DMA *>(master)->getClock();
+
     auto accessCycles = [&cycles, this](int c)
     {
         cycles += c;
@@ -427,12 +436,12 @@ void MemoryBus::write(ARMv6MCore &cpu, uint32_t addr, T data, int &cycles, bool 
 
         case Region_APBPeriph:
             accessCycles(5);
-            doAPBPeriphWrite<T>(cpu.getClock(), addr, data);
+            doAPBPeriphWrite<T>(masterClock, addr, data);
             return;
 
         case Region_AHBPeriph:
             accessCycles(1);
-            doAHBPeriphWrite<T>(cpu.getClock(), addr, data);
+            doAHBPeriphWrite<T>(masterClock, addr, data);
             return;
 
         case Region_IOPORT:
@@ -442,7 +451,8 @@ void MemoryBus::write(ARMv6MCore &cpu, uint32_t addr, T data, int &cycles, bool 
 
         case Region_CPUInternal:
             accessCycles(1);
-            doCPUInternalWrite<T>(cpu, addr, data);
+            assert(std::holds_alternative<ARMv6MCore *>(master));
+            doCPUInternalWrite<T>(*std::get<ARMv6MCore *>(master), addr, data);
             return;
     }
 }
