@@ -14,6 +14,8 @@ static uint8_t bootROM[0x4000];
 
 static std::ifstream uf2File;
 
+uint16_t screenData[240 * 240];
+
 static const uint32_t uf2MagicStart0 = 0x0A324655, uf2MagicStart1 = 0x9E5D5157, uf2MagicEnd = 0x0AB16F30;
 
 struct UF2Block
@@ -69,8 +71,8 @@ static bool parseUF2(std::ifstream &file)
 
 int main(int argc, char *argv[])
 {
-    int screenWidth = 160;
-    int screenHeight = 144;
+    int screenWidth = 240;
+    int screenHeight = 240;
     int screenScale = 5;
 
     std::string romFilename;
@@ -191,9 +193,9 @@ int main(int argc, char *argv[])
         lastTick = now;
 
         // TODO: sync
-        //SDL_UpdateTexture(texture, nullptr, screenData, screenWidth * 2);
+        SDL_UpdateTexture(texture, nullptr, screenData, screenWidth * 2);
         SDL_RenderClear(renderer);
-        //SDL_RenderCopy(renderer, texture, nullptr, nullptr);
+        SDL_RenderCopy(renderer, texture, nullptr, nullptr);
         SDL_RenderPresent(renderer);
     }
 
