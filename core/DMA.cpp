@@ -13,6 +13,8 @@ void DMA::reset()
 {
     clock.reset();
 
+    curChannel = 0;
+
     for(auto &reg : readAddr)
         reg = 0;
 
@@ -34,6 +36,46 @@ void DMA::reset()
 void DMA::update(uint64_t target)
 {
     auto passed = clock.getCyclesToTime(target);
+
+    if(!channelTriggered)
+    {
+        clock.addCycles(passed);
+        return;
+    }
+
+    // TODO: DREQ, FIFOs, priority, ring, chaining, bswap, sniff...
+
+    for(uint32_t cycle = 0; cycle < passed; cycle++)
+    {
+        for(int i = 0; i < numChannels; i++, curChannel++)
+        {
+            if(curChannel == numChannels)
+                curChannel = 0;
+
+            if(!(channelTriggered & (1 << curChannel)) || !(ctrl[curChannel] & 1/*EN*/))
+                continue;
+
+            int transferSize = 1 << ((ctrl[curChannel] >> 2) & 3);
+
+            int cycles; // TODO
+            if(transferSize == 1)
+                mem.write(this, writeAddr[curChannel], mem.read<uint8_t>(this, readAddr[curChannel], cycles, false), cycles, false);
+            else if(transferSize == 2)
+                mem.write(this, writeAddr[curChannel], mem.read<uint16_t>(this, readAddr[curChannel], cycles, false), cycles, false);
+            else
+                mem.write(this, writeAddr[curChannel], mem.read<uint32_t>(this, readAddr[curChannel], cycles, false), cycles, false);
+
+            if(ctrl[curChannel] & (1 << 4)/*INCR_READ*/)
+                readAddr[curChannel] += transferSize;
+
+            if(ctrl[curChannel] & (1 << 5)/*INCR_WRITE*/)
+                writeAddr[curChannel] += transferSize;
+
+            if(--transferCount[curChannel] == 0)
+                channelTriggered &= ~(1 << curChannel); // done
+            break;
+        }
+    }
 
     clock.addCycles(passed);
 }
@@ -116,7 +158,7 @@ void DMA::regWrite(uint32_t addr, uint32_t data)
 
         if((addr & 0xF) == 0xC && (ctrl[ch] & 1/*EN*/)) // *_TRIG
         {
-            printf("DMA trig %i (%08X -> %08X x %i)\n", ch, readAddr[ch], writeAddr[ch], transferCountReload[ch]);
+            printf("DMA trig %i (%08X -> %08X x %i ctrl %08X)\n", ch, readAddr[ch], writeAddr[ch], transferCountReload[ch], ctrl[ch]);
             transferCount[ch] = transferCountReload[ch];
             channelTriggered |= 1 << ch;
         }

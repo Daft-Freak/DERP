@@ -25,6 +25,8 @@ private:
 
     ClockTarget clock;
 
+    int curChannel;
+
     static const int numChannels = 12;
     uint32_t readAddr[numChannels];
     uint32_t writeAddr[numChannels];
