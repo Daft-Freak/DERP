@@ -544,7 +544,7 @@ void MemoryBus::peripheralUpdate(uint64_t target, uint32_t irqMask)
         timer.updateForInterrupts(target);
 
     if(irqMask & (1 << 11/*DMA_IRQ_0*/ | 1 << 12/*DMA_IRQ_1*/))
-        dma.update(target);
+        dma.updateForInterrupts(target);
 }
 
 uint64_t MemoryBus::getNextInterruptTime(uint64_t target)

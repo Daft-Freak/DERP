@@ -92,6 +92,12 @@ void DMA::update(uint64_t target)
     clock.addCycles(passed);
 }
 
+void DMA::updateForInterrupts(uint64_t target)
+{
+    if(channelTriggered & (interruptEnables[0] | interruptEnables[1]))
+        update(target);
+}
+
 uint32_t DMA::regRead(uint32_t addr)
 {
     if(addr < 0x400)
