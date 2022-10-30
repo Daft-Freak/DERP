@@ -120,7 +120,7 @@ uint32_t DMA::regRead(uint32_t addr)
             case 0x10: // AL1_CTRL
             case 0x20: // AL2_CTRL
             case 0x30: // AL3_CTRL
-                return ctrl[ch];
+                return ctrl[ch] | (channelTriggered & (1 << ch) ? (1 << 24)/*BUSY*/ : 0);
         }
     }
     else
@@ -179,7 +179,7 @@ void DMA::regWrite(uint32_t addr, uint32_t data)
             case 0x10: // AL1_CTRL
             case 0x20: // AL2_CTRL
             case 0x30: // AL3_CTRL
-                updateReg(ctrl[ch], data, atomic);
+                updateReg(ctrl[ch], data & ~(1 << 24 | 1 << 31), atomic);
                 break;
         }
 
