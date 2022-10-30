@@ -194,6 +194,12 @@ void Timer::update(uint64_t target)
     }
 }
 
+void Timer::updateForInterrupts(uint64_t target)
+{
+    if(armed & interruptEnables)
+        update(target);
+}
+
 uint64_t Timer::getNextInterruptTime(uint64_t target)
 {
     if(!armed || !interruptEnables)
@@ -535,7 +541,7 @@ void MemoryBus::peripheralUpdate(uint64_t target, uint32_t irqMask)
     // only update things that might cause interrupts
     
     if(irqMask & (0xF)/*TIMER_IRQ0-3*/)
-        timer.update(target);
+        timer.updateForInterrupts(target);
 
     if(irqMask & (1 << 11/*DMA_IRQ_0*/ | 1 << 12/*DMA_IRQ_1*/))
         dma.update(target);
