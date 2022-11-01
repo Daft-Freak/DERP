@@ -475,14 +475,10 @@ const uint8_t *MemoryBus::mapAddress(uint32_t addr) const
 
         case Region_SRAM:
         {
-            if(addr < 0x20040000) // striped SRAM0-3
-                return nullptr;
-            else
-            {
-                // SRAM4-5 (or OOB)
-                if(addr < 0x20042000)
-                    return sram + (addr & 0xFFFFF);
-            }
+            // SRAM0-3 is stored striped so that we can do this
+            // + SRAM4-5
+            if(addr < 0x20042000)
+                return sram + (addr & 0xFFFFF);
 
             break;
         }
@@ -501,14 +497,9 @@ uint8_t *MemoryBus::mapAddress(uint32_t addr)
 
         case Region_SRAM:
         {
-            if(addr < 0x20040000) // striped SRAM0-3
-                return nullptr; // can't map this for more than one word...
-            else
-            {
-                // SRAM4-5 (or OOB)
-                if(addr < 0x20042000)
-                    return sram + (addr & 0xFFFFF);
-            }
+            // SRAM0-3 (striped) + SRAM4-5
+            if(addr < 0x20042000)
+                return sram + (addr & 0xFFFFF);
 
             break;
         }
@@ -762,9 +753,9 @@ void MemoryBus::doXIPSSIWrite(uint32_t addr, T data)
 template<class T>
 T MemoryBus::doSRAMRead(uint32_t addr) const
 {
-    if(addr < 0x20040000) // striped SRAM0-3
-        return *reinterpret_cast<const T *>(sram + getStripedSRAMAddr(addr));
-    else if (addr < 0x20042000) // SRAM4-5
+    // striped SRAM0-3, SRAM4-5
+    // (SRAM0-3 is stored striped)
+    if (addr < 0x20042000)
         return *reinterpret_cast<const T *>(sram + (addr & 0xFFFFF));
 
     printf("SRAM R %08X\n", addr);
@@ -774,12 +765,7 @@ T MemoryBus::doSRAMRead(uint32_t addr) const
 template<class T>
 void MemoryBus::doSRAMWrite(uint32_t addr, T data)
 {
-    if(addr < 0x20040000) // striped SRAM0-3
-    {
-        *reinterpret_cast<T *>(sram + getStripedSRAMAddr(addr)) = data;
-        return;
-    }
-    else if (addr < 0x20042000) // SRAM4-5
+    if(addr < 0x20042000)
     {
         *reinterpret_cast<T *>(sram + (addr & 0xFFFFF)) = data;
         return;
