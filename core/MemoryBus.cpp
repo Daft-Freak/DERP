@@ -49,16 +49,16 @@ void Watchdog::update(uint64_t target)
         return;
     }
 
-    int tickCycles = tick & 0x1FF;
+    unsigned int tickCycles = tick & 0x1FF;
 
     if(!tickCycles)
         ticks += passed;
     else
     {
-        tickCounter -= passed;
-        while(tickCounter < 0)
+        tickCounter += passed;
+        while(tickCounter >= tickCycles)
         {
-            tickCounter += tickCycles;
+            tickCounter -= tickCycles;
             ticks++;
         }
     }

@@ -40,7 +40,7 @@ private:
     ClockTarget clock;
 
     int timer;
-    int tickCounter;
+    unsigned int tickCounter;
     uint32_t ticks;
 };
 
