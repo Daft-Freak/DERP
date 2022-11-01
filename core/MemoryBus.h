@@ -42,6 +42,11 @@ public:
         return i;
     }
 
+    int prefetchTiming16(int cycles, int bugCycles = 0)
+    {
+        return cycles;
+    }
+
     // verify that pointer returns the same as a regular read to the address
     // without affecting prefetch (used for asserts)
     template<class T>
