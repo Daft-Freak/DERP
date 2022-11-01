@@ -6,6 +6,8 @@ target_sources(DERPCore INTERFACE
     DMA.cpp
     GPIO.cpp
     MemoryBus.cpp
+    Timer.cpp
+    Watchdog.cpp
 )
 
 target_include_directories(DERPCore INTERFACE ${CMAKE_CURRENT_LIST_DIR})
