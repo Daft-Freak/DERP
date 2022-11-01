@@ -392,7 +392,7 @@ T MemoryBus::read(BusMasterPtr master, uint32_t addr, int &cycles, bool sequenti
             return doSRAMRead<T>(addr);
 
         case Region_APBPeriph:
-            accessCycles(4);
+            accessCycles(3);
             return doAPBPeriphRead<T>(masterClock, addr);
 
         case Region_AHBPeriph:
@@ -440,7 +440,7 @@ void MemoryBus::write(BusMasterPtr master, uint32_t addr, T data, int &cycles, b
             return;
 
         case Region_APBPeriph:
-            accessCycles(5);
+            accessCycles(4);
             doAPBPeriphWrite<T>(masterClock, addr, data);
             return;
 
