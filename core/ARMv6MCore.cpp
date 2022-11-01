@@ -89,6 +89,11 @@ unsigned int ARMv6MCore::run(int ms)
             clock.addCycles(exec);
             cycles += exec;
 
+            // update systick if using cpu clock
+            uint32_t mask = (1 << 0)/*ENABLE*/ | (1 << 2)/*CLKSOURCE*/;
+            if((sysTickRegs[0]/*SYST_CSR*/ & mask) == mask)
+                updateSysTick(exec);
+
             mem.peripheralUpdate(clock.getTime(), sleeping ? ~0u : nvicEnabled);
 
             if(sleeping && clock.getTime() < targetTime)
@@ -117,6 +122,7 @@ uint32_t ARMv6MCore::readReg(uint32_t addr)
         case 0xE014: // SYST_RVR
         case 0xE018: // SYST_CVR
         case 0xE01C: // SYST_CALIB
+            updateSysTick();
             return sysTickRegs[(addr & 0xF) / 4];
         
         case 0xE100: // NVIC_ISER
@@ -164,9 +170,11 @@ void ARMv6MCore::writeReg(uint32_t addr, uint32_t data)
     {
         case 0xE010: // SYST_CSR
         case 0xE014: // SYST_RVR
+            updateSysTick();
             sysTickRegs[(addr & 0xF) / 4] = data;
             return;
         case 0xE018: // SYST_CVR
+            updateSysTick();
             sysTickRegs[2] = 0;
             return;
         
@@ -1622,4 +1630,12 @@ int ARMv6MCore::handleExceptionReturn(uint32_t excRet)
     updateTHUMBPC(newPC & ~1);
 
     return cycles; // caller should handle the branch
+}
+
+void ARMv6MCore::updateSysTick(int sysCycles)
+{
+    if(!(sysTickRegs[0]/*SYST_CSR*/ & (1 << 2)/*CLKSOURCE*/))
+        return; // TODO: watchdog tick
+
+    sysTickRegs[2] = (sysTickRegs[2] - sysCycles) & 0xFFFFFF;
 }

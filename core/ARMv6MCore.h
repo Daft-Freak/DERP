@@ -115,6 +115,8 @@ private:
     int handleException();
     int handleExceptionReturn(uint32_t excRet);
 
+    void updateSysTick(int sysCycles = 0);
+
     static const uint32_t signBit = 0x80000000;
 
     // registers
