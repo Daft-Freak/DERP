@@ -400,7 +400,6 @@ T MemoryBus::read(BusMasterPtr master, uint32_t addr, int &cycles, bool sequenti
             return doAHBPeriphRead<T>(masterClock, addr);
 
         case Region_IOPORT:
-            accessCycles(1);
             return doIOPORTRead<T>(addr);
 
         case Region_CPUInternal:
@@ -451,7 +450,6 @@ void MemoryBus::write(BusMasterPtr master, uint32_t addr, T data, int &cycles, b
             return;
 
         case Region_IOPORT:
-            accessCycles(1);
             doIOPORTWrite<T>(addr, data);
             return;
 
