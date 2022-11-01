@@ -175,7 +175,7 @@ void ARMv6MCore::writeReg(uint32_t addr, uint32_t data)
             return;
         case 0xE018: // SYST_CVR
             updateSysTick();
-            sysTickRegs[2] = 0;
+            sysTickRegs[2] = sysTickRegs[1];
             return;
         
         case 0xE100: // NVIC_ISER
@@ -1637,5 +1637,8 @@ void ARMv6MCore::updateSysTick(int sysCycles)
     if(!(sysTickRegs[0]/*SYST_CSR*/ & (1 << 2)/*CLKSOURCE*/))
         return; // TODO: watchdog tick
 
-    sysTickRegs[2] = (sysTickRegs[2] - sysCycles) & 0xFFFFFF;
+    sysTickRegs[2]/*CVR*/ = (sysTickRegs[2] - sysCycles) & 0xFFFFFF;
+
+    if(!sysTickRegs[2])
+        sysTickRegs[2] = sysTickRegs[1] /*RVR*/;
 }
