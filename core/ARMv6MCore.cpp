@@ -65,6 +65,8 @@ unsigned int ARMv6MCore::run(int ms)
 
     unsigned int cycles = 0;
 
+    mem.calcNextInterruptTime();
+
     while(clock.getTime() < targetTime)
     {
         uint32_t exec = 1;

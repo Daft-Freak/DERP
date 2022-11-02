@@ -61,7 +61,9 @@ public:
 
     void peripheralUpdate(uint64_t target);
     void peripheralUpdate(uint64_t target, uint32_t irqMask);
+
     uint64_t getNextInterruptTime(uint64_t target);
+    void calcNextInterruptTime();
 
     void setPendingIRQ(int n);
 
@@ -134,6 +136,8 @@ private:
     Timer timer; // depends on watchdog
 
     DMA dma;
+
+    uint64_t nextInterruptTime;
 
     // temp peripherals stuff
     uint32_t ioQSPICtrl[6]{0};

@@ -77,6 +77,8 @@ void MemoryBus::reset()
     watchdog.reset();
 
     dma.reset();
+
+    nextInterruptTime = 0;
 }
 
 template<class T>
@@ -268,15 +270,25 @@ uint64_t MemoryBus::getNextInterruptTime(uint64_t target)
     // clamp to when there might be an interrupt
     // TODO: check cpu enabled mask
 
-    target = timer.getNextInterruptTime(target);
+    if(nextInterruptTime < target)
+        target = nextInterruptTime;
 
     return target;
+}
+
+void MemoryBus::calcNextInterruptTime()
+{
+    nextInterruptTime = ~0ull;
+
+    nextInterruptTime = timer.getNextInterruptTime(nextInterruptTime);
 }
 
 void MemoryBus::setPendingIRQ(int n)
 {
     // TODO: and the other one
     cpu->setPendingIRQ(n);
+
+    calcNextInterruptTime();
 }
 
 template<class T, size_t size>
@@ -713,6 +725,7 @@ void MemoryBus::doAPBPeriphWrite(ClockTarget &masterClock, uint32_t addr, T data
         case 21: // TIMER
             timer.update(masterClock.getTime());
             timer.regWrite(periphAddr, data);
+            calcNextInterruptTime();
             return;
 
         case 22: // WATCHDOG

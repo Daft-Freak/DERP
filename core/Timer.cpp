@@ -58,11 +58,10 @@ void Timer::update(uint64_t target)
             if(alarms[i] == (time & 0xFFFFFFFF))
             {
                 interrupts |= (1 << i);
+                armed &= ~(1 << i);
 
                 if(interruptEnables & (1 << i))
                     mem.setPendingIRQ(i); // TODO: should stay pending if not cleared?
-
-                armed &= ~(1 << i);
             }
         }
     }
