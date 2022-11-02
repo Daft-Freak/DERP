@@ -68,12 +68,6 @@ void Timer::update(uint64_t target)
     }
 }
 
-void Timer::updateForInterrupts(uint64_t target)
-{
-    if(armed & interruptEnables)
-        update(target);
-}
-
 uint64_t Timer::getNextInterruptTime(uint64_t target)
 {
     if(!armed || !interruptEnables)

@@ -12,7 +12,11 @@ public:
     void reset();
 
     void update(uint64_t target);
-    void updateForInterrupts(uint64_t target);
+    void updateForInterrupts(uint64_t target)
+    {
+        if(armed & interruptEnables)
+            update(target);
+    }
 
     uint64_t getNextInterruptTime(uint64_t target);
 
