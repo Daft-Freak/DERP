@@ -24,6 +24,9 @@ void Watchdog::update(uint64_t target)
 
     auto passed = clock.getCyclesToTime(target);
 
+    if(!passed)
+        return;
+
     if(!(tick & (1 << 9)))
     {
         clock.addCycles(passed);

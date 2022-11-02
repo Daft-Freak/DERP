@@ -28,6 +28,10 @@ void Timer::update(uint64_t target)
     watchdog.update(target);
 
     auto ticks = watchdog.getTicks() - lastTicks;
+
+    if(!ticks)
+        return;
+
     lastTicks = watchdog.getTicks();
 
     while(ticks)
