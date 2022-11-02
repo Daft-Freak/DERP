@@ -40,16 +40,14 @@ void DMA::update(uint64_t target)
 {
     auto passed = clock.getCyclesToTime(target);
 
-    if(!channelTriggered)
-    {
-        clock.addCycles(passed);
-        return;
-    }
 
     // TODO: DREQ, FIFOs, priority, ring, chaining, bswap, sniff...
 
     for(uint32_t cycle = 0; cycle < passed; cycle++)
     {
+        if(!channelTriggered)
+            break;
+
         for(int i = 0; i < numChannels; i++, curChannel++)
         {
             if(curChannel == numChannels)
