@@ -32,7 +32,7 @@ public:
 
     uint32_t getCyclesToTime(uint64_t targetTime) const
     {
-        return (targetTime - emuTime) / clockScale;
+        return (targetTime - emuTime + clockScale - 1) / clockScale;
     }
 
     uint64_t getTimeToCycles(uint32_t cycles) const
