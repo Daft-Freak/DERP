@@ -37,12 +37,14 @@ public:
 
     int getAccessCycles(uint32_t addr, int width, bool sequential) const;
 
+    void updatePC(uint32_t pc);
+
     inline int iCycle(int i = 1)
     {
         return i;
     }
 
-    int prefetchTiming16(int cycles, int bugCycles = 0)
+    int fetchTiming(uint32_t addr, int cycles)
     {
         return cycles;
     }
@@ -108,6 +110,8 @@ private:
 
     template<class T>
     T doOpenRead(uint32_t addr) const;
+
+    bool pcInCachedXIP = false;
 
     const uint8_t *bootROM = nullptr;
 

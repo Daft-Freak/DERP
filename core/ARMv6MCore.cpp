@@ -356,7 +356,7 @@ int ARMv6MCore::doTHUMB01MoveShifted(uint16_t opcode, uint32_t pc)
          | (res == 0 ? Flag_Z : 0)
          | carry;
 
-    return mem.prefetchTiming16(pcSCycles);
+    return mem.fetchTiming(pc, pcSCycles);
 }
 
 int ARMv6MCore::doTHUMB0102(uint16_t opcode, uint32_t pc)
@@ -426,7 +426,7 @@ int ARMv6MCore::doTHUMB0102(uint16_t opcode, uint32_t pc)
              | carry;
     }
 
-    return mem.prefetchTiming16(pcSCycles);
+    return mem.fetchTiming(pc, pcSCycles);
 }
 
 int ARMv6MCore::doTHUMB03(uint16_t opcode, uint32_t pc)
@@ -468,7 +468,7 @@ int ARMv6MCore::doTHUMB03(uint16_t opcode, uint32_t pc)
             __builtin_unreachable();
     }
 
-    return mem.prefetchTiming16(pcSCycles);
+    return mem.fetchTiming(pc, pcSCycles);
 }
 
 int ARMv6MCore::doTHUMB040506(uint16_t opcode, uint32_t pc)
@@ -640,7 +640,7 @@ int ARMv6MCore::doTHUMB04ALU(uint16_t opcode, uint32_t pc)
             break;
     }
 
-    return mem.prefetchTiming16(pcSCycles);
+    return mem.fetchTiming(pc, pcSCycles);
 }
 
 int ARMv6MCore::doTHUMB05HiReg(uint16_t opcode, uint32_t pc)
@@ -712,7 +712,7 @@ int ARMv6MCore::doTHUMB05HiReg(uint16_t opcode, uint32_t pc)
             assert(!"Invalid format 5 op!");
     }
 
-    return mem.prefetchTiming16(pcSCycles);
+    return mem.fetchTiming(pc, pcSCycles);
 }
 
 int ARMv6MCore::doTHUMB06PCRelLoad(uint16_t opcode, uint32_t pc)
@@ -724,7 +724,7 @@ int ARMv6MCore::doTHUMB06PCRelLoad(uint16_t opcode, uint32_t pc)
     int cycles = 0;
     loReg(dstReg) = readMem32((pc & ~2) + (word << 2), cycles);
 
-    return cycles + mem.prefetchTiming16(pcSCycles, pcNCycles);
+    return cycles + mem.fetchTiming(pc, pcSCycles);
 }
 
 int ARMv6MCore::doTHUMB0708(uint16_t opcode, uint32_t pc)
@@ -751,7 +751,7 @@ int ARMv6MCore::doTHUMB0708(uint16_t opcode, uint32_t pc)
                 else
                     loReg(dstReg) = val;
 
-                return cycles + mem.prefetchTiming16(pcSCycles, pcNCycles);
+                return cycles + mem.fetchTiming(pc, pcSCycles);
             }
             else // LDRSB
             {
@@ -762,7 +762,7 @@ int ARMv6MCore::doTHUMB0708(uint16_t opcode, uint32_t pc)
                 else
                     loReg(dstReg) = val;
 
-                return cycles + mem.prefetchTiming16(pcSCycles, pcNCycles);
+                return cycles + mem.fetchTiming(pc, pcSCycles);
             }
         }
         else
@@ -771,13 +771,13 @@ int ARMv6MCore::doTHUMB0708(uint16_t opcode, uint32_t pc)
             {
                 int cycles = 0;
                 loReg(dstReg) = readMem16(addr, cycles);
-                return cycles + mem.prefetchTiming16(pcSCycles, pcNCycles);
+                return cycles + mem.fetchTiming(pc, pcSCycles);
             }
             else // STRH
             {
                 int cycles = 0;
                 writeMem16(addr, loReg(dstReg), cycles);
-                return cycles + mem.prefetchTiming16(pcNCycles);
+                return cycles + mem.fetchTiming(pc, pcNCycles);
             }
         }
     }
@@ -794,7 +794,7 @@ int ARMv6MCore::doTHUMB0708(uint16_t opcode, uint32_t pc)
             else // LDR
                 loReg(dstReg) = readMem32(addr, cycles);
 
-            return cycles + mem.prefetchTiming16(pcSCycles, pcNCycles);
+            return cycles + mem.fetchTiming(pc, pcSCycles);
         }
         else
         {
@@ -804,7 +804,7 @@ int ARMv6MCore::doTHUMB0708(uint16_t opcode, uint32_t pc)
             else // STR
                 writeMem32(addr, loReg(dstReg), cycles);
 
-            return cycles + mem.prefetchTiming16(pcNCycles);
+            return cycles + mem.fetchTiming(pc, pcNCycles);
         }
     }
 }
@@ -821,13 +821,13 @@ int ARMv6MCore::doTHUMB09LoadStoreWord(uint16_t opcode, uint32_t pc)
     {
         int cycles = 0;
         loReg(dstReg) = readMem32(addr, cycles);
-        return cycles + mem.prefetchTiming16(pcSCycles, pcNCycles);
+        return cycles + mem.fetchTiming(pc, pcSCycles);
     }
     else // STR
     {
         int cycles = 0;
         writeMem32(addr, loReg(dstReg), cycles);
-        return cycles + mem.prefetchTiming16(pcNCycles);
+        return cycles + mem.fetchTiming(pc, pcNCycles);
     }
 }
 
@@ -843,13 +843,13 @@ int ARMv6MCore::doTHUMB09LoadStoreByte(uint16_t opcode, uint32_t pc)
     {
         int cycles = 0;
         loReg(dstReg) = readMem8(addr, cycles);
-        return cycles + mem.prefetchTiming16(pcSCycles, pcNCycles);
+        return cycles + mem.fetchTiming(pc, pcSCycles);
     }
     else // STRB
     {
         int cycles = 0;
         writeMem8(addr, loReg(dstReg), cycles);
-        return cycles + mem.prefetchTiming16(pcNCycles);
+        return cycles + mem.fetchTiming(pc, pcNCycles);
     }
 }
 
@@ -865,13 +865,13 @@ int ARMv6MCore::doTHUMB10LoadStoreHalf(uint16_t opcode, uint32_t pc)
     {
         int cycles = 0;
         loReg(dstReg) = readMem16(addr, cycles);
-        return cycles + mem.prefetchTiming16(pcSCycles, pcNCycles);
+        return cycles + mem.fetchTiming(pc, pcSCycles);
     }
     else // STRH
     {
         int cycles = 0;
         writeMem16(addr, loReg(dstReg), cycles);
-        return cycles + mem.prefetchTiming16(pcNCycles);
+        return cycles + mem.fetchTiming(pc, pcNCycles);
     }
 }
 
@@ -887,13 +887,13 @@ int ARMv6MCore::doTHUMB11SPRelLoadStore(uint16_t opcode, uint32_t pc)
     {
         int cycles = 0;
         loReg(dstReg) = readMem32(addr, cycles);
-        return cycles + mem.prefetchTiming16(pcSCycles, pcNCycles);
+        return cycles + mem.fetchTiming(pc, pcSCycles);
     }
     else
     {
         int cycles = 0;
         writeMem32(addr, loReg(dstReg), cycles);
-        return cycles + mem.prefetchTiming16(pcNCycles);
+        return cycles + mem.fetchTiming(pc, pcNCycles);
     }
 }
 
@@ -908,7 +908,7 @@ int ARMv6MCore::doTHUMB12LoadAddr(uint16_t opcode, uint32_t pc)
     else
         loReg(dstReg) = (pc & ~2) + word; // + 4, bit 1 forced to 0
 
-    return mem.prefetchTiming16(pcSCycles);
+    return mem.fetchTiming(pc, pcSCycles);
 }
 
 int ARMv6MCore::doTHUMBMisc(uint16_t opcode, uint32_t pc)
@@ -1044,7 +1044,7 @@ int ARMv6MCore::doTHUMB13SPOffset(uint16_t opcode, uint32_t pc)
     else
         loReg(curSP) += off;
 
-    return mem.prefetchTiming16(pcSCycles);
+    return mem.fetchTiming(pc, pcSCycles);
 }
 
 int ARMv6MCore::doTHUMB14PushPop(uint16_t opcode, uint32_t pc)
@@ -1093,7 +1093,7 @@ int ARMv6MCore::doTHUMB14PushPop(uint16_t opcode, uint32_t pc)
             cycles += loadCycles; // TODO
         }
 
-        return mem.iCycle(cycles) + mem.prefetchTiming16(pcSCycles, pcNCycles);
+        return mem.iCycle(cycles) + mem.fetchTiming(pc, pcSCycles);
     }
     else // PUSH
     {
@@ -1119,7 +1119,7 @@ int ARMv6MCore::doTHUMB14PushPop(uint16_t opcode, uint32_t pc)
             cycles += storeCycles;
         }
 
-        return mem.iCycle(cycles) +  mem.prefetchTiming16(pcNCycles);
+        return mem.iCycle(cycles) +  mem.fetchTiming(pc, pcNCycles);
     }
 }
 
@@ -1187,9 +1187,9 @@ int ARMv6MCore::doTHUMB15MultiLoadStore(uint16_t opcode, uint32_t pc)
     }
 
     if(isLoad)
-        cycles += mem.prefetchTiming16(pcSCycles, pcNCycles);
+        cycles += mem.fetchTiming(pc, pcSCycles);
     else
-        cycles += mem.prefetchTiming16(pcNCycles);
+        cycles += mem.fetchTiming(pc, pcNCycles);
 
     return cycles;
 }
@@ -1464,6 +1464,8 @@ void ARMv6MCore::updateTHUMBPC(uint32_t pc)
         pcSCycles = mem.getAccessCycles(pc, 2, true);
         pcNCycles = mem.getAccessCycles(pc, 2, false);
     }
+
+    mem.updatePC(pc);
 
     // refill the pipeline
     if(pcPtr)

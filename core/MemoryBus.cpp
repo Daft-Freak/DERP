@@ -238,6 +238,12 @@ int MemoryBus::getAccessCycles(uint32_t addr, int width, bool sequential) const
     return 1;
 }
 
+void MemoryBus::updatePC(uint32_t pc)
+{
+    // TODO: could be non-alloc cached
+    pcInCachedXIP = (pc >> 24) == Region_XIP;
+}
+
 void MemoryBus::peripheralUpdate(uint64_t target)
 {
     watchdog.update(target);
