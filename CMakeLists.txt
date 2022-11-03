@@ -21,3 +21,6 @@ if(BUILD_SDL)
     add_subdirectory(minsdl)
 endif()
 
+set(CPACK_INCLUDE_TOPLEVEL_DIRECTORY OFF)
+set(CPACK_GENERATOR "ZIP" "TGZ")
+include(CPack)
