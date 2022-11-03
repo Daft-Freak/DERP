@@ -90,6 +90,32 @@ void DMA::update(uint64_t target)
     clock.addCycles(passed);
 }
 
+uint64_t DMA::getNextInterruptTime(uint64_t target)
+{
+    auto anyInterruptEnable = interruptEnables[0] | interruptEnables[1];
+    if(!channelTriggered || !anyInterruptEnable)
+        return target;
+
+    for(int i = 0; i < numChannels; i++)
+    {
+        if(!(channelTriggered & (1 << i)) || !(ctrl[i] & 1/*EN*/))
+            continue;
+
+        if(!(anyInterruptEnable & (1 << i)))
+            continue;
+
+        // FIXME: this is very wrong and doesn't even try... but it shouldn't be too late
+        auto cycles = transferCount[i];
+
+        auto time = clock.getTimeToCycles(cycles);
+
+        if(time < target)
+            target = time;
+    }
+
+    return target;
+}
+
 uint32_t DMA::regRead(uint32_t addr)
 {
     if(addr < 0x400)

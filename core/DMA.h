@@ -20,6 +20,8 @@ public:
             update(target);
     }
 
+    uint64_t getNextInterruptTime(uint64_t target);
+
     uint32_t regRead(uint32_t addr);
     void regWrite(uint32_t addr, uint32_t data);
 

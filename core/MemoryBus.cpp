@@ -281,6 +281,7 @@ void MemoryBus::calcNextInterruptTime()
     nextInterruptTime = ~0ull;
 
     nextInterruptTime = timer.getNextInterruptTime(nextInterruptTime);
+    nextInterruptTime = dma.getNextInterruptTime(nextInterruptTime);
 }
 
 void MemoryBus::setPendingIRQ(int n)
