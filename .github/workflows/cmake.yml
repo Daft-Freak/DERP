@@ -22,6 +22,10 @@ jobs:
             name: Linux
             release-suffix: LIN64
 
+          - os: windows-latest
+            name: Visual Studio
+            release-suffix: WIN64
+
     runs-on: ${{matrix.os}}
 
     env:
@@ -36,6 +40,11 @@ jobs:
       if: runner.os == 'Linux'
       run: |
         sudo apt update && sudo apt install libsdl2-dev
+
+    # Windows (VS) deps
+    - name: Install deps
+      if: runner.os == 'Windows'
+      run: vcpkg install sdl2
 
     - name: Create Build Environment
       run: cmake -E make_directory ${{runner.workspace}}/build
