@@ -59,7 +59,7 @@ jobs:
         cmake --build . --config $BUILD_TYPE -j 2
 
     - name: Package Release
-      if: github.event_name == 'release' && matrix.release-suffix != ''
+      if: matrix.release-suffix != ''
       shell: bash
       working-directory: ${{runner.workspace}}/build
       run: |
