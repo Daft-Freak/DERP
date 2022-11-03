@@ -25,6 +25,7 @@ jobs:
           - os: windows-latest
             name: Visual Studio
             release-suffix: WIN64
+            cmake-args: -DCMAKE_TOOLCHAIN_FILE=$VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake
 
     runs-on: ${{matrix.os}}
 
