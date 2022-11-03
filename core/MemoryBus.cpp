@@ -580,6 +580,13 @@ T MemoryBus::doAPBPeriphRead(ClockTarget &masterClock, uint32_t addr)
         case 11: // PLL_USB
             return clocks.pllUSBRegRead(periphAddr);
 
+        case 15: // SPI0
+        {
+            if(periphAddr == 0xC) // SSPSR
+                return 1 << 1/*TNF*/;
+            break;
+        }
+
         case 20: // PWM
         {
             if((periphAddr & 0xFFF) < 0xA0)
