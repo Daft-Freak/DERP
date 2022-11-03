@@ -44,7 +44,7 @@ jobs:
     # Windows (VS) deps
     - name: Install deps
       if: runner.os == 'Windows'
-      run: vcpkg install sdl2
+      run: vcpkg install sdl2:x64-windows
 
     - name: Create Build Environment
       run: cmake -E make_directory ${{runner.workspace}}/build
