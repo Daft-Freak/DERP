@@ -62,9 +62,42 @@ void DMA::update(uint64_t target)
             if(transferSize == 1)
                 mem.write(this, writeAddr[curChannel], mem.read<uint8_t>(this, readAddr[curChannel], cycles, false), cycles, false);
             else if(transferSize == 2)
-                mem.write(this, writeAddr[curChannel], mem.read<uint16_t>(this, readAddr[curChannel], cycles, false), cycles, false);
+            {
+                auto val = mem.read<uint16_t>(this, readAddr[curChannel], cycles, false);
+                mem.write(this, writeAddr[curChannel], val, cycles, false);
+
+                // picosystem hax (hires)
+                if(writeAddr[curChannel] == 0x50200010 /*PIO0 TXF0*/)
+                {
+                    static int off = 0;
+                    extern uint16_t screenData[];
+
+                    screenData[off++] = val;
+
+                    if(off == 240 * 240)
+                        off = 0;
+                }
+            }
             else
-                mem.write(this, writeAddr[curChannel], mem.read<uint32_t>(this, readAddr[curChannel], cycles, false), cycles, false);
+            {
+                auto val = mem.read<uint32_t>(this, readAddr[curChannel], cycles, false);
+                mem.write(this, writeAddr[curChannel], val, cycles, false);
+
+                // picosystem hax (lores)
+                if(writeAddr[curChannel] == 0x50200010 /*PIO0 TXF0*/)
+                {
+                    static int off = 0;
+                    extern uint16_t screenData[];
+
+                    screenData[off++] = val;
+                    screenData[off++] = val;
+                    screenData[off++] = val >> 16;
+                    screenData[off++] = val >> 16;
+
+                    if(off == 240 * 240)
+                        off = 0;
+                }
+            }
 
             if(ctrl[curChannel] & (1 << 4)/*INCR_READ*/)
                 readAddr[curChannel] += transferSize;
