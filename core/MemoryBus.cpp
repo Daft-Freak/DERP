@@ -265,19 +265,9 @@ void MemoryBus::peripheralUpdate(uint64_t target, uint32_t irqMask)
         dma.updateForInterrupts(target);
 }
 
-uint64_t MemoryBus::getNextInterruptTime(uint64_t target)
-{
-    // clamp to when there might be an interrupt
-    // TODO: check cpu enabled mask
-
-    if(nextInterruptTime < target)
-        target = nextInterruptTime;
-
-    return target;
-}
-
 void MemoryBus::calcNextInterruptTime()
 {
+    // TODO: check cpu enabled mask
     nextInterruptTime = ~0ull;
 
     nextInterruptTime = timer.getNextInterruptTime(nextInterruptTime);

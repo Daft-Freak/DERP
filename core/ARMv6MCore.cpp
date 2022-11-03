@@ -78,6 +78,7 @@ unsigned int ARMv6MCore::run(int ms)
         }
 
         // loop until not halted or DMA was triggered
+        uint64_t curTime;
         do
         {
             // interrupts?
@@ -96,16 +97,19 @@ unsigned int ARMv6MCore::run(int ms)
             if((sysTickRegs[0]/*SYST_CSR*/ & mask) == mask)
                 updateSysTick(exec);
 
-            mem.peripheralUpdate(clock.getTime(), sleeping ? ~0u : nvicEnabled);
+            curTime = clock.getTime();
 
-            if(sleeping && clock.getTime() < targetTime)
+            if(mem.getNextInterruptTime() <= curTime)
+                mem.peripheralUpdate(curTime, sleeping ? ~0u : nvicEnabled);
+
+            if(sleeping && curTime < targetTime)
             {
                 // skip ahead
-                auto target = mem.getNextInterruptTime(targetTime);
+                auto target = std::min(targetTime, mem.getNextInterruptTime());
                 exec = std::max(UINT32_C(1), clock.getCyclesToTime(target));
             }
         }
-        while(sleeping && clock.getTime() < targetTime);
+        while(sleeping && curTime < targetTime);
     }
 
     return cycles;
