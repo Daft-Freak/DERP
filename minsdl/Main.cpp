@@ -1,5 +1,6 @@
 #include <fstream>
 #include <iostream>
+#include <unordered_map>
 
 #include <SDL.h>
 
@@ -15,6 +16,8 @@ static uint8_t bootROM[0x4000];
 static std::ifstream uf2File;
 
 uint16_t screenData[240 * 240];
+
+static uint32_t buttonState = 0;
 
 static const uint32_t uf2MagicStart0 = 0x0A324655, uf2MagicStart1 = 0x9E5D5157, uf2MagicEnd = 0x0AB16F30;
 
@@ -32,6 +35,18 @@ struct UF2Block
 };
 static_assert(sizeof(UF2Block) == 512);
 
+static const std::unordered_map<SDL_Keycode, int> picosystemKeyMap {
+    {SDLK_RIGHT,  1 << 21},
+    {SDLK_LEFT,   1 << 22},
+    {SDLK_UP,     1 << 23},
+    {SDLK_DOWN,   1 << 20},
+
+    {SDLK_z,      1 << 18},
+    {SDLK_x,      1 << 19},
+    {SDLK_c,      1 << 17},
+    {SDLK_v,      1 << 16},
+};
+
 static void pollEvents()
 {
     SDL_Event event;
@@ -39,6 +54,20 @@ static void pollEvents()
     {
         switch(event.type)
         {
+            case SDL_KEYDOWN:
+            {
+                auto it = picosystemKeyMap.find(event.key.keysym.sym);
+                if(it != picosystemKeyMap.end())
+                    buttonState |= it->second;
+                break;
+            }
+            case SDL_KEYUP:
+            {
+                auto it = picosystemKeyMap.find(event.key.keysym.sym);
+                if(it != picosystemKeyMap.end())
+                    buttonState &= ~it->second;
+                break;
+            }
             case SDL_QUIT:
                 quit = true;
                 break;
