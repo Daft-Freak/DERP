@@ -502,11 +502,11 @@ int ARMv6MCore::doTHUMB04ALU(uint16_t opcode, uint32_t pc)
     switch(instOp)
     {
         case 0x0: // AND
-            reg(dstReg) = res = op1 & op2;
+            loReg(dstReg) = res = op1 & op2;
             cpsr = (cpsr & ~(Flag_N | Flag_Z)) | (res & signBit) | (res == 0 ? Flag_Z : 0);
             break;
         case 0x1: // EOR
-            reg(dstReg) = res = op1 ^ op2;
+            loReg(dstReg) = res = op1 ^ op2;
             cpsr = (cpsr & ~(Flag_N | Flag_Z)) | (res & signBit) | (res == 0 ? Flag_Z : 0);
             break;
         case 0x2: // LSL
@@ -516,15 +516,15 @@ int ARMv6MCore::doTHUMB04ALU(uint16_t opcode, uint32_t pc)
             {
                 carry = op2 == 32 ? (op1 & 1) : 0;
                 carry = carry ? Flag_C : 0;
-                reg(dstReg) = res = 0;
+                loReg(dstReg) = res = 0;
             }
             else if(op2)
             {
                 carry = op1 & (1 << (32 - op2)) ? Flag_C : 0;
-                reg(dstReg) = res = op1 << op2;
+                loReg(dstReg) = res = op1 << op2;
             }
             else
-                reg(dstReg) = res = op1;
+                loReg(dstReg) = res = op1;
 
             cpsr = (cpsr & ~(Flag_C | Flag_N | Flag_Z)) | (res & signBit) | (res == 0 ? Flag_Z : 0) | carry;
             break;
@@ -535,15 +535,15 @@ int ARMv6MCore::doTHUMB04ALU(uint16_t opcode, uint32_t pc)
             {
                 carry = op2 == 32 ? (op1 & (1 << 31)) : 0;
                 carry = carry ? Flag_C : 0;
-                reg(dstReg) = res = 0;
+                loReg(dstReg) = res = 0;
             }
             else if(op2)
             {
                 carry = op1 & (1 << (op2 - 1)) ? Flag_C : 0;
-                reg(dstReg) = res = op1 >> op2;
+                loReg(dstReg) = res = op1 >> op2;
             }
             else
-                reg(dstReg) = res = op1;
+                loReg(dstReg) = res = op1;
 
             cpsr = (cpsr & ~(Flag_C | Flag_N | Flag_Z)) | (res & signBit) | (res == 0 ? Flag_Z : 0) | carry;
             break;
@@ -554,17 +554,17 @@ int ARMv6MCore::doTHUMB04ALU(uint16_t opcode, uint32_t pc)
             if(op2 >= 32)
             {
                 carry = sign ? Flag_C : 0;
-                reg(dstReg) = res = sign ? 0xFFFFFFFF : 0;
+                loReg(dstReg) = res = sign ? 0xFFFFFFFF : 0;
             }
             else if(op2)
             {
                 carry = op1 & (1 << (op2 - 1)) ? Flag_C : 0;
                 res = static_cast<int32_t>(op1) >> op2;
 
-                reg(dstReg) = res;
+                loReg(dstReg) = res;
             }
             else
-                reg(dstReg) = res = op1;
+                loReg(dstReg) = res = op1;
 
             cpsr = (cpsr & ~(Flag_C | Flag_N | Flag_Z)) | (res & signBit) | (res == 0 ? Flag_Z : 0) | carry;
             break;
@@ -572,7 +572,7 @@ int ARMv6MCore::doTHUMB04ALU(uint16_t opcode, uint32_t pc)
         case 0x5: // ADC
         {
             int c = (cpsr & Flag_C) ? 1 : 0;
-            reg(dstReg) = res = op1 + op2 + c;
+            loReg(dstReg) = res = op1 + op2 + c;
             carry = res < op1 || (res == op1 && c) ? Flag_C : 0;
             overflow = ~((op1 ^ op2) & signBit) & ((op1 ^ res) & signBit);
             cpsr = (cpsr & 0x0FFFFFFF) | (res & signBit) | (res == 0 ? Flag_Z : 0) | carry | (overflow >> 3);
@@ -581,7 +581,7 @@ int ARMv6MCore::doTHUMB04ALU(uint16_t opcode, uint32_t pc)
         case 0x6: // SBC
         {
             int c = (cpsr & Flag_C) ? 1 : 0;
-            reg(dstReg) = res = op1 - op2 + c - 1;
+            loReg(dstReg) = res = op1 - op2 + c - 1;
             carry = !(op2 > op1 || (op2 == op1 && !c)) ? Flag_C : 0;
             overflow = ((op1 ^ op2) & signBit) & ((op1 ^ res) & signBit);
             cpsr = (cpsr & 0x0FFFFFFF) | (res & signBit) | (res == 0 ? Flag_Z : 0) | carry | (overflow >> 3);
@@ -592,7 +592,7 @@ int ARMv6MCore::doTHUMB04ALU(uint16_t opcode, uint32_t pc)
             carry = cpsr & Flag_C;
             int shift = op2 & 0x1F;
 
-            reg(dstReg) = res = (op1 >> shift) | (op1 << (32 - shift));
+            loReg(dstReg) = res = (op1 >> shift) | (op1 << (32 - shift));
 
             if(op2)
                 carry = res & (1 << 31) ? Flag_C : 0;
@@ -606,7 +606,7 @@ int ARMv6MCore::doTHUMB04ALU(uint16_t opcode, uint32_t pc)
             break;
         case 0x9: // NEG
         {
-            reg(dstReg) = res = 0 - op2;
+            loReg(dstReg) = res = 0 - op2;
             carry = !(op2 > 0) ? Flag_C : 0; //?
             overflow = (op2 & signBit) & (res & signBit);
             cpsr = (cpsr & 0x0FFFFFFF) | (res & signBit) | (res == 0 ? Flag_Z : 0) | carry | (overflow >> 3);
@@ -625,23 +625,23 @@ int ARMv6MCore::doTHUMB04ALU(uint16_t opcode, uint32_t pc)
             cpsr = (cpsr & 0x0FFFFFFF) | (res & signBit) | (res == 0 ? Flag_Z : 0) | carry | (overflow >> 3);
             break;
         case 0xC: // ORR
-            reg(dstReg) = res = op1 | op2;
+            loReg(dstReg) = res = op1 | op2;
             cpsr = (cpsr & ~(Flag_N | Flag_Z)) | (res & signBit) | (res == 0 ? Flag_Z : 0);
             break;
         case 0xD: // MUL
         {
             // carry is meaningless, v is unaffected
-            reg(dstReg) = res = op1 * op2;
+            loReg(dstReg) = res = op1 * op2;
             cpsr = (cpsr & ~(Flag_N | Flag_Z)) | (res & signBit) | (res == 0 ? Flag_Z : 0);
 
             break; // single-cycle multiply
         }
         case 0xE: // BIC
-            reg(dstReg) = res = op1 & ~op2;
+            loReg(dstReg) = res = op1 & ~op2;
             cpsr = (cpsr & ~(Flag_N | Flag_Z)) | (res & signBit) | (res == 0 ? Flag_Z : 0);
             break;
         case 0xF: // MVN
-            reg(dstReg) = res = ~op2;
+            loReg(dstReg) = res = ~op2;
             cpsr = (cpsr & ~(Flag_N | Flag_Z)) | (res & signBit) | (res == 0 ? Flag_Z : 0);
             break;
     }
