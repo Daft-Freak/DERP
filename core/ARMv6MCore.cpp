@@ -9,6 +9,10 @@
 
 #include "ARMv6MCore.h"
 
+#ifdef _MSC_VER
+#define __builtin_unreachable() __assume(false)
+#endif
+
 // FIXME: this still thinks it's an ARMv4T
 
 ARMv6MCore::ARMv6MCore(MemoryBus &mem) : mem(mem)

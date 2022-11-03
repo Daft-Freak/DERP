@@ -221,8 +221,8 @@ void Clocks::pllUSBRegWrite(uint32_t addr, uint32_t data)
 
 void Clocks::calcFreq(int clock)
 {
-    const int xoscFreq = 12 * 1000 * 1000;
-    const int roscFreq = 6 * 1000 * 1000; // ish
+    static const int xoscFreq = 12 * 1000 * 1000;
+    static const int roscFreq = 6 * 1000 * 1000; // ish
 
     auto getPLLSysFreq = [this]()
     {
