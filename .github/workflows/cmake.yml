@@ -92,4 +92,4 @@ jobs:
       uses: actions/upload-artifact@v2
       with:
         name: ${{env.RELEASE_FILE}}
-        path: ${{runner.workspace}}/main/build/${{env.RELEASE_FILE}}.zip
+        path: ${{runner.workspace}}/build/${{env.RELEASE_FILE}}.zip
