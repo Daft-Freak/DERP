@@ -212,6 +212,22 @@ int main(int argc, char *argv[])
         if(elapsed > 30)
             elapsed = 30;
 
+        // picosystem IO
+        auto &gpio = mem.getGPIO();
+
+        auto inputs = gpio.getInputs();
+
+        // update buttons
+        int buttonMask = 0xFF0000;
+        inputs = (inputs & ~buttonMask) | (buttonState ^ buttonMask);
+
+        // toggle TE
+        // FIXME: correct timings
+        gpio.setInputs(inputs & ~(1 << 8));
+        cpuCycles += cpu.run(1); // picosystem sdk wants to see the transition
+        elapsed--;
+        gpio.setInputs(inputs | (1 << 8));
+
         cpuCycles += cpu.run(elapsed);
         // sync peripherals
         mem.peripheralUpdate(cpu.getClock().getTime());
