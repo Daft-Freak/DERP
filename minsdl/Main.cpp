@@ -134,7 +134,7 @@ int main(int argc, char *argv[])
 
     if(!romFilename.empty())
     {
-        uf2File.open(romFilename);
+        uf2File.open(romFilename, std::ifstream::in | std::ifstream::binary);
 
         if(!uf2File || !parseUF2(uf2File))
         {
@@ -146,7 +146,7 @@ int main(int argc, char *argv[])
     // emu init
     mem.setCPU(&cpu);
 
-    std::ifstream bootROMFile(basePath + "bootrom.bin");
+    std::ifstream bootROMFile(basePath + "bootrom.bin", std::ifstream::in | std::ifstream::binary);
     if(bootROMFile)
     {
         bootROMFile.read(reinterpret_cast<char *>(bootROM), sizeof(bootROM));
