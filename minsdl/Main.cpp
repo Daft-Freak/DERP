@@ -10,7 +10,7 @@
 static bool quit = false;
 
 static MemoryBus mem;
-static ARMv6MCore cpu(mem);
+static ARMv6MCore cpuCores[2]{mem, mem};
 
 static uint8_t bootROM[0x4000];
 
@@ -89,7 +89,7 @@ static bool parseUF2(std::ifstream &file)
             return false;
         }
 
-        auto ptr = cpu.getMem().mapAddress(block.addr);
+        auto ptr = mem.mapAddress(block.addr);
         if(ptr)
             memcpy(ptr, block.payload, block.payloadSize);
         else
@@ -145,7 +145,7 @@ int main(int argc, char *argv[])
     }
 
     // emu init
-    mem.setCPU(&cpu);
+    mem.setCPUs(cpuCores);
 
     std::ifstream bootROMFile(basePath + "bootrom.bin", std::ifstream::in | std::ifstream::binary);
     if(bootROMFile)
@@ -161,9 +161,12 @@ int main(int argc, char *argv[])
     }
     auto &clocks = mem.getClocks();
 
-    clocks.addClockTarget(5, cpu.getClock());
+    for(auto &core : cpuCores)
+    {
+        clocks.addClockTarget(5, core.getClock());
 
-    cpu.reset();
+        core.reset();
+    }
 
     // SDL init
     if(SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) != 0)
@@ -225,13 +228,18 @@ int main(int argc, char *argv[])
         // toggle TE
         // FIXME: correct timings
         gpio.setInputs(inputs & ~(1 << 8));
-        cpuCycles += cpu.run(1); // picosystem sdk wants to see the transition
+        cpuCycles += cpuCores[0].run(1); // picosystem sdk wants to see the transition
         elapsed--;
         gpio.setInputs(inputs | (1 << 8));
 
-        cpuCycles += cpu.run(elapsed);
+        cpuCycles += cpuCores[0].run(elapsed);
+
+        // sync core 1
+        // TODO: more sync
+        cpuCores[1].update(cpuCores[0].getClock().getTime());
+
         // sync peripherals
-        mem.peripheralUpdate(cpu.getClock().getTime());
+        mem.peripheralUpdate(cpuCores[0].getClock().getTime());
 
         // adjust timers to stay in range
         clocks.adjustClocks();

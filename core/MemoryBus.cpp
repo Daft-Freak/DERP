@@ -64,9 +64,9 @@ void MemoryBus::setBootROM(const uint8_t *rom)
     bootROM = rom;
 }
 
-void MemoryBus::setCPU(ARMv6MCore *cpu)
+void MemoryBus::setCPUs(ARMv6MCore *cpus)
 {
-    this->cpu = cpu;
+    this->cpuCores = cpus;
 }
 
 void MemoryBus::reset()
@@ -123,7 +123,11 @@ T MemoryBus::read(BusMasterPtr master, uint32_t addr, int &cycles, bool sequenti
             return doAHBPeriphRead<T>(masterClock, addr);
 
         case Region_IOPORT:
-            return doIOPORTRead<T>(addr);
+        {
+            assert(std::holds_alternative<ARMv6MCore *>(master));
+            int core = std::get<ARMv6MCore *>(master) - cpuCores;
+            return doIOPORTRead<T>(core, addr);
+        }
 
         case Region_CPUInternal:
             accessCycles(1);
@@ -173,8 +177,12 @@ void MemoryBus::write(BusMasterPtr master, uint32_t addr, T data, int &cycles, b
             return;
 
         case Region_IOPORT:
-            doIOPORTWrite<T>(addr, data);
+        {
+            assert(std::holds_alternative<ARMv6MCore *>(master));
+            int core = std::get<ARMv6MCore *>(master) - cpuCores;
+            doIOPORTWrite<T>(core, addr, data);
             return;
+        }   
 
         case Region_CPUInternal:
             accessCycles(1);
@@ -277,7 +285,8 @@ void MemoryBus::calcNextInterruptTime()
 void MemoryBus::setPendingIRQ(int n)
 {
     // TODO: and the other one
-    cpu->setPendingIRQ(n);
+    cpuCores[0].setPendingIRQ(n);
+    cpuCores[1].setPendingIRQ(n);
 
     calcNextInterruptTime();
 }
@@ -786,12 +795,12 @@ void MemoryBus::doAHBPeriphWrite(ClockTarget &masterClock, uint32_t addr, T data
 }
 
 template<class T>
-T MemoryBus::doIOPORTRead(uint32_t addr)
+T MemoryBus::doIOPORTRead(int core, uint32_t addr)
 {
     switch(addr & 0xFFF)
     {
         case 0: // CPUID
-            return 0; // TODO: need to know which CPU is reading
+            return core;
 
         case 4: // GPIO_IN
             return gpio.getInputs();
@@ -802,6 +811,9 @@ T MemoryBus::doIOPORTRead(uint32_t addr)
             printf("R GPIO_HI_IN\n");
             return 2;
         }
+
+        case 0x50: // FIFO_ST
+            return 0;
 
         case 0x60: // DIV_UDIVIDEND
         case 0x68: // DIV_SDIVIDEND
@@ -865,7 +877,7 @@ T MemoryBus::doIOPORTRead(uint32_t addr)
 }
 
 template<class T>
-void MemoryBus::doIOPORTWrite(uint32_t addr, T data)
+void MemoryBus::doIOPORTWrite(int core, uint32_t addr, T data)
 {
     auto doDiv = [this]()
     {

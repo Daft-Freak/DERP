@@ -12,6 +12,7 @@ public:
     void reset();
 
     unsigned int run(int ms);
+    unsigned int update(uint64_t target);
 
     void setPendingIRQ(int n);
 

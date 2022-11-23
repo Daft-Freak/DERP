@@ -23,7 +23,7 @@ public:
 
     void setBootROM(const uint8_t *rom);
 
-    void setCPU(ARMv6MCore *cpu);
+    void setCPUs(ARMv6MCore *cpus);
 
     void reset();
 
@@ -101,9 +101,9 @@ private:
     void doAHBPeriphWrite(ClockTarget &masterClock, uint32_t addr, T data);
 
     template<class T>
-    T doIOPORTRead(uint32_t addr);
+    T doIOPORTRead(int core, uint32_t addr);
     template<class T>
-    void doIOPORTWrite(uint32_t addr, T data);
+    void doIOPORTWrite(int core, uint32_t addr, T data);
 
     template<class T>
     T doCPUInternalRead(ARMv6MCore &cpu, uint32_t addr) const;
@@ -125,7 +125,7 @@ private:
 
     uint32_t dummy = 0xBADADD55;
 
-    ARMv6MCore *cpu = nullptr; // TODO: cpus
+    ARMv6MCore *cpuCores = nullptr;
 
     Clocks clocks;
 

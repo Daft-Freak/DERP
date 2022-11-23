@@ -66,12 +66,16 @@ void ARMv6MCore::reset()
 unsigned int ARMv6MCore::run(int ms)
 {
     auto targetTime = clock.getTargetTime(ms);
+    return update(targetTime);
+}
 
+unsigned int ARMv6MCore::update(uint64_t target)
+{
     unsigned int cycles = 0;
 
     mem.calcNextInterruptTime();
 
-    while(clock.getTime() < targetTime)
+    while(clock.getTime() < target)
     {
         uint32_t exec = 1;
 
@@ -106,14 +110,14 @@ unsigned int ARMv6MCore::run(int ms)
             if(mem.getNextInterruptTime() <= curTime)
                 mem.peripheralUpdate(curTime, sleeping ? ~0u : nvicEnabled);
 
-            if(sleeping && curTime < targetTime)
+            if(sleeping && curTime < target)
             {
                 // skip ahead
-                auto target = std::min(targetTime, mem.getNextInterruptTime());
-                exec = std::max(UINT32_C(1), clock.getCyclesToTime(target));
+                auto skipTarget = std::min(target, mem.getNextInterruptTime());
+                exec = std::max(UINT32_C(1), clock.getCyclesToTime(skipTarget));
             }
         }
-        while(sleeping && curTime < targetTime);
+        while(sleeping && curTime < target);
     }
 
     return cycles;
