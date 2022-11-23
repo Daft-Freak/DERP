@@ -154,10 +154,10 @@ private:
     uint32_t flashAddr;
     int flashCmdOff = 0;
 
-    // TODO: there are two of these
-    uint32_t dividend, divisor;
-    uint32_t divQuot, divRem;
-    bool dividerSigned, dividerDirty = false;
+    // per-core divider
+    uint32_t dividend[2], divisor[2];
+    uint32_t divQuot[2], divRem[2];
+    bool dividerSigned[2], dividerDirty[2];
 
     uint32_t spinlocks = 0;
 };

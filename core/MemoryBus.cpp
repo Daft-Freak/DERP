@@ -79,6 +79,9 @@ void MemoryBus::reset()
     dma.reset();
 
     nextInterruptTime = 0;
+
+    for(auto &dirty : dividerDirty)
+        dirty = false;
 }
 
 template<class T>
@@ -817,17 +820,17 @@ T MemoryBus::doIOPORTRead(int core, uint32_t addr)
 
         case 0x60: // DIV_UDIVIDEND
         case 0x68: // DIV_SDIVIDEND
-            return dividend;
+            return dividend[core];
         case 0x64: // DIV_UDIVISOR
         case 0x6C: // DIV_SDIVISOR
-            return divisor;
+            return divisor[core];
         case 0x70: // DIV_QUOTIENT
-            dividerDirty = false;
-            return divQuot;
+            dividerDirty[core] = false;
+            return divQuot[core];
         case 0x74: // DIV_REMAINDER
-            return divRem;
+            return divRem[core];
         case 0x78: // DIV_CSR
-            return (dividerDirty ? 2 : 0) | 1;
+            return (dividerDirty[core] ? 2 : 0) | 1;
 
         case 0x100: // SPINLOCK0
         case 0x104:
@@ -879,57 +882,57 @@ T MemoryBus::doIOPORTRead(int core, uint32_t addr)
 template<class T>
 void MemoryBus::doIOPORTWrite(int core, uint32_t addr, T data)
 {
-    auto doDiv = [this]()
+    auto doDiv = [this, core]()
     {
         // TODO: should take 8 cycles
-        if(!divisor)
+        if(!divisor[core])
             return; // what should this do?
 
-        if(dividerSigned)
+        if(dividerSigned[core])
         {
-            divQuot = static_cast<int32_t>(dividend) / divisor;
-            divRem = static_cast<int32_t>(dividend) % divisor;
+            divQuot[core] = static_cast<int32_t>(dividend[core]) / divisor[core];
+            divRem[core] = static_cast<int32_t>(dividend[core]) % divisor[core];
         }
         else
         {
-            divQuot = dividend / divisor;
-            divRem = dividend % divisor;
+            divQuot[core] = dividend[core] / divisor[core];
+            divRem[core] = dividend[core] % divisor[core];
         }
     };
 
     switch(addr & 0xFFF)
     {
         case 0x60: // DIV_UDIVIDEND
-            dividend = data;
-            dividerDirty = true;
-            dividerSigned = false;
+            dividend[core] = data;
+            dividerDirty[core] = true;
+            dividerSigned[core] = false;
             doDiv();
             return;
         case 0x64: // DIV_UDIVISOR
-            divisor = data;
-            dividerDirty = true;
-            dividerSigned = false;
+            divisor[core] = data;
+            dividerDirty[core] = true;
+            dividerSigned[core] = false;
             doDiv();
             return;
         case 0x68: // DIV_SDIVIDEND
-            dividend = data;
-            dividerDirty = true;
-            dividerSigned = true;
+            dividend[core] = data;
+            dividerDirty[core] = true;
+            dividerSigned[core] = true;
             doDiv();
             return;
         case 0x6C: // DIV_SDIVISOR
-            divisor = data;
-            dividerDirty = true;
-            dividerSigned = true;
+            divisor[core] = data;
+            dividerDirty[core] = true;
+            dividerSigned[core] = true;
             doDiv();
             return;
         case 0x70: // DIV_QUOTIENT
-            divQuot = data;
-            dividerDirty = true;
+            divQuot[core] = data;
+            dividerDirty[core] = true;
             return;
         case 0x74: // DIV_REMAINDER
-            divRem = data;
-            dividerDirty = true;
+            divRem[core] = data;
+            dividerDirty[core] = true;
             return;
 
         case 0x100: // SPINLOCK0
