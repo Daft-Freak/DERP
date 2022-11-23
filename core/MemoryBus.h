@@ -68,6 +68,8 @@ public:
 
     void setPendingIRQ(int n);
 
+    void sendEvent(ARMv6MCore *coreFrom);
+
     Clocks &getClocks() {return clocks;}
     GPIO &getGPIO() {return gpio;}
     Watchdog &getWatchdog() {return watchdog;}

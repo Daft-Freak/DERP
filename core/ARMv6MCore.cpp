@@ -130,6 +130,13 @@ void ARMv6MCore::setPendingIRQ(int n)
     exceptionPending |= 1ull << (n + 16);
 }
 
+void ARMv6MCore::setEvent()
+{
+    eventFlag = true;
+    if(sleeping)
+        sleeping = false;
+}
+
 uint32_t ARMv6MCore::readReg(uint32_t addr)
 {
     switch(addr & 0xFFFFFFF)
@@ -1039,7 +1046,7 @@ int ARMv6MCore::doTHUMBMisc(uint16_t opcode, uint32_t pc)
                         return pcSCycles * 2;
 
                     case 4: // SEV
-                        // TODO
+                        mem.sendEvent(this);
                         return pcSCycles;
                 }
             }

@@ -294,6 +294,12 @@ void MemoryBus::setPendingIRQ(int n)
     calcNextInterruptTime();
 }
 
+void MemoryBus::sendEvent(ARMv6MCore *coreFrom)
+{
+    int coreIndex = coreFrom - cpuCores;
+    cpuCores[1 - coreIndex].setEvent();
+}
+
 template<class T, size_t size>
 T MemoryBus::doRead(const uint8_t (&mem)[size], uint32_t addr) const
 {

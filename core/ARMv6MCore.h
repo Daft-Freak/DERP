@@ -15,6 +15,7 @@ public:
     unsigned int update(uint64_t target);
 
     void setPendingIRQ(int n);
+    void setEvent();
 
     uint32_t readReg(uint32_t addr);
     void writeReg(uint32_t addr, uint32_t data);
