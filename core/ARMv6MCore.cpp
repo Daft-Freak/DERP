@@ -93,8 +93,10 @@ unsigned int ARMv6MCore::update(uint64_t target)
 
             if(!(primask & 1) && exceptionPending)
             {
-                // TODO: mask disabled
-                exec += handleException();
+                // mask disabled
+                uint64_t mask = nvicEnabled << 16 | 0xFFFF;
+                if(exceptionPending & mask)
+                    exec += handleException();
             }
 
             clock.addCycles(exec);
