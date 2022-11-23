@@ -816,7 +816,13 @@ T MemoryBus::doIOPORTRead(int core, uint32_t addr)
         }
 
         case 0x50: // FIFO_ST
-            return 0;
+        {
+            bool vld = !coreFIFO[1 - core].empty();
+            bool rdy = !coreFIFO[core].full();
+            return (vld ? 1 : 0) | (rdy ? 2 : 0); // TODO: error flags
+        }
+        case 0x58: // FIFO_RD
+            return coreFIFO[1 - core].pop();
 
         case 0x60: // DIV_UDIVIDEND
         case 0x68: // DIV_SDIVIDEND
@@ -902,6 +908,12 @@ void MemoryBus::doIOPORTWrite(int core, uint32_t addr, T data)
 
     switch(addr & 0xFFF)
     {
+        case 0x54: // FIFO_WR
+            coreFIFO[core].push(data);
+            // at least one status flag got set here...
+            setPendingIRQ(15/*SIO_IRQ_PROC0*/ + core);
+            return;
+
         case 0x60: // DIV_UDIVIDEND
             dividend[core] = data;
             dividerDirty[core] = true;

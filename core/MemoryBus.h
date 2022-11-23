@@ -7,6 +7,7 @@
 #include "Clocks.h"
 #include "DMA.h"
 #include "GPIO.h"
+#include "FIFO.h"
 #include "Timer.h"
 #include "Watchdog.h"
 
@@ -153,6 +154,9 @@ private:
     uint8_t flashCmd;
     uint32_t flashAddr;
     int flashCmdOff = 0;
+
+    // inter-core FIFO
+    FIFO<uint32_t, 8> coreFIFO[2];
 
     // per-core divider
     uint32_t dividend[2], divisor[2];
