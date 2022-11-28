@@ -56,6 +56,8 @@ void DMA::update(uint64_t target)
             if(!(channelTriggered & (1 << curChannel)) || !(ctrl[curChannel] & 1/*EN*/))
                 continue;
 
+            bool bswap = ctrl[curChannel] & (1 << 22);
+
             int transferSize = 1 << ((ctrl[curChannel] >> 2) & 3);
 
             int cycles; // TODO
@@ -64,6 +66,9 @@ void DMA::update(uint64_t target)
             else if(transferSize == 2)
             {
                 auto val = mem.read<uint16_t>(this, readAddr[curChannel], cycles, false);
+                if(bswap)
+                    val = val >> 8 | val << 8;
+
                 mem.write(this, writeAddr[curChannel], val, cycles, false);
 
                 // picosystem hax (hires)
@@ -81,6 +86,9 @@ void DMA::update(uint64_t target)
             else
             {
                 auto val = mem.read<uint32_t>(this, readAddr[curChannel], cycles, false);
+                if(bswap)
+                    val = val >> 24 | val << 24 | (val & 0xFF00) << 8 | (val & 0xFF0000) >> 8;
+
                 mem.write(this, writeAddr[curChannel], val, cycles, false);
 
                 // picosystem hax (lores)
@@ -88,6 +96,10 @@ void DMA::update(uint64_t target)
                 {
                     static int off = 0;
                     extern uint16_t screenData[];
+
+                    // picosystem sdk unswaps in the pio program
+                    if(bswap)
+                        val = val >> 16 | val << 16;
 
                     screenData[off++] = val;
                     screenData[off++] = val;
