@@ -902,8 +902,8 @@ void MemoryBus::doIOPORTWrite(int core, uint32_t addr, T data)
 
         if(dividerSigned[core])
         {
-            divQuot[core] = static_cast<int32_t>(dividend[core]) / divisor[core];
-            divRem[core] = static_cast<int32_t>(dividend[core]) % divisor[core];
+            divQuot[core] = static_cast<int32_t>(dividend[core]) / static_cast<int32_t>(divisor[core]);
+            divRem[core] = static_cast<int32_t>(dividend[core]) % static_cast<int32_t>(divisor[core]);
         }
         else
         {
