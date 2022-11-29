@@ -19,6 +19,7 @@ static std::ifstream uf2File;
 uint16_t screenData[240 * 240];
 
 static uint32_t buttonState = 0;
+static bool needTE = false;
 
 static const uint32_t uf2MagicStart0 = 0x0A324655, uf2MagicStart1 = 0x9E5D5157, uf2MagicEnd = 0x0AB16F30;
 
@@ -99,6 +100,35 @@ static bool parseUF2(std::ifstream &file)
     return true;
 }
 
+// picosystem external hardware/IO
+static void displayUpdate(uint64_t time)
+{
+    if(needTE)
+    {
+        mem.getGPIO().setInputMask(1 << 8);
+        needTE = false;
+    }
+    else
+        mem.getGPIO().clearInputMask(1 << 8);
+}
+
+static uint32_t onGPIORead(uint64_t time, uint32_t inputs)
+{
+    // apply buttons
+    int buttonMask = 0xFF0000;
+    inputs = (inputs & ~buttonMask) | (buttonState ^ buttonMask);
+
+    displayUpdate(time);
+
+    return inputs;
+}
+
+static void onInterruptUpdate(uint64_t time, uint32_t irqMask)
+{
+    if(irqMask & (1 << 13) /*IO_IRQ_BANK0*/)
+        displayUpdate(time);
+}
+
 int main(int argc, char *argv[])
 {
     int screenWidth = 240;
@@ -159,6 +189,7 @@ int main(int argc, char *argv[])
         std::cerr << "bootrom.bin not found \n";
         return 1;
     }
+
     auto &clocks = mem.getClocks();
 
     for(auto &core : cpuCores)
@@ -167,6 +198,9 @@ int main(int argc, char *argv[])
 
         core.reset();
     }
+
+    mem.setInterruptUpdateCallback(onInterruptUpdate);
+    mem.getGPIO().setReadCallback(onGPIORead);
 
     // SDL init
     if(SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) != 0)
@@ -217,20 +251,9 @@ int main(int argc, char *argv[])
             elapsed = 30;
 
         // picosystem IO
-        auto &gpio = mem.getGPIO();
-
-        auto inputs = gpio.getInputs(0); //
-
-        // update buttons
-        int buttonMask = 0xFF0000;
-        inputs = (inputs & ~buttonMask) | (buttonState ^ buttonMask);
-
         // toggle TE
         // FIXME: correct timings
-        gpio.setInputs(inputs & ~(1 << 8));
-        cpuCycles += cpuCores[0].run(1); // picosystem sdk wants to see the transition
-        elapsed--;
-        gpio.setInputs(inputs | (1 << 8));
+        needTE = true;
 
         cpuCycles += cpuCores[0].run(elapsed);
 
