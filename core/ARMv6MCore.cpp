@@ -33,6 +33,7 @@ void ARMv6MCore::reset()
     clock.reset();
 
     exceptionActive = exceptionPending = 0;
+    needException = false;
 
     for(auto &reg : sysTickRegs)
         reg = 0;
@@ -91,13 +92,8 @@ unsigned int ARMv6MCore::update(uint64_t target)
         {
             // interrupts?
 
-            if(!(primask & 1) && exceptionPending)
-            {
-                // mask disabled
-                uint64_t mask = nvicEnabled << 16 | 0xFFFF;
-                if(exceptionPending & mask)
-                    exec += handleException();
-            }
+            if(!(primask & 1) && needException)
+                exec += handleException();
 
             clock.addCycles(exec);
             cycles += exec;
@@ -128,6 +124,7 @@ unsigned int ARMv6MCore::update(uint64_t target)
 void ARMv6MCore::setPendingIRQ(int n)
 {
     exceptionPending |= 1ull << (n + 16);
+    checkPendingExceptions();
 }
 
 void ARMv6MCore::setEvent()
@@ -203,15 +200,19 @@ void ARMv6MCore::writeReg(uint32_t addr, uint32_t data)
         
         case 0xE100: // NVIC_ISER
             nvicEnabled |= data;
+            checkPendingExceptions();
             return;
         case 0xE180: // NVIC_ICER
             nvicEnabled &= ~data; //
+            checkPendingExceptions();
             return;
         case 0xE200: // NVIC_ISPR
             exceptionPending |= static_cast<uint64_t>(data) << 16;
+            checkPendingExceptions();
             return;
         case 0xE280: // NVIC_IPCR
             exceptionPending &= ~(static_cast<uint64_t>(data) << 16);
+            checkPendingExceptions();
             return;
         case 0xE400: // NVIC_IPR0
         case 0xE404: // NVIC_IPR1
@@ -1510,34 +1511,6 @@ void ARMv6MCore::updateTHUMBPC(uint32_t pc)
 
 int ARMv6MCore::handleException()
 {
-    auto getExceptionPriority = [this](int exception) -> int
-    {
-        switch(exception)
-        {
-            case 0: // thread/no exception
-                return 4;
-
-            case 2: // NMI
-                return -2;
-            
-            case 3: // HardFault
-                return -1;
-
-            case 11: // SVCall
-                return scbRegs[7]/*SHPR2*/ >> 30;
-            case 14: // PendSV
-                return  (scbRegs[8]/*SHPR3*/ >> 22) & 3;
-            case 15: // SysTick
-                return scbRegs[8]/*SHPR3*/ >> 30;
-            
-            default:
-                assert(exception >= 16);
-                // external interrupt
-                int shift = 6 + (exception & 3) * 8;
-                return (nvicPriority[(exception - 16) / 4] >> shift) & 3;
-        }
-    };
-
     // get cur priority
     int curException = cpsr & 0x3F;
     int curPrio = getExceptionPriority(curException);
@@ -1597,6 +1570,7 @@ int ARMv6MCore::handleException()
 
     exceptionActive |= 1ull << newException;
     exceptionPending &= ~(1ull << newException);
+    needException = false;
 
     // set event/wake up
     eventFlag = true;
@@ -1646,7 +1620,76 @@ int ARMv6MCore::handleExceptionReturn(uint32_t excRet)
 
     updateTHUMBPC(newPC & ~1);
 
+    checkPendingExceptions();
+
     return cycles; // caller should handle the branch
+}
+
+int ARMv6MCore::getExceptionPriority(int exception) const
+{
+    switch(exception)
+    {
+        case 0: // thread/no exception
+            return 4;
+
+        case 2: // NMI
+            return -2;
+        
+        case 3: // HardFault
+            return -1;
+
+        case 11: // SVCall
+            return scbRegs[7]/*SHPR2*/ >> 30;
+        case 14: // PendSV
+            return  (scbRegs[8]/*SHPR3*/ >> 22) & 3;
+        case 15: // SysTick
+            return scbRegs[8]/*SHPR3*/ >> 30;
+        
+        default:
+            assert(exception >= 16);
+            // external interrupt
+            int shift = 6 + (exception & 3) * 8;
+            return (nvicPriority[(exception - 16) / 4] >> shift) & 3;
+    }
+}
+
+void ARMv6MCore::checkPendingExceptions()
+{
+    needException = false;
+
+    // mask disabled
+    uint64_t mask = nvicEnabled << 16 | 0xFFFF;
+    if(!(exceptionPending & mask))
+        return;
+
+    // get cur priority
+    int curException = cpsr & 0x3F;
+    int curPrio = getExceptionPriority(curException);
+
+    // find highest priority pending exception
+    int newException = 0;
+    int newPrio = 4;
+
+    uint64_t maskedExceptions = exceptionPending & mask;
+
+    for(int i = 2; i < 48 && newPrio; i++)
+    {
+        // skip not pending
+        if(!(maskedExceptions & (1ull << i)))
+            continue;
+
+        int prio = getExceptionPriority(i);
+
+        if(prio < newPrio)
+        {
+            newPrio = prio;
+            newException = i;
+        }
+    }
+
+    // higher priority exception
+    if(newPrio < curPrio || newException < curException)
+        needException = true;
 }
 
 void ARMv6MCore::updateSysTick(int sysCycles)

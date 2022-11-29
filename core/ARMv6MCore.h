@@ -116,6 +116,8 @@ private:
 
     int handleException();
     int handleExceptionReturn(uint32_t excRet);
+    int getExceptionPriority(int exception) const;
+    void checkPendingExceptions();
 
     void updateSysTick(int sysCycles = 0);
 
@@ -139,6 +141,7 @@ private:
 
     // exceptions
     uint64_t exceptionPending, exceptionActive;
+    bool needException = false;
 
     // "real" time for synchronisation/scheduling
     ClockTarget clock;
