@@ -267,6 +267,9 @@ void MemoryBus::peripheralUpdate(uint64_t target)
 
 void MemoryBus::peripheralUpdate(uint64_t target, uint32_t irqMask)
 {
+    if(interruptUpdateCallback)
+        interruptUpdateCallback(target, irqMask);
+
     // only update things that might cause interrupts
     
     if(irqMask & (0xF)/*TIMER_IRQ0-3*/)
@@ -283,6 +286,11 @@ void MemoryBus::calcNextInterruptTime()
 
     nextInterruptTime = timer.getNextInterruptTime(nextInterruptTime);
     nextInterruptTime = dma.getNextInterruptTime(nextInterruptTime);
+}
+
+void MemoryBus::setInterruptUpdateCallback(InterruptUpdateCallback cb)
+{
+    interruptUpdateCallback = cb;
 }
 
 void MemoryBus::setPendingIRQ(int n)

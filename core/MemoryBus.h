@@ -1,6 +1,7 @@
 #pragma once
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <queue>
 #include <variant>
 
@@ -20,6 +21,8 @@ using BusMasterPtr = std::variant<ARMv6MCore *, DMA *>;
 class MemoryBus
 {
 public:
+    using InterruptUpdateCallback = std::function<void(uint64_t, uint32_t)>;
+
     MemoryBus();
 
     void setBootROM(const uint8_t *rom);
@@ -65,6 +68,8 @@ public:
 
     uint64_t getNextInterruptTime() const {return nextInterruptTime;}
     void calcNextInterruptTime();
+
+    void setInterruptUpdateCallback(InterruptUpdateCallback cb);
 
     void setPendingIRQ(int n);
 
@@ -141,6 +146,8 @@ private:
     DMA dma;
 
     uint64_t nextInterruptTime;
+
+    InterruptUpdateCallback interruptUpdateCallback;
 
     // temp peripherals stuff
     uint32_t ioQSPICtrl[6]{0};
