@@ -11,7 +11,7 @@ public:
 
     void reset();
 
-    uint32_t getInputs() const {return inputs;}
+    uint32_t getInputs(uint64_t time) const {return inputs;}
 
     void setInputs(uint32_t inputs);
 

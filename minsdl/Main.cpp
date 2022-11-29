@@ -219,7 +219,7 @@ int main(int argc, char *argv[])
         // picosystem IO
         auto &gpio = mem.getGPIO();
 
-        auto inputs = gpio.getInputs();
+        auto inputs = gpio.getInputs(0); //
 
         // update buttons
         int buttonMask = 0xFF0000;

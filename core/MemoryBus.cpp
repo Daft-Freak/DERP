@@ -129,7 +129,7 @@ T MemoryBus::read(BusMasterPtr master, uint32_t addr, int &cycles, bool sequenti
         {
             assert(std::holds_alternative<ARMv6MCore *>(master));
             int core = std::get<ARMv6MCore *>(master) - cpuCores;
-            return doIOPORTRead<T>(core, addr);
+            return doIOPORTRead<T>(masterClock, core, addr);
         }
 
         case Region_CPUInternal:
@@ -183,7 +183,7 @@ void MemoryBus::write(BusMasterPtr master, uint32_t addr, T data, int &cycles, b
         {
             assert(std::holds_alternative<ARMv6MCore *>(master));
             int core = std::get<ARMv6MCore *>(master) - cpuCores;
-            doIOPORTWrite<T>(core, addr, data);
+            doIOPORTWrite<T>(masterClock, core, addr, data);
             return;
         }   
 
@@ -805,7 +805,7 @@ void MemoryBus::doAHBPeriphWrite(ClockTarget &masterClock, uint32_t addr, T data
 }
 
 template<class T>
-T MemoryBus::doIOPORTRead(int core, uint32_t addr)
+T MemoryBus::doIOPORTRead(ClockTarget &masterClock, int core, uint32_t addr)
 {
     switch(addr & 0xFFF)
     {
@@ -813,7 +813,7 @@ T MemoryBus::doIOPORTRead(int core, uint32_t addr)
             return core;
 
         case 4: // GPIO_IN
-            return gpio.getInputs();
+            return gpio.getInputs(masterClock.getTime());
 
         case 8:  // GPIO_HI_IN
         {
@@ -893,7 +893,7 @@ T MemoryBus::doIOPORTRead(int core, uint32_t addr)
 }
 
 template<class T>
-void MemoryBus::doIOPORTWrite(int core, uint32_t addr, T data)
+void MemoryBus::doIOPORTWrite(ClockTarget &masterClock, int core, uint32_t addr, T data)
 {
     auto doDiv = [this, core]()
     {
