@@ -104,9 +104,9 @@ private:
     void doAHBPeriphWrite(ClockTarget &masterClock, uint32_t addr, T data);
 
     template<class T>
-    T doIOPORTRead(int core, uint32_t addr);
+    T doIOPORTRead(ClockTarget &masterClock, int core, uint32_t addr);
     template<class T>
-    void doIOPORTWrite(int core, uint32_t addr, T data);
+    void doIOPORTWrite(ClockTarget &masterClock, int core, uint32_t addr, T data);
 
     template<class T>
     T doCPUInternalRead(ARMv6MCore &cpu, uint32_t addr) const;
