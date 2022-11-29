@@ -785,6 +785,7 @@ void MemoryBus::doAHBPeriphWrite(ClockTarget &masterClock, uint32_t addr, T data
     {
         dma.update(masterClock.getTime());
         dma.regWrite(addr & 0xFFFF, data);
+        calcNextInterruptTime();
         return;
     }
     else if(addr < 0x50101000) // USB DPRAM
