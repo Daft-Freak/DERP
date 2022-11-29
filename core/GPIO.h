@@ -1,19 +1,30 @@
 #pragma once
 
 #include <cstdint>
+#include <functional>
 
 class MemoryBus;
 
 class GPIO final
 {
 public:
+    using ReadCallback = std::function<uint32_t(uint64_t, uint32_t)>;
+
     GPIO(MemoryBus &mem);
 
     void reset();
 
-    uint32_t getInputs(uint64_t time) const {return inputs;}
+    uint32_t getInputs(uint64_t time) const
+    {
+        if(readCallback)
+            return readCallback(time, inputs);
+
+        return inputs;
+    }
 
     void setInputs(uint32_t inputs);
+
+    void setReadCallback(ReadCallback cb);
 
     // IO_BANK0
     uint32_t regRead(uint32_t addr);
@@ -31,4 +42,6 @@ private:
     uint32_t proc0InterruptEnables[4]; // TODO: proc1
 
     uint32_t inputs;
+
+    ReadCallback readCallback;
 };

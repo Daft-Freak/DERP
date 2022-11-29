@@ -63,6 +63,11 @@ void GPIO::setInputs(uint32_t inputs)
     this->inputs = inputs;
 }
 
+void GPIO::setReadCallback(ReadCallback cb)
+{
+    readCallback = cb;
+}
+
 uint32_t GPIO::regRead(uint32_t addr)
 {
     if(addr < 0xF0)
