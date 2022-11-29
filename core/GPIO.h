@@ -24,6 +24,9 @@ public:
 
     void setInputs(uint32_t inputs);
 
+    void setInputMask(uint32_t mask) {setInputs(inputs | mask);}
+    void clearInputMask(uint32_t mask) {setInputs(inputs & ~mask);}
+
     void setReadCallback(ReadCallback cb);
 
     // IO_BANK0
