@@ -30,9 +30,9 @@ public:
         return emuTime + (1ull << 63) / 1000 * ms;
     }
 
-    uint32_t getCyclesToTime(uint64_t targetTime) const
+    uint32_t getCyclesToTime(uint64_t targetTime, bool round = false) const
     {
-        return (targetTime - emuTime + clockScale - 1) / clockScale;
+        return (targetTime - emuTime + (round ? clockScale - 1 : 0)) / clockScale;
     }
 
     uint64_t getTimeToCycles(uint32_t cycles) const

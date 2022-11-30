@@ -112,7 +112,7 @@ unsigned int ARMv6MCore::update(uint64_t target)
             {
                 // skip ahead
                 auto skipTarget = std::min(target, mem.getNextInterruptTime());
-                exec = std::max(UINT32_C(1), clock.getCyclesToTime(skipTarget));
+                exec = std::max(UINT32_C(1), clock.getCyclesToTime(skipTarget, true));
             }
         }
         while(sleeping && curTime < target);
