@@ -227,6 +227,8 @@ int main(int argc, char *argv[])
     int screenHeight = 240;
     int screenScale = 5;
 
+    bool picosystemSDK = false;
+
     std::string romFilename;
 
     int i = 1;
@@ -237,6 +239,8 @@ int main(int argc, char *argv[])
 
         if(arg == "--scale" && i + 1 < argc)
             screenScale = std::stoi(argv[++i]);
+        else if(arg == "--picosystem-sdk")
+            picosystemSDK = true;
         else
             break;
     }
@@ -296,7 +300,7 @@ int main(int argc, char *argv[])
     mem.setGetNextInterruptTimeCallback(onGetNextInterruptTime);
     mem.getGPIO().setReadCallback(onGPIORead);
 
-    const int fps = 50; //40 for ps sdk
+    const int fps = picosystemSDK ? 40 : 50;
     displayClock.setFrequency(fps * 240);
     clocks.addClockTarget(-1, displayClock);
 
@@ -315,7 +319,7 @@ int main(int argc, char *argv[])
     SDL_RenderSetLogicalSize(renderer, screenWidth, screenHeight);
     SDL_RenderSetIntegerScale(renderer, SDL_TRUE);
 
-    auto texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_BGR565, SDL_TEXTUREACCESS_STREAMING, screenWidth, screenHeight);
+    auto texture = SDL_CreateTexture(renderer, picosystemSDK ? SDL_PIXELFORMAT_ARGB4444 : SDL_PIXELFORMAT_BGR565, SDL_TEXTUREACCESS_STREAMING, screenWidth, screenHeight);
 
     auto lastTick = SDL_GetTicks();
 
