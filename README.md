@@ -29,7 +29,7 @@ picotool save -r 0 4000 bootrom.bin
 
 | Feature | Status | Details 
 |---------|--------|---------
-| Cortex-M0+ | Partial   | One core. Copied from GBA emu, so some details are still an ARM7
+| Cortex-M0+ | Partial   | Copied from GBA emu, so some details are still an ARM7
 | DMA | Minimal | Implemented just enough for PicoSystem display updates
 | Clocks | Partial |
 | XOSC | Minimal | Fixed 12MHz
