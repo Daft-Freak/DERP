@@ -19,7 +19,8 @@ static std::ifstream uf2File;
 uint16_t screenData[240 * 240];
 
 static uint32_t buttonState = 0;
-static bool needTE = false;
+static unsigned int displayScanline = 0;
+static ClockTarget displayClock;
 
 static const uint32_t uf2MagicStart0 = 0x0A324655, uf2MagicStart1 = 0x9E5D5157, uf2MagicEnd = 0x0AB16F30;
 
@@ -103,13 +104,28 @@ static bool parseUF2(std::ifstream &file)
 // picosystem external hardware/IO
 static void displayUpdate(uint64_t time)
 {
-    if(needTE)
-    {
+    auto lines = displayClock.getCyclesToTime(time);
+
+    if(!lines)
+        return;
+
+    // set TE when we're on the last scanline
+    // TODO: use STE reg
+    auto newLine = (displayScanline + lines) % 240;
+
+    // TODO: need to be able to adjust next interrupt time so we don't miss the interrupt
+    if(newLine == 239) // now last line
         mem.getGPIO().setInputMask(1 << 8);
-        needTE = false;
+    else if(newLine < displayScanline)
+    {
+        // missed the interrupt
+        mem.getGPIO().setInputMask(1 << 8);
     }
-    else
+    else //if(displayScanline == 239) // was last line
         mem.getGPIO().clearInputMask(1 << 8);
+
+    displayScanline = newLine;
+    displayClock.addCycles(lines);
 }
 
 static uint32_t onGPIORead(uint64_t time, uint32_t inputs)
@@ -199,8 +215,13 @@ int main(int argc, char *argv[])
         core.reset();
     }
 
+    // external hardware
     mem.setInterruptUpdateCallback(onInterruptUpdate);
     mem.getGPIO().setReadCallback(onGPIORead);
+
+    const int fps = 50; //40 for ps sdk
+    displayClock.setFrequency(fps * 240);
+    clocks.addClockTarget(-1, displayClock);
 
     // SDL init
     if(SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) != 0)
@@ -250,19 +271,16 @@ int main(int argc, char *argv[])
         if(elapsed > 30)
             elapsed = 30;
 
-        // picosystem IO
-        // toggle TE
-        // FIXME: correct timings
-        needTE = true;
-
         cpuCycles += cpuCores[0].run(elapsed);
 
         // sync core 1
         // TODO: more sync
-        cpuCores[1].update(cpuCores[0].getClock().getTime());
+        auto time = cpuCores[0].getClock().getTime();
+        cpuCores[1].update(time);
 
         // sync peripherals
-        mem.peripheralUpdate(cpuCores[0].getClock().getTime());
+        mem.peripheralUpdate(time);
+        displayUpdate(time);
 
         // adjust timers to stay in range
         clocks.adjustClocks();
