@@ -13,7 +13,6 @@ public:
     void adjustClocks();
 
     uint32_t getClockFrequency(int clock) const;
-    uint64_t getClockScale(int clock) const;
 
     void addClockTarget(int clock, ClockTarget &target);
 

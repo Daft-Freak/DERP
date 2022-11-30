@@ -40,9 +40,11 @@ public:
         return emuTime + cycles * clockScale;
     }
 
-    void setClockScale(uint64_t clockScale)
+    void setFrequency(uint32_t freq)
     {
-        this->clockScale = clockScale;
+        const uint64_t base = (1ull << 63) - 1;
+
+        clockScale = base / freq;
     }
     
 private:

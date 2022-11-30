@@ -57,13 +57,6 @@ uint32_t Clocks::getClockFrequency(int clock) const
     return clockFreq[clock];
 }
 
-uint64_t Clocks::getClockScale(int clock) const
-{
-    const uint64_t base = (1ull << 63) - 1;
-
-    return base / clockFreq[clock];
-}
-
 void Clocks::addClockTarget(int clock, ClockTarget &target)
 {
     targets.emplace(clock, target);
@@ -356,7 +349,7 @@ void Clocks::calcFreq(int clock)
         auto toUpdate = targets.equal_range(clock);
 
         for(auto it = toUpdate.first; it != toUpdate.second; ++it)
-            it->second.setClockScale(getClockScale(clock));
+            it->second.setFrequency(getClockFrequency(clock));
 
         // debug
         printf("CLK_%s: %i -> %iHz\n", clockNames[clock], oldFreq, clockFreq[clock]);
