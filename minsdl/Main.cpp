@@ -109,23 +109,23 @@ static void displayUpdate(uint64_t time)
     if(!lines)
         return;
 
-    // set TE when we're on the last scanline
-    // TODO: use STE reg
-    auto newLine = (displayScanline + lines) % 240;
-
-    // TODO: need to be able to adjust next interrupt time so we don't miss the interrupt
-    if(newLine == 239) // now last line
-        mem.getGPIO().setInputMask(1 << 8);
-    else if(newLine < displayScanline)
+    while(lines)
     {
-        // missed the interrupt
-        mem.getGPIO().setInputMask(1 << 8);
-    }
-    else //if(displayScanline == 239) // was last line
-        mem.getGPIO().clearInputMask(1 << 8);
+        int step = std::max(1u, std::min(lines, 239 - displayScanline));
+        lines -= step;
 
-    displayScanline = newLine;
-    displayClock.addCycles(lines);
+        // set TE when we're on the last scanline
+        // TODO: use STE reg
+        auto newLine = (displayScanline + step) % 240;
+
+        if(newLine == 239) // now last line
+            mem.getGPIO().setInputMask(1 << 8);
+        else if(displayScanline == 239) // was last line
+            mem.getGPIO().clearInputMask(1 << 8);
+
+        displayScanline = newLine;
+        displayClock.addCycles(step);
+    }
 }
 
 static uint32_t onGPIORead(uint64_t time, uint32_t inputs)
@@ -143,6 +143,17 @@ static void onInterruptUpdate(uint64_t time, uint32_t irqMask)
 {
     if(irqMask & (1 << 13) /*IO_IRQ_BANK0*/)
         displayUpdate(time);
+}
+
+static uint64_t onGetNextInterruptTime(uint64_t time)
+{
+    if(!mem.getGPIO().interruptsEnabledOnPin(8))
+        return time;
+
+    int lines = std::max(1u, 239 - displayScanline);
+    auto ret = displayClock.getTimeToCycles(lines);
+
+    return ret;
 }
 
 int main(int argc, char *argv[])
@@ -217,6 +228,7 @@ int main(int argc, char *argv[])
 
     // external hardware
     mem.setInterruptUpdateCallback(onInterruptUpdate);
+    mem.setGetNextInterruptTimeCallback(onGetNextInterruptTime);
     mem.getGPIO().setReadCallback(onGPIORead);
 
     const int fps = 50; //40 for ps sdk
