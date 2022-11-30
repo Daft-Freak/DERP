@@ -16,6 +16,9 @@ static uint8_t bootROM[0x4000];
 
 static std::ifstream uf2File;
 
+// TODO: maybe an enum if other boards get supported
+static bool isPicoSystem = false;
+
 uint16_t screenData[240 * 240];
 
 static uint32_t buttonState = 0;
@@ -155,8 +158,12 @@ static bool parseUF2(std::ifstream &file)
                 auto str = reinterpret_cast<char *>(flash + charPtr - 0x10000000);
 
                 auto idStr = raspberryPiIdMap.find(id);
-                if (idStr != raspberryPiIdMap.end())
+                if(idStr != raspberryPiIdMap.end())
                     std::cout << "\t" << idStr->second << ": " << str << "\n";
+
+                // detect board
+                if(id == 0xb63cffbb/*pico_board*/ && std::string_view(str) == "pimoroni_picosystem")
+                    isPicoSystem = true;
             }
         }
 
@@ -268,6 +275,10 @@ int main(int argc, char *argv[])
             std::cerr << "Failed to open UF2 \"" << romFilename << "\"\n";
             return 1;
         }
+
+        // picosystem SDK does not require the correct board to be set... so most uf2s don't
+        if(picosystemSDK)
+            isPicoSystem = true;
     }
 
     // emu init
@@ -296,13 +307,16 @@ int main(int argc, char *argv[])
     }
 
     // external hardware
-    mem.setInterruptUpdateCallback(onInterruptUpdate);
-    mem.setGetNextInterruptTimeCallback(onGetNextInterruptTime);
-    mem.getGPIO().setReadCallback(onGPIORead);
+    if(isPicoSystem)
+    {
+        mem.setInterruptUpdateCallback(onInterruptUpdate);
+        mem.setGetNextInterruptTimeCallback(onGetNextInterruptTime);
+        mem.getGPIO().setReadCallback(onGPIORead);
 
-    const int fps = picosystemSDK ? 40 : 50;
-    displayClock.setFrequency(fps * 240);
-    clocks.addClockTarget(-1, displayClock);
+        const int fps = picosystemSDK ? 40 : 50;
+        displayClock.setFrequency(fps * 240);
+        clocks.addClockTarget(-1, displayClock);
+    }
 
     // SDL init
     if(SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) != 0)
@@ -361,7 +375,9 @@ int main(int argc, char *argv[])
 
         // sync peripherals
         mem.peripheralUpdate(time);
-        displayUpdate(time);
+
+        if(isPicoSystem)
+            displayUpdate(time);
 
         // adjust timers to stay in range
         clocks.adjustClocks();
