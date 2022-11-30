@@ -5,6 +5,18 @@ This is mostly an _extremely hacky_ PicoSystem emulator.
 ./DERP_SDL file.uf2
 ```
 
+## Bootrom
+A copy of the RP2040 bootrom is required in bootrom.bin.
+
+This can be created from the elf files in [the official releases](https://github.com/raspberrypi/pico-bootrom/releases):
+```
+arm-none-eabi-objcopy -O binary b2.elf bootrom.bin
+```
+... or dumped from a real RP2040 with picotool:
+```
+picotool save -r 0 4000 bootrom.bin
+```
+
 ## PicoSystem status
 | Feature | Status | Details 
 |---------|--------|---------
