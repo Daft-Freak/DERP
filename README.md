@@ -5,6 +5,8 @@ This is mostly an _extremely hacky_ PicoSystem emulator.
 ./DERP_SDL file.uf2
 ```
 
+(To run uf2s built with the PicoSystem SDK add `--picosystem-sdk` before the file to apply some workarounds)
+
 ## Bootrom
 A copy of the RP2040 bootrom is required in bootrom.bin.
 
