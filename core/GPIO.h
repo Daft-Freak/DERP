@@ -27,6 +27,8 @@ public:
     void setInputMask(uint32_t mask) {setInputs(inputs | mask);}
     void clearInputMask(uint32_t mask) {setInputs(inputs & ~mask);}
 
+    bool interruptsEnabledOnPin(int pin);
+
     void setReadCallback(ReadCallback cb);
 
     // IO_BANK0

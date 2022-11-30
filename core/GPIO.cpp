@@ -63,6 +63,15 @@ void GPIO::setInputs(uint32_t inputs)
     this->inputs = inputs;
 }
 
+bool GPIO::interruptsEnabledOnPin(int pin)
+{
+    // TODO: proc1
+    int ioShift = pin % 8 * 4;
+    auto p0IntEn = (proc0InterruptEnables[pin / 8] >> ioShift) & 0xF;
+
+    return p0IntEn != 0;
+}
+
 void GPIO::setReadCallback(ReadCallback cb)
 {
     readCallback = cb;
