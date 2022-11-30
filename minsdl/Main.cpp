@@ -98,6 +98,71 @@ static bool parseUF2(std::ifstream &file)
             std::cerr << "Can't write UF2 payload to " << std::hex << block.addr << std::dec << "!\n";
     }
 
+    // parse binary info
+    const uint32_t biStart = 0x7188EBF2, biEnd = 0xE71AA390;
+
+    const uint16_t biTypeIdAndString = 6;
+
+    const uint16_t biTagRaspberryPi = 0x5052;
+
+    static const std::map<uint32_t, const char *> raspberryPiIdMap{
+        {0x02031c86, "program_name"},
+        {0x11a9bc3a, "program_version"},
+        {0x9da22254, "program_build_date"},
+        {0x68f465de, "program_binary_end"},
+        {0x1856239a, "program_url"},
+        {0xb6a07c19, "program_description"},
+        {0xa1f4b453, "program_feature"},
+        {0x4275f0d3, "program_build_attribute"},
+        {0x5360b3ab, "sdk_version"},
+        {0xb63cffbb, "pico_board"},
+        {0x7f8882e1, "boot2_name"}};
+
+    auto flash = mem.mapAddress(0x10000000);
+
+    auto ptr = reinterpret_cast<uint32_t *>(flash + 256);
+    uint32_t infoStartAddr = 0, infoEndAddr;
+
+    for (int i = 0; i < 256 / 4; i++, ptr++)
+    {
+        if (ptr[0] == biStart && ptr[4] == biEnd)
+        {
+            infoStartAddr = ptr[1];
+            infoEndAddr = ptr[2];
+            // infoMapAddr = ptr[3];
+        }
+    }
+
+    if (infoStartAddr)
+    {
+        std::cout << "binary_info:\n";
+
+        for (auto addr = infoStartAddr; addr < infoEndAddr; addr += 4)
+        {
+            auto infoPtr = *reinterpret_cast<uint32_t *>(flash + addr - 0x10000000);
+            auto infoData = flash + infoPtr - 0x10000000;
+
+            auto type = *reinterpret_cast<uint16_t *>(infoData);
+            auto tag = *reinterpret_cast<uint16_t *>(infoData + 2);
+
+            if (tag != biTagRaspberryPi)
+                continue;
+
+            if (type == biTypeIdAndString)
+            {
+                auto id = *reinterpret_cast<uint32_t *>(infoData + 4);
+                auto charPtr = *reinterpret_cast<uint32_t *>(infoData + 8);
+                auto str = reinterpret_cast<char *>(flash + charPtr - 0x10000000);
+
+                auto idStr = raspberryPiIdMap.find(id);
+                if (idStr != raspberryPiIdMap.end())
+                    std::cout << "\t" << idStr->second << ": " << str << "\n";
+            }
+        }
+
+        std::cout << "\n";
+    }
+
     return true;
 }
 
