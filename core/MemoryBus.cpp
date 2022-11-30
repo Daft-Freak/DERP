@@ -284,6 +284,9 @@ void MemoryBus::calcNextInterruptTime()
     // TODO: check cpu enabled mask
     nextInterruptTime = ~0ull;
 
+    if(getNextInterruptTimeCallback)
+        nextInterruptTime = getNextInterruptTimeCallback(nextInterruptTime);
+
     nextInterruptTime = timer.getNextInterruptTime(nextInterruptTime);
     nextInterruptTime = dma.getNextInterruptTime(nextInterruptTime);
 }
@@ -291,6 +294,11 @@ void MemoryBus::calcNextInterruptTime()
 void MemoryBus::setInterruptUpdateCallback(InterruptUpdateCallback cb)
 {
     interruptUpdateCallback = cb;
+}
+
+void MemoryBus::setGetNextInterruptTimeCallback(GetNextInterruptTimeCallback cb)
+{
+    getNextInterruptTimeCallback = cb;
 }
 
 void MemoryBus::setPendingIRQ(int n)

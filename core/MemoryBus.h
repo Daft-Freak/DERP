@@ -22,6 +22,7 @@ class MemoryBus
 {
 public:
     using InterruptUpdateCallback = std::function<void(uint64_t, uint32_t)>;
+    using GetNextInterruptTimeCallback = std::function<uint64_t(uint64_t)>;
 
     MemoryBus();
 
@@ -70,6 +71,7 @@ public:
     void calcNextInterruptTime();
 
     void setInterruptUpdateCallback(InterruptUpdateCallback cb);
+    void setGetNextInterruptTimeCallback(GetNextInterruptTimeCallback cb);
 
     void setPendingIRQ(int n);
 
@@ -148,6 +150,7 @@ private:
     uint64_t nextInterruptTime;
 
     InterruptUpdateCallback interruptUpdateCallback;
+    GetNextInterruptTimeCallback getNextInterruptTimeCallback;
 
     // temp peripherals stuff
     uint32_t ioQSPICtrl[6]{0};
