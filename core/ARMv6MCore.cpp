@@ -106,7 +106,10 @@ unsigned int ARMv6MCore::update(uint64_t target)
             curTime = clock.getTime();
 
             if(mem.getNextInterruptTime() <= curTime)
+            {
                 mem.peripheralUpdate(curTime, sleeping ? ~0u : nvicEnabled);
+                mem.calcNextInterruptTime();
+            }
 
             if(sleeping && curTime < target)
             {
