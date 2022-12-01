@@ -34,7 +34,7 @@ jobs:
 
     steps:
     - name: Checkout
-      uses: actions/checkout@v2
+      uses: actions/checkout@v3
 
     # Linux deps
     - name: Install deps
@@ -98,7 +98,7 @@ jobs:
 
     - name: Upload artifact
       if: github.event_name != 'release' && matrix.release-suffix != ''
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v3
       with:
         name: ${{env.RELEASE_FILE}}
         path: ${{runner.workspace}}/build/${{env.RELEASE_FILE}}.zip
