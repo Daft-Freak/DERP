@@ -453,6 +453,12 @@ void MemoryBus::doXIPSSIWrite(uint32_t addr, T data)
         {
             if(flashCmdOff)
             {
+                if(flashCmd == 0x35) // read status2
+                {
+                    ssiRx.push(2);
+                    return;
+                }
+
                 if(flashCmdOff >= 4) // done addr
                 {
                     if(flashCmd == 2) // write
@@ -498,6 +504,10 @@ void MemoryBus::doXIPSSIWrite(uint32_t addr, T data)
                 else if(flashCmd == 0x20) // 4k erase
                 {
                     flashAddr = 0;
+                    flashCmdOff++;
+                }
+                else if(flashCmd == 0x35) // read status2
+                {
                     flashCmdOff++;
                 }
                 else if(flashCmd)
