@@ -660,6 +660,12 @@ T MemoryBus::doAPBPeriphRead(ClockTarget &masterClock, uint32_t addr)
         case 22: // WATCHDOG
             watchdog.update(masterClock.getTime());
             return watchdog.regRead(periphAddr);
+
+        case 23: // RTC
+            if(periphAddr == 0xC) // CTRL
+                return rtcCtrl | (rtcCtrl & 1) << 1; // RTC_ACTIVE = RTC_ENABLE
+
+            break;
     }
 
     printf("APBP R %s %04X\n", apbPeriphNames[peripheral], addr & 0x3FFF);
@@ -774,6 +780,14 @@ void MemoryBus::doAPBPeriphWrite(ClockTarget &masterClock, uint32_t addr, T data
             watchdog.update(masterClock.getTime());
             watchdog.regWrite(periphAddr, data);
             return;
+
+        case 23: // RTC
+            if(periphAddr == 0xC) // CTRL
+            {
+                rtcCtrl = data;
+                return;
+            }
+            break;
     }
 
     printf("APBP W %s %04X = %08X\n", apbPeriphNames[peripheral], addr & 0x3FFF, data);

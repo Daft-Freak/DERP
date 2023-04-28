@@ -161,6 +161,8 @@ private:
     uint32_t pwmCC[8];
     uint32_t pwmTOP[8];
 
+    uint32_t rtcCtrl = 0;
+
     std::queue<uint32_t> ssiRx;
 
     uint8_t flashCmd;
