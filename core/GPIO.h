@@ -27,6 +27,12 @@ public:
     void setInputMask(uint32_t mask) {setInputs(inputs | mask);}
     void clearInputMask(uint32_t mask) {setInputs(inputs & ~mask);}
 
+    void setOutputs(uint32_t outputs);
+
+    void setOutputMask(uint32_t mask) {setOutputs(outputs | mask);}
+    void clearOutputMask(uint32_t mask) {setOutputs(outputs & ~mask);}
+    void xorOutputMask(uint32_t mask) {setOutputs(outputs ^ mask);}
+
     bool interruptsEnabledOnPin(int pin);
 
     void setReadCallback(ReadCallback cb);
@@ -47,6 +53,7 @@ private:
     uint32_t proc0InterruptEnables[4]; // TODO: proc1
 
     uint32_t inputs;
+    uint32_t outputs;
 
     ReadCallback readCallback;
 };

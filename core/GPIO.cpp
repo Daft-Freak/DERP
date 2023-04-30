@@ -20,6 +20,7 @@ void GPIO::reset()
         reg = 0;
 
     inputs = 0;
+    outputs = 0;
 }
 
 void GPIO::setInputs(uint32_t inputs)
@@ -61,6 +62,12 @@ void GPIO::setInputs(uint32_t inputs)
     }
 
     this->inputs = inputs;
+}
+
+void GPIO::setOutputs(uint32_t outputs)
+{
+    printf("GPIO out %08X\n", outputs);
+    this->outputs = outputs;
 }
 
 bool GPIO::interruptsEnabledOnPin(int pin)

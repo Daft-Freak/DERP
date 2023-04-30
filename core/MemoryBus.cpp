@@ -996,6 +996,19 @@ void MemoryBus::doIOPORTWrite(ClockTarget &masterClock, int core, uint32_t addr,
 
     switch(addr & 0xFFF)
     {
+        case 0x10: // GPIO_OUT
+            gpio.setOutputs(data);
+            return;
+        case 0x14: // GPIO_OUT_SET
+            gpio.setOutputMask(data);
+            return;
+        case 0x18: // GPIO_OUT_CLR
+            gpio.clearOutputMask(data);
+            return;
+        case 0x1C: // GPIO_OUT_XOR
+            gpio.xorOutputMask(data);
+            return;
+
         case 0x54: // FIFO_WR
             coreFIFO[core].push(data);
             // at least one status flag got set here...
