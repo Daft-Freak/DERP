@@ -53,7 +53,7 @@ static inline uint32_t getStripedSRAMAddr(uint32_t addr)
     return bank * 64 * 1024 + word * 4 + (addr & 3);
 }
 
-MemoryBus::MemoryBus() : gpio(*this), timer(*this), dma(*this)
+MemoryBus::MemoryBus() : gpio(*this), uart{{*this, 0}, {*this, 1}}, timer(*this), dma(*this)
 {
     clocks.addClockTarget(4/*REF*/, watchdog.getClock());
 
@@ -74,6 +74,8 @@ void MemoryBus::reset()
 {
     clocks.reset();
     gpio.reset();
+    uart[0].reset();
+    uart[1].reset();
     timer.reset();
     watchdog.reset();
 
@@ -667,6 +669,11 @@ T MemoryBus::doAPBPeriphRead(ClockTarget &masterClock, uint32_t addr)
         case 11: // PLL_USB
             return clocks.pllUSBRegRead(periphAddr);
 
+        case 13: // UART0
+            return uart[0].regRead(periphAddr);
+        case 14: // UART1
+            return uart[1].regRead(periphAddr);
+
         case 15: // SPI0
         {
             if(periphAddr == 0xC) // SSPSR
@@ -773,6 +780,14 @@ void MemoryBus::doAPBPeriphWrite(ClockTarget &masterClock, uint32_t addr, T data
 
         case 11: // PLL_USB
             clocks.pllUSBRegWrite(periphAddr, data);
+            return;
+
+        case 13: // UART0
+            uart[0].regWrite(periphAddr, data);
+            return;
+
+        case 14: // UART1
+            uart[0].regWrite(periphAddr, data);
             return;
 
         case 20: // PWM

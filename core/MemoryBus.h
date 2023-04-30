@@ -10,6 +10,7 @@
 #include "GPIO.h"
 #include "FIFO.h"
 #include "Timer.h"
+#include "UART.h"
 #include "Watchdog.h"
 
 class ARMv6MCore;
@@ -145,6 +146,8 @@ private:
     Clocks clocks;
 
     GPIO gpio;
+
+    UART uart[2];
 
     Watchdog watchdog;
 
