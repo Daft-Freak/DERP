@@ -91,6 +91,11 @@ private:
     T doROMRead(uint32_t addr) const;
 
     template<class T>
+    T doXIPCtrlRead(uint32_t addr);
+    template<class T>
+    void doXIPCtrlWrite(uint32_t addr, T data);
+
+    template<class T>
     T doXIPSSIRead(uint32_t addr);
     template<class T>
     void doXIPSSIWrite(uint32_t addr, T data);

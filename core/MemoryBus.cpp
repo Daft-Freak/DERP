@@ -29,6 +29,7 @@ enum MemoryRegion
     Region_XIP_NoAlloc = 0x11,
     Region_XIP_NoCache = 0x12,
     Region_XIP_NoCNoA  = 0x13,
+    Region_XIP_Ctrl    = 0x14,
     Region_XIP_SSI     = 0x18,
     Region_SRAM        = 0x20,
     Region_APBPeriph   = 0x40,
@@ -109,6 +110,10 @@ T MemoryBus::read(BusMasterPtr master, uint32_t addr, int &cycles, bool sequenti
             accessCycles(1);
             return doRead<T>(qspiFlash, addr);
 
+        case Region_XIP_Ctrl:
+            accessCycles(1);
+            return doXIPCtrlRead<T>(addr);
+
         case Region_XIP_SSI:
             accessCycles(1);
             return doXIPSSIRead<T>(addr);
@@ -157,6 +162,11 @@ void MemoryBus::write(BusMasterPtr master, uint32_t addr, T data, int &cycles, b
     {
         case Region_ROM:
             accessCycles(1);
+            return;
+
+        case Region_XIP_Ctrl:
+            accessCycles(1);
+            doXIPCtrlWrite<T>(addr, data);
             return;
 
         case Region_XIP_SSI:
@@ -338,6 +348,31 @@ T MemoryBus::doROMRead(uint32_t addr) const
 
     const size_t size = 0x4000;
     return *reinterpret_cast<const T *>(bootROM + (addr & (size - 1)));
+}
+
+static const char *ctrlRegNames[]
+{
+    "CTRL",
+    "FLUSH",
+    "STAT",
+    "CTR_HIT",
+    "CTR_ACC",
+    "STREAM_ADDR",
+    "STREAM_CTR",
+    "STREAM_FIFO",
+};
+
+template<class T>
+T MemoryBus::doXIPCtrlRead(uint32_t addr)
+{
+    printf("XIP ctrl R %s (%08X)\n", ctrlRegNames[(addr & 0xFF) / 4], addr);
+    return 0;
+}
+
+template<class T>
+void MemoryBus::doXIPCtrlWrite(uint32_t addr, T data)
+{
+    printf("XIP ctrl W %s (%08X) = %08X\n", ctrlRegNames[(addr & 0xFF) / 4], addr, data);
 }
 
 static const char *ssiRegNames[]
