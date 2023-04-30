@@ -540,6 +540,8 @@ void MemoryBus::doXIPSSIWrite(uint32_t addr, T data)
                     flashAddr = 0;
                     flashCmdOff++;
                 }
+                else if(flashCmd == 5) // read status
+                {}
                 else if(flashCmd == 6) // write enable
                 {}
                 else if(flashCmd == 0x20) // 4k erase
@@ -551,7 +553,7 @@ void MemoryBus::doXIPSSIWrite(uint32_t addr, T data)
                 {
                     flashCmdOff++;
                 }
-                else if(flashCmd)
+                else if(flashCmd && flashCmd != 0xFF)
                     printf("XIP SSI write %08X\n", data);
 
                 ssiRx.push(0); //
