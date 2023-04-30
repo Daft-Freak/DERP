@@ -143,6 +143,9 @@ T MemoryBus::read(BusMasterPtr master, uint32_t addr, int &cycles, bool sequenti
             return doCPUInternalRead<T>(*std::get<ARMv6MCore *>(master), addr);
     }
 
+    if(std::holds_alternative<ARMv6MCore *>(master))
+        std::get<ARMv6MCore *>(master)->fault("Memory read");
+
     return doOpenRead<T>(addr);
 }
 
@@ -203,6 +206,9 @@ void MemoryBus::write(BusMasterPtr master, uint32_t addr, T data, int &cycles, b
             doCPUInternalWrite<T>(*std::get<ARMv6MCore *>(master), addr, data);
             return;
     }
+
+    if(std::holds_alternative<ARMv6MCore *>(master))
+        std::get<ARMv6MCore *>(master)->fault("Memory write");
 }
 
 const uint8_t *MemoryBus::mapAddress(uint32_t addr) const

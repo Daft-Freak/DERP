@@ -137,6 +137,21 @@ void ARMv6MCore::setEvent()
         sleeping = false;
 }
 
+void ARMv6MCore::fault(const char *desc)
+{
+    auto curException = cpsr & 0x3F;
+    if(curException == 2 /*NMI*/ || curException == 3 /*HardFault*/)
+    {
+        printf("Lockup (%s) in %s at ~%08X\n", desc, curException == 2 ? "NMI" : "HardFault", reg(Reg::PC));
+        exit(1);
+    }
+
+    printf("Fault (%s) at ~%08X\n", desc, reg(Reg::PC));
+
+    exceptionPending |= 1ull << 3; // HardFault
+    checkPendingExceptions();
+}
+
 uint32_t ARMv6MCore::readReg(uint32_t addr)
 {
     switch(addr & 0xFFFFFFF)
@@ -1019,8 +1034,7 @@ int ARMv6MCore::doTHUMBMisc(uint16_t opcode, uint32_t pc)
             return doTHUMB14PushPop(opcode, pc);
 
         case 0xE: // BKPT
-            printf("BKPT @%08X\n", pc - 4);
-            exit(1);
+            fault("Unhandled BKPT"); // don't implement debugging
             return pcSCycles;
 
         case 0xF: // hints
@@ -1058,7 +1072,8 @@ int ARMv6MCore::doTHUMBMisc(uint16_t opcode, uint32_t pc)
     }
 
     printf("Unhandled opcode %04X @%08X\n", opcode, pc - 4);
-    exit(1);
+    fault("Undefined instruction");
+    return pcSCycles;
 }
 
 int ARMv6MCore::doTHUMB13SPOffset(uint16_t opcode, uint32_t pc)
@@ -1468,14 +1483,21 @@ int ARMv6MCore::doTHUMB32BitInstruction(uint16_t opcode, uint32_t pc)
     }
 
     printf("Unhandled opcode %08X @%08X\n",opcode32, pc - 6);
-    exit(1);
+    fault("Undefined instruction");
+    return pcSCycles;
 }
 
 void ARMv6MCore::updateTHUMBPC(uint32_t pc)
 {
     // called when PC is updated in THUMB mode (except for incrementing)
     assert(!(pc & 1));
-    assert(pc < 0x40000000);
+
+    // TODO: RP2040 specific ranges
+    if((pc >= 0x40000000 && pc < 0x60000000) || pc >= 0xA0000000)
+    {
+        fault("XN");
+        return;
+    }
 
     if(pcPtr && pc >> 24 == loReg(Reg::PC) >> 24)
     {

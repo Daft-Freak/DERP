@@ -16,6 +16,7 @@ public:
 
     void setPendingIRQ(int n);
     void setEvent();
+    void fault(const char *desc);
 
     uint32_t readReg(uint32_t addr);
     void writeReg(uint32_t addr, uint32_t data);
