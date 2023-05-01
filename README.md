@@ -40,12 +40,12 @@ picotool save -r 0 4000 bootrom.bin
 | GPIO | Partial | Some input and interrupt handling
 | PIO | Minimal | PIO0 always returns all FIFOs empty + TXSTALL
 | USB | Minimal | RAM exists
-| UART | None |
+| UART | Minimal | Prints TX data
 | I2C | None |
 | SPI | Minimal | SPI0 TNF always set
 | PWM | Minimal | Register read/write handled
 | Timer | Partial |
 | Watchdog | Partial | Ticks for timer
-| RTC | None |
+| RTC | Minimal | Enough to get through init
 | ADC | None |
 | SSI | Minimal | Just enough to boot
