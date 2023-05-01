@@ -17,4 +17,12 @@ public:
 private:
     MemoryBus &mem;
     int index;
+
+    uint32_t baudInt;
+    uint32_t baudFrac;
+    uint32_t lcr;
+    uint32_t cr;
+
+    int txDataOff;
+    uint8_t txData[1024];
 };
