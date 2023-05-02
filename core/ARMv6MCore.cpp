@@ -1451,7 +1451,7 @@ int ARMv6MCore::doTHUMB32BitInstruction(uint16_t opcode, uint32_t pc)
 
                 // if(sysm & 2) // T bit reads as 0 so do nothing
 
-                if(sysm & 4) // APSR
+                if((sysm & 4)== 0) // APSR
                     mask |= 0xF8000000;
 
                 reg(dstReg) = cpsr & mask;
