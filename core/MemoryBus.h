@@ -11,6 +11,7 @@
 #include "FIFO.h"
 #include "Timer.h"
 #include "UART.h"
+#include "USB.h"
 #include "Watchdog.h"
 
 class ARMv6MCore;
@@ -137,8 +138,6 @@ private:
 
     uint8_t sram[264 * 1024]; // first 256k pre-striped
 
-    uint8_t usbDPRAM[4 * 1024];
-
     uint32_t dummy = 0xBADADD55;
 
     ARMv6MCore *cpuCores = nullptr;
@@ -154,6 +153,8 @@ private:
     Timer timer; // depends on watchdog
 
     DMA dma;
+
+    USB usb;
 
     uint64_t nextInterruptTime;
 

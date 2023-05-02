@@ -8,6 +8,7 @@ target_sources(DERPCore INTERFACE
     MemoryBus.cpp
     Timer.cpp
     UART.cpp
+    USB.cpp
     Watchdog.cpp
 )
 

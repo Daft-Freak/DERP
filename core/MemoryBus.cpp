@@ -53,7 +53,7 @@ static inline uint32_t getStripedSRAMAddr(uint32_t addr)
     return bank * 64 * 1024 + word * 4 + (addr & 3);
 }
 
-MemoryBus::MemoryBus() : gpio(*this), uart{{*this, 0}, {*this, 1}}, timer(*this), dma(*this)
+MemoryBus::MemoryBus() : gpio(*this), uart{{*this, 0}, {*this, 1}}, timer(*this), dma(*this), usb(*this)
 {
     clocks.addClockTarget(4/*REF*/, watchdog.getClock());
 
@@ -80,6 +80,7 @@ void MemoryBus::reset()
     watchdog.reset();
 
     dma.reset();
+    usb.reset();
 
     nextInterruptTime = 0;
 
@@ -257,7 +258,7 @@ uint8_t *MemoryBus::mapAddress(uint32_t addr)
         case Region_AHBPeriph:
         {
             if(addr >= 0x50100000 && addr < 0x50101000)
-                return usbDPRAM + (addr & 0xFFF);
+                return usb.getRAM() + (addr & 0xFFF);
         }
     }
 
@@ -860,8 +861,10 @@ T MemoryBus::doAHBPeriphRead(ClockTarget &masterClock, uint32_t addr)
         return dma.regRead(addr & 0xFFFF);
     }
     else if(addr < 0x50101000) // USB DPRAM
-        return doRead<T>(usbDPRAM, addr);
-    else if(addr >= 0x50200000 && addr < 0x50300000)
+        return *reinterpret_cast<const T *>(usb.getRAM() + (addr & 0xFFF));
+    else if(addr >= 0x50110000 && addr < 0x50200000) // USB regs
+        return usb.regRead(addr & 0xFFFF);
+    else if(addr < 0x50300000)
     {
         if(addr == 0x50200004) // FSTAT
             return T(0x0F000F00); // all FIFOs empty
@@ -888,10 +891,15 @@ void MemoryBus::doAHBPeriphWrite(ClockTarget &masterClock, uint32_t addr, T data
     }
     else if(addr < 0x50101000) // USB DPRAM
     {
-        doWrite<T>(usbDPRAM, addr, data);
+        *reinterpret_cast<T *>(usb.getRAM() + (addr & 0xFFF)) = data;
         return;
     }
-    else if(addr >= 0x50200000 && addr < 0x50300000)
+    else if(addr >= 0x50110000 && addr < 0x50200000) // USB regs
+    {
+        usb.regWrite(addr & 0xFFFF, data);
+        return;
+    }
+    else if(addr < 0x50300000)
     {
         if(addr == 0x50200010) // TXF0
         {}
