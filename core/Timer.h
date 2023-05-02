@@ -34,6 +34,7 @@ private:
 
     uint32_t interrupts;
     uint32_t interruptEnables;
+    uint32_t interruptForce;
 
     uint32_t lastTicks;
 };

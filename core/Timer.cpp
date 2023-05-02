@@ -20,6 +20,7 @@ void Timer::reset()
 
     interrupts = 0;
     interruptEnables = 0;
+    interruptForce = 0;
 }
 
 void Timer::update(uint64_t target)
@@ -162,6 +163,11 @@ void Timer::regWrite(uint32_t addr, uint32_t data)
             break;
         case 0x38: // INTE
             updateReg(interruptEnables, data, atomic);
+            return;
+        case 0x3C: // INTF
+            updateReg(interruptForce, data, atomic);
+            if(interruptForce)
+                printf("Forced timer intr %x\n", interruptForce); // TODO
             return;
     }
 
