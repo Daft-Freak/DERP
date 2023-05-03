@@ -23,6 +23,8 @@ void USB::reset()
     configDesc = nullptr;
     configDescLen = 0;
     configDescOffset = 0;
+
+    cdcInEP = cdcOutEP = 0;
 }
 
 uint32_t USB::regRead(uint32_t addr)
@@ -74,7 +76,7 @@ void USB::regWrite(uint32_t addr, uint32_t data)
 
             if(atomic == 3 && (data & 1)) // clearing ep0 in
             {
-                if(enumerationState == 2 || enumerationState == 4 || enumerationState == 5 || enumerationState == 6)
+                if(enumerationState == 2 || enumerationState == 4 || enumerationState == 5 || enumerationState == 6 || enumerationState == 7)
                     updateEnumeration();
             }
 
@@ -91,58 +93,74 @@ void USB::regWrite(uint32_t addr, uint32_t data)
 
 void USB::ramWrite(uint32_t addr)
 {
-    if(addr == 0x80) // EP0 in buffer control
+    if(addr >= 0x80 && addr < 0x100) // buffer control
     {
+        bool in = !(addr & 4);
+        int ep = (addr - 0x80) / 8;
+
         auto bufCtrl = reinterpret_cast<uint32_t *>(dpram + addr);
+        auto ctrl = ep == 0 ? &sieCtrl : reinterpret_cast<uint32_t *>(dpram + ep * 8 + (in ? 0 : 4)); // ep0 interrupt/buffer bits in SIE_CTRL
 
-        if(*bufCtrl & (1 << 10) && *bufCtrl & (1 << 15)) // buf 0 available and full
+        if(*ctrl & (1 << 30))
+            printf("ep%i db\n", ep);
+
+        if(in)
         {
-            // "transfer" it
-            //int len = *bufCtrl & 0x3FF;
-            bool last = *bufCtrl & (1 << 14);
-
-            //printf("EP0 in len %i last %i (ctrl %08X sieCtrl %08X)\n", len, last, *bufCtrl, sieCtrl);
-
-            *bufCtrl &= 0x63FF;
-
-            if(last)
+            if(*bufCtrl & (1 << 10) && *bufCtrl & (1 << 15)) // buf 0 available and full
             {
-                sieStatus |= (1 << 18); /*TRANS_COMPLETE*/
-                
-                if(sieCtrl & (1 << 29)) // EP0_INT_1BUF
-                    buffStatus |= 1; // EP0_IN
-                
-                updateInterrupts();
-            }
-        }
-    }
-    else if(addr == 0x84) // EP0 out buffer control
-    {
-        auto bufCtrl = reinterpret_cast<uint32_t *>(dpram + addr);
-        if(*bufCtrl & (1 << 10) && !(*bufCtrl & (1 << 15))) // buf 0 available and not full
-        {
-            int len = *bufCtrl & 0x3FF;
-
-            if(len)
-                printf("EP0 out len %i\n", len);
-            else
-            {
+                // "transfer" it
+                int len = *bufCtrl & 0x3FF;
                 bool last = *bufCtrl & (1 << 14);
+
+                if(cdcInEP && ep == cdcInEP)
+                {
+                    auto buf = dpram + (*ctrl & 0xFFF);
+                    printf("USBCDC: %.*s", len, buf);
+                }
+                else if(ep)
+                    printf("EP%i in len %i last %i (bufCtrl %08X ctrl %08X)\n", ep, len, last, *bufCtrl, *ctrl);
+
                 *bufCtrl &= 0x63FF;
-                *bufCtrl |= (1 << 15); // full
 
                 if(last)
                 {
                     sieStatus |= (1 << 18); /*TRANS_COMPLETE*/
                     
-                    if(sieCtrl & (1 << 29)) // EP0_INT_1BUF
-                        buffStatus |= 1 << 1; // EP0_OUT
+                    if(*ctrl & (1 << 29))
+                        buffStatus |= 1 << (ep * 2); // EPx_IN
                     
                     updateInterrupts();
                 }
             }
         }
+        else
+        {
+            if(*bufCtrl & (1 << 10) && !(*bufCtrl & (1 << 15))) // buf 0 available and not full
+            {
+                int len = *bufCtrl & 0x3FF;
+
+                if(len)
+                    printf("EP%i out len %i\n", ep,  len);
+                else
+                {
+                    bool last = *bufCtrl & (1 << 14);
+                    *bufCtrl &= 0x63FF;
+                    *bufCtrl |= (1 << 15); // full
+
+                    if(last)
+                    {
+                        sieStatus |= (1 << 18); /*TRANS_COMPLETE*/
+                        
+                        if(*ctrl & (1 << 29))
+                            buffStatus |= 1 << (ep * 2 + 1); // EPx_OUT
+                        
+                        updateInterrupts();
+                    }
+                }
+            }
+        }
     }
+
 }
 
 bool USB::getEnabled()
@@ -161,6 +179,7 @@ void USB::startEnumeration()
         return;
 
     enumerationState = 1;
+    cdcInEP = cdcOutEP = 0;
 
     updateEnumeration();
 }
@@ -319,6 +338,8 @@ void USB::updateEnumeration()
 
                         int numEP = desc[4];
 
+                        int intClass = desc[5];
+
                         i++;
                         desc += desc[0];
                         
@@ -338,6 +359,14 @@ void USB::updateEnumeration()
                                 printf("\t\t\twMaxPacketSize   %04X\n", desc[4] | desc[5] << 8);
                                 printf("\t\t\tbInterval        %i\n", desc[6]);
                                 ep++;
+
+                                if(intClass == 10 /*CDC Data*/)
+                                {
+                                    if(desc[2] & 0x80)
+                                        cdcInEP = desc[2] & 0x7F;
+                                    else
+                                        cdcOutEP = desc[2];
+                                }
                             }
                             else
                                 printf("\t\tdesc %i len %i\n", desc[1], desc[0]);
@@ -359,6 +388,20 @@ void USB::updateEnumeration()
                 enumerationState = 7;
             }
 
+            break;
+        }
+
+        case 7: // set config done
+        {
+            if(cdcInEP && cdcOutEP)
+            {
+                printf("Found USB CDC IN %02X OUT %02X\n", cdcInEP, cdcOutEP);
+                // setup the CDC interface if found
+                setupPacket(0x21/*class, interface*/, 0x22 /*SET_CONTROL_LINE_STATE*/, 3, 0, 0);
+            }
+
+            enumerationState = 8;
+            
             break;
         }
     }

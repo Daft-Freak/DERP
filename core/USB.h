@@ -45,4 +45,6 @@ private:
     int enumerationState;
     uint8_t *configDesc;
     int configDescLen, configDescOffset;
+
+    uint8_t cdcInEP, cdcOutEP;
 };
