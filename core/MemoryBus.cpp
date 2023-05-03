@@ -892,6 +892,7 @@ void MemoryBus::doAHBPeriphWrite(ClockTarget &masterClock, uint32_t addr, T data
     else if(addr < 0x50101000) // USB DPRAM
     {
         *reinterpret_cast<T *>(usb.getRAM() + (addr & 0xFFF)) = data;
+        usb.ramWrite(addr & 0xFFF);
         return;
     }
     else if(addr >= 0x50110000 && addr < 0x50200000) // USB regs
