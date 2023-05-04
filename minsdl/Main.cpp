@@ -235,6 +235,7 @@ int main(int argc, char *argv[])
     int screenScale = 5;
 
     bool picosystemSDK = false;
+    bool usbEnabled = false;
 
     std::string romFilename;
 
@@ -248,6 +249,8 @@ int main(int argc, char *argv[])
             screenScale = std::stoi(argv[++i]);
         else if(arg == "--picosystem-sdk")
             picosystemSDK = true;
+        else if(arg == "--usb")
+            usbEnabled = true;
         else
             break;
     }
@@ -378,6 +381,14 @@ int main(int argc, char *argv[])
 
         if(isPicoSystem)
             displayUpdate(time);
+
+        // attempt to connect USB
+        if(usbEnabled)
+        {
+            auto &usb = mem.getUSB();
+            if(usb.getEnabled() && !usb.getConfigured())
+                usb.startEnumeration();
+        }
 
         // adjust timers to stay in range
         clocks.adjustClocks();
