@@ -25,6 +25,7 @@ void USB::reset()
     configDescOffset = 0;
 
     cdcInEP = cdcOutEP = 0;
+    cdcInOff = 0;
 }
 
 uint32_t USB::regRead(uint32_t addr)
@@ -115,7 +116,33 @@ void USB::ramWrite(uint32_t addr)
                 if(cdcInEP && ep == cdcInEP)
                 {
                     auto buf = dpram + (*ctrl & 0xFFF);
-                    printf("USBCDC: %.*s", len, buf);
+
+                    while(len)
+                    {
+                        int copyLen = std::min(len, static_cast<int>(sizeof(cdcInData) - cdcInOff));
+                        memcpy(cdcInData + cdcInOff, buf, copyLen);
+                        cdcInOff += copyLen;
+                        len -= copyLen;
+
+                        auto newLine = reinterpret_cast<uint8_t *>(memchr(cdcInData, '\n', cdcInOff));
+                        while(newLine)
+                        {
+                            int off = newLine - cdcInData;
+                            printf("USBCDC: %.*s", off + 1, cdcInData);
+
+                            if(off != (cdcInOff - 1))
+                                memmove(cdcInData, newLine + 1, cdcInOff - (off + 1));
+
+                            cdcInOff -= (off + 1);
+                            newLine = reinterpret_cast<uint8_t *>(memchr(cdcInData, '\n', cdcInOff));
+                        }
+                        
+                        if(cdcInOff == sizeof(cdcInData))
+                        {
+                            cdcInOff = 0;
+                            printf("Dropping CDC data\n");
+                        }
+                    }
                 }
                 else if(ep)
                     printf("EP%i in len %i last %i (bufCtrl %08X ctrl %08X)\n", ep, len, last, *bufCtrl, *ctrl);

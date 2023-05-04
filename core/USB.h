@@ -47,4 +47,7 @@ private:
     int configDescLen, configDescOffset;
 
     uint8_t cdcInEP, cdcOutEP;
+
+    int cdcInOff;
+    uint8_t cdcInData[1024];
 };
