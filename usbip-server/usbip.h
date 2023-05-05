@@ -50,6 +50,7 @@ struct usbip_client *usbip_create_client(int sosket_fd);
 void usbip_destroy_client(struct usbip_client *client);
 enum usbip_result usbip_client_recv(struct usbip_client *client);
 enum usbip_result usbip_client_reply(struct usbip_client *client, uint32_t seqnum, const uint8_t *data, size_t data_len);
+enum usbip_result usbip_client_stall(struct usbip_client *client, uint32_t seqnum);
 
 enum usbip_result usbip_create_server(struct usbip_server **server, const char *bind_addr, uint16_t port);
 void usbip_destroy_server(struct usbip_server *server);
