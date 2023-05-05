@@ -2,6 +2,8 @@
 
 #include <cstdint>
 
+#include "usbip.h"
+
 class MemoryBus;
 
 class USB final
@@ -23,6 +25,9 @@ public:
 
     void startEnumeration();
 
+    void setUSBIPEnabled(bool enabled);
+    void usbipUpdate();
+
 private:
     void updateInterrupts();
 
@@ -43,6 +48,7 @@ private:
     uint32_t interruptEnables;
 
     int enumerationState;
+    uint8_t deviceDesc[18];
     uint8_t *configDesc;
     int configDescLen, configDescOffset;
 
@@ -50,4 +56,9 @@ private:
 
     int cdcInOff;
     uint8_t cdcInData[1024];
+
+    // usbip
+    bool usbipEnabled = false;
+    usbip_server *usbipServer = nullptr;
+    usbip_device usbipDev;
 };

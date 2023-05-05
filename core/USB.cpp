@@ -26,6 +26,18 @@ void USB::reset()
 
     cdcInEP = cdcOutEP = 0;
     cdcInOff = 0;
+
+    if(usbipEnabled)
+    {
+        if(usbipServer)
+        {
+            usbip_destroy_server(usbipServer);
+            usbipServer = nullptr;
+        }
+
+        if(usbip_create_server(&usbipServer, "::1", 0) != usbip_success)
+            printf("USBIP server create failed!\n");
+    }
 }
 
 uint32_t USB::regRead(uint32_t addr)
@@ -278,6 +290,8 @@ void USB::updateEnumeration()
             printf("\tiSerialNumber      %i\n", buf[16]);
             printf("\tbNumConfigurations %i\n", buf[17]);
 
+            memcpy(deviceDesc, buf, 18);
+
             // reset
             sieStatus |= (1 << 19); // BUS_RESET
 
@@ -408,11 +422,28 @@ void USB::updateEnumeration()
                     }
                 }
 
-                // set config
-                int configValue = configDesc[5];
-                setupPacket(0, 9 /*SET_CONFIGURATION*/, configValue, 0, 0);
+                if(usbipServer)
+                {
+                    // switch over to usbip now that we have the descriptors
+                    usbip_remove_device(&usbipDev);
 
-                enumerationState = 7;
+                    usbipDev.device_descriptor = deviceDesc;
+                    usbipDev.config_descriptor = configDesc;
+                    usbipDev.speed = usbip_speed_full;
+                    usbipDev.user_data = this;
+
+                    usbip_add_device(&usbipDev);
+
+                    enumerationState = 8;
+                }
+                else
+                {
+                    // set config
+                    int configValue = configDesc[5];
+                    setupPacket(0, 9 /*SET_CONFIGURATION*/, configValue, 0, 0);
+
+                    enumerationState = 7;
+                }
             }
 
             break;
@@ -434,4 +465,22 @@ void USB::updateEnumeration()
     }
 
     updateInterrupts();
+}
+
+void USB::setUSBIPEnabled(bool enabled)
+{
+    usbipEnabled = enabled;
+}
+
+void USB::usbipUpdate()
+{
+    if(!usbipServer)
+        return;
+
+    timeval timeout;
+
+    timeout.tv_sec = 0;
+    timeout.tv_usec = 0;
+
+    usbip_server_update(usbipServer, &timeout);
 }

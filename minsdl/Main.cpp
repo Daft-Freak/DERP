@@ -251,6 +251,11 @@ int main(int argc, char *argv[])
             picosystemSDK = true;
         else if(arg == "--usb")
             usbEnabled = true;
+        else if(arg == "--usbip")
+        {
+            usbEnabled = true;
+            mem.getUSB().setUSBIPEnabled(true);
+        }
         else
             break;
     }
@@ -388,6 +393,8 @@ int main(int argc, char *argv[])
             auto &usb = mem.getUSB();
             if(usb.getEnabled() && !usb.getConfigured())
                 usb.startEnumeration();
+
+            usb.usbipUpdate();
         }
 
         // adjust timers to stay in range
