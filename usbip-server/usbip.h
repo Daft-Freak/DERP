@@ -2,11 +2,12 @@
 
 #include <stdbool.h>
 #include <stdint.h>
-#include <sys/time.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+struct timeval;
 
 enum usbip_result {
     usbip_success = 0,
