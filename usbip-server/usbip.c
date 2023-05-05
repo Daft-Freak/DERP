@@ -72,7 +72,7 @@ static bool send_all(int fd, const void *data, size_t *len)
 
     while(to_send)
     {
-        sent = send(fd, data + total_sent, to_send, 0);
+        sent = send(fd, (char *)data + total_sent, to_send, 0);
         if(sent == -1)
             break;
         total_sent += sent;
@@ -300,7 +300,7 @@ static enum usbip_result handle_import(struct usbip_client *client)
     }
 
     // send reply
-    struct import_reply_header reply_head = {};
+    struct import_reply_header reply_head = {0};
     reply_head.version = htons(usbip_version);
     reply_head.code = htons(0x0003);
 
