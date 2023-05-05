@@ -5,6 +5,8 @@
 
 #if defined(_WIN32)
 #include <Ws2tcpip.h>
+
+typedef int ssize_t; // used for send result
 #else
 #include <arpa/inet.h>
 #include <netdb.h>

@@ -9,7 +9,7 @@ struct devlist_reply_header
     uint32_t status;
     uint32_t num_devices;
 };
-static_assert(sizeof(struct devlist_reply_header) == 12);
+static_assert(sizeof(struct devlist_reply_header) == 12, "incorrect struct size");
 
 struct devlist_reply_device
 {
@@ -29,7 +29,7 @@ struct devlist_reply_device
     uint8_t bNumConfigurations;
     uint8_t bNumInterfaces;
 };
-static_assert(sizeof(struct devlist_reply_device) == 312);
+static_assert(sizeof(struct devlist_reply_device) == 312, "incorrect struct size");
 
 struct devlist_reply_interface
 {
@@ -38,7 +38,7 @@ struct devlist_reply_interface
     uint8_t bInterfaceProtocol;
     uint8_t padding;
 };
-static_assert(sizeof(struct devlist_reply_interface) == 4);
+static_assert(sizeof(struct devlist_reply_interface) == 4, "incorrect struct size");
 
 struct import_reply_header
 {
@@ -46,7 +46,7 @@ struct import_reply_header
     uint16_t code;
     uint32_t status;
 };
-static_assert(sizeof(struct import_reply_header) == 8);
+static_assert(sizeof(struct import_reply_header) == 8, "incorrect struct size");
 
 struct usbip_header_basic
 {
@@ -56,7 +56,7 @@ struct usbip_header_basic
     uint32_t direction;
     uint32_t ep;
 };
-static_assert(sizeof(struct usbip_header_basic) == 20);
+static_assert(sizeof(struct usbip_header_basic) == 20, "incorrect struct size");
 
 struct cmd_submit
 {
@@ -67,7 +67,7 @@ struct cmd_submit
     uint32_t interval;
     uint8_t setup[8];
 };
-static_assert(sizeof(struct cmd_submit) == 28);
+static_assert(sizeof(struct cmd_submit) == 28, "incorrect struct size");
 
 struct ret_submit
 {
@@ -78,20 +78,20 @@ struct ret_submit
     uint32_t error_count;
     uint8_t padding[8];
 };
-static_assert(sizeof(struct ret_submit) == 28);
+static_assert(sizeof(struct ret_submit) == 28, "incorrect struct size");
 
 struct cmd_unlink
 {
     uint32_t unlink_seqnum;
     uint8_t padding[24];
 };
-static_assert(sizeof(struct cmd_unlink) == 28);
+static_assert(sizeof(struct cmd_unlink) == 28, "incorrect struct size");
 
 struct ret_unlink
 {
     uint32_t status;
     uint8_t padding[24];
 };
-static_assert(sizeof(struct ret_unlink) == 28);
+static_assert(sizeof(struct ret_unlink) == 28, "incorrect struct size");
 
 static const uint16_t usbip_version = 0x0111;
