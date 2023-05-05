@@ -1,6 +1,14 @@
 #include <cstdio>
 #include <cstring>
 
+// need this for timeval on windows
+// unfortunately, this resunts in windows.h getting pulled in
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
+#include "winsock2.h"
+#endif
+
 #include "USB.h"
 
 #include "MemoryBus.h"
