@@ -3,16 +3,11 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-// struct timeval
-#if defined(_WIN32)
-#include <Ws2tcpip.h>
-#else
-#include <sys/time.h>
-#endif
-
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+struct timeval;
 
 enum usbip_result {
     usbip_success = 0,
