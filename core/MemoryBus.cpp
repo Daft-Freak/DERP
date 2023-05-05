@@ -459,7 +459,7 @@ T MemoryBus::doXIPSSIRead(uint32_t addr)
         case 8: // TXFLR
             return 0;
         case 9: // RXFLR
-            return ssiRx.size();
+            return static_cast<T>(ssiRx.size());
 
         case 10: // SR
             return 1 << 1/*TFNF*/ | 1 << 2/*TFE*/ | (ssiRx.empty() ? 0 : 1 << 3/*RFNE*/);
@@ -640,7 +640,7 @@ T MemoryBus::doAPBPeriphRead(ClockTarget &masterClock, uint32_t addr)
             if(addr == 0x4000C008)
             {
                 printf("R RESET_DONE\n");
-                return ~0;
+                return static_cast<T>(~0);
             }
             break;
         }
