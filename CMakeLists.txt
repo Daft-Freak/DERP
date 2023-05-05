@@ -16,6 +16,7 @@ endif()
 option(BUILD_SDL "Build minimal SDL UI" ON)
 
 add_subdirectory(core)
+add_subdirectory(usbip-server)
 
 if(BUILD_SDL)
     add_subdirectory(minsdl)
