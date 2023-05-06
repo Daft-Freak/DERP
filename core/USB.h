@@ -38,6 +38,8 @@ private:
 
     void updateEnumeration();
 
+    void checkBuffer(int ep, bool in);
+
     MemoryBus &mem;
 
     uint8_t dpram[4 * 1024];
