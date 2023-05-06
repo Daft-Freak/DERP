@@ -88,6 +88,8 @@ void USB::reset()
         buf = nullptr;
     for(auto &len : usbipOutDataLen)
         len = 0;
+    for(auto &off : usbipOutDataOffset)
+        off = 0;
 }
 
 uint32_t USB::regRead(uint32_t addr)
@@ -215,7 +217,6 @@ void USB::ramWrite(uint32_t addr)
                                 usbip_client_reply(usbipLastClient, usbipInSeqnum[ep], buf, len);
 
                             usbipInSeqnum[ep] = 0;
-                            usbipInDataOffset[ep] = 0;
                         }
                     }
                     else if(len) // do nothing, wait for the client
@@ -289,9 +290,9 @@ void USB::ramWrite(uint32_t addr)
         }
         else
         {
-            if(*bufCtrl & (1 << 10) && !(*bufCtrl & (1 << 15))) // buf 0 available and not full
+            while(curBufferCtrl & (1 << 10) && !(curBufferCtrl & (1 << 15))) // buffer available and not full
             {
-                uint32_t len = *bufCtrl & 0x3FF;
+                uint32_t len = curBufferCtrl & 0x3FF;
 
                 bool haveData = false;
                 
@@ -300,40 +301,71 @@ void USB::ramWrite(uint32_t addr)
                 {
                     if(usbipOutData[ep])
                     {
-                        if(usbipOutDataLen[ep] < len)
+                        if(usbipOutDataLen[ep] - usbipOutDataOffset[ep] < len)
                             len = usbipOutDataLen[ep];
 
                         auto buf = ep ? dpram + (*ctrl & 0xFFF) : dpram + 0x100; // ep0 fixed buffer
-                        memcpy(buf, usbipOutData[ep], len);
-                        delete[] usbipOutData[ep];
-                        usbipOutData[ep] = nullptr;
+                        if(curBuffer)
+                            buf += 64;
+
+                        memcpy(buf, usbipOutData[ep] + usbipOutDataOffset[ep], len);
+                        usbipOutDataOffset[ep] += len;
+
+                        if(usbipOutDataOffset[ep] == usbipOutDataLen[ep])
+                        {
+                            delete[] usbipOutData[ep];
+                            usbipOutData[ep] = nullptr;
+                        }
 
                         haveData = true;
                     }
 
-                    usbip_client_reply(usbipLastClient, usbipOutSeqnum[ep], nullptr, len);
+                    if(usbipOutDataOffset[ep] == usbipOutDataLen[ep])
+                    {
+                        usbip_client_reply(usbipLastClient, usbipOutSeqnum[ep], nullptr, usbipOutDataOffset[ep]);
 
-                    usbipOutSeqnum[ep] = 0;
+                        usbipOutSeqnum[ep] = 0;
+                    }
                 }
 
                 if(len == 0 || haveData)
                 {
                     bool last = *bufCtrl & (1 << 14);
-                    *bufCtrl &= 0x6000;
-                    *bufCtrl |= (1 << 15)/*full*/ | len;
+                    if(curBuffer == 0)
+                    {
+                        *bufCtrl &= 0xFFFF6000;
+                        *bufCtrl |= (1 << 15)/*full*/ | len;
+                    }
+                    else
+                    {
+                        *bufCtrl &= 0x6000FFFF;
+                        *bufCtrl |= (1 << 31)/*full*/ | len << 16;
+                    }
 
                     if(last)
-                    {
                         sieStatus |= (1 << 18); /*TRANS_COMPLETE*/
                         
-                        if(*ctrl & (1 << 29))
-                            buffStatus |= 1 << (ep * 2 + 1); // EPx_OUT
-                        
-                        updateInterrupts();
+                    // int for every buf or int on every two bufs and this is the second
+                    if(*ctrl & (1 << 29) || (curBuffer == 1 && *ctrl & (1 << 30)))
+                        buffStatus |= 1 << (ep * 2 + 1); // EPx_OUT
+                    
+                    updateInterrupts();
+
+                    // swap buffers
+                    if(doubleBuffer)
+                    {
+                        bufferSelect ^= (1 << ep);
+                        curBuffer ^= 1;
                     }
+
+                    // re-read status (possibly for the other buffer)
+                    curBufferCtrl = *bufCtrl >> (curBuffer * 16);
                 }
                 else
+                {
                     printf("EP%i out len %i\n", ep, len);
+                    break;
+                }
             }
         }
 
@@ -674,6 +706,7 @@ bool USB::usbipControlRequest(struct usbip_client *client, uint32_t seqnum, uint
 
         usbipOutData[0] = new uint8_t[length];
         usbipOutDataLen[0] = length;
+        usbipOutDataOffset[0] = 0;
         memcpy(usbipOutData[0], outData, length);
     }
 
@@ -732,6 +765,7 @@ bool USB::usbipOut(struct usbip_client *client, uint32_t seqnum, int ep, uint32_
 
     usbipOutData[ep] = new uint8_t[length];
     usbipOutDataLen[ep] = length;
+    usbipOutDataOffset[ep] = 0;
     memcpy(usbipOutData[ep], data, length);
 
     usbipOutSeqnum[ep] = seqnum;

@@ -80,4 +80,5 @@ private:
 
     uint8_t *usbipOutData[16];
     uint32_t usbipOutDataLen[16];
+    uint32_t usbipOutDataOffset[16];
 };
