@@ -167,7 +167,7 @@ enum usbip_result usbip_client_reply(struct usbip_client *client, uint32_t seqnu
         return usbip_error_socket;
 
     // send data
-    if(data)
+    if(data && data_len)
     {
         len = data_len;
         if(!send_all(client->fd, data, &len, 0) || len < data_len)
