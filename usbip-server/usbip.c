@@ -10,6 +10,7 @@ typedef int ssize_t; // used for send result
 #else
 #include <arpa/inet.h>
 #include <netdb.h>
+#include <netinet/tcp.h>
 #include <sys/select.h>
 #include <sys/socket.h>
 #include <unistd.h>
@@ -615,6 +616,9 @@ enum usbip_result usbip_server_update(struct usbip_server *server, struct timeva
                 {
                     debug_printf("new connection from %s port %s\n", hoststr, portstr);
                 }
+
+                int yes = 1;
+                setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &yes, sizeof(int));
 
                 FD_SET(fd, &server->sock_set);
                 
