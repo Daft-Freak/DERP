@@ -502,6 +502,17 @@ void MemoryBus::doXIPSSIWrite(uint32_t addr, T data)
                     ssiRx.push(2);
                     return;
                 }
+                else if(flashCmd == 0x4B) // read uid
+                {
+                    static const uint8_t uid[]{'E', 0xDA, 0xF7, 0x20, 0x40, 'F', 'A', 'K'};
+                    if(flashCmdOff < 4)
+                        ssiRx.push(0);
+                    else if(flashCmdOff <= 12)
+                        ssiRx.push(uid[flashCmdOff - 4]);
+
+                    flashCmdOff++;
+                    return;
+                }
 
                 if(flashCmdOff >= 4) // done addr
                 {
@@ -553,9 +564,9 @@ void MemoryBus::doXIPSSIWrite(uint32_t addr, T data)
                     flashCmdOff++;
                 }
                 else if(flashCmd == 0x35) // read status2
-                {
                     flashCmdOff++;
-                }
+                else if(flashCmd == 0x4B) // unique id
+                    flashCmdOff++;
                 else if(flashCmd && flashCmd != 0xFF)
                     printf("XIP SSI write %08X\n", data);
 
