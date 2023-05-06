@@ -30,6 +30,8 @@ public:
 
     bool usbipGetDescriptor(struct usbip_client *client, uint32_t seqnum, uint8_t descType, uint8_t descIndex, uint16_t setupIndex, uint16_t setupLength);
     bool usbipControlRequest(struct usbip_client *client, uint32_t seqnum, uint8_t requestType, uint8_t request, uint16_t value, uint16_t index, uint16_t length, const uint8_t *outData);
+    bool usbipIn(struct usbip_client *client, uint32_t seqnum, int ep, uint32_t length);
+    bool usbipOut(struct usbip_client *client, uint32_t seqnum, int ep, uint32_t length, const uint8_t *data);
 
 private:
     void updateInterrupts();
@@ -66,9 +68,10 @@ private:
     usbip_device usbipDev;
 
     usbip_client *usbipLastClient;
-    uint32_t usbipControlSeqnum;
-    bool usbipControlDir; // in == true
 
-    uint8_t *usbipOutData = nullptr;
-    uint32_t usbipOutDataLen = 0;
+    uint32_t usbipInSeqnum[16];
+    uint32_t usbipOutSeqnum[16];
+
+    uint8_t *usbipOutData[16];
+    uint32_t usbipOutDataLen[16];
 };

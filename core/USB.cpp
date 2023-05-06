@@ -25,6 +25,18 @@ static bool usbipControlRequest(struct usbip_client *client, uint32_t seqnum, ui
     return usb->usbipControlRequest(client, seqnum, requestType, request, value, index, length, outData);
 }
 
+static bool usbipIn(struct usbip_client *client, uint32_t seqnum, int ep, uint32_t length, void *userData)
+{
+    auto usb = reinterpret_cast<USB*>(userData);
+    return usb->usbipIn(client, seqnum, ep, length);
+}
+
+static bool usbipOut(struct usbip_client *client, uint32_t seqnum, int ep, uint32_t length, const uint8_t *data, void *userData)
+{
+    auto usb = reinterpret_cast<USB*>(userData);
+    return usb->usbipOut(client, seqnum, ep, length, data);
+}
+
 USB::USB(MemoryBus &mem) : mem(mem)
 {
 }
@@ -59,7 +71,15 @@ void USB::reset()
             printf("USBIP server create failed!\n");
     }
 
-    usbipControlSeqnum = 0;
+    for(auto &num : usbipInSeqnum)
+        num = 0;
+    for(auto &num : usbipOutSeqnum)
+        num = 0;
+
+    for(auto &buf : usbipOutData)
+        buf = nullptr;
+    for(auto &len : usbipOutDataLen)
+        len = 0;
 }
 
 uint32_t USB::regRead(uint32_t addr)
@@ -147,7 +167,24 @@ void USB::ramWrite(uint32_t addr)
                 int len = *bufCtrl & 0x3FF;
                 bool last = *bufCtrl & (1 << 14);
 
-                if(cdcInEP && ep == cdcInEP)
+                bool handled = true;
+
+                // send usbip reply
+                if(usbipServer && enumerationState >= 8/*why is this not an enum?*/)
+                {
+                    if(usbipInSeqnum[ep])
+                    {
+                        auto buf = ep ? dpram + (*ctrl & 0xFFF) : dpram + 0x100; // ep0 fixed buffer
+                        usbip_client_reply(usbipLastClient, usbipInSeqnum[ep], buf, len);
+
+                        usbipInSeqnum[ep] = 0;
+                    }
+                    else if(len) // do nothing, wait for the client
+                    {
+                        handled = false;
+                    }
+                }
+                else if(cdcInEP && ep == cdcInEP)
                 {
                     auto buf = dpram + (*ctrl & 0xFFF);
 
@@ -181,24 +218,19 @@ void USB::ramWrite(uint32_t addr)
                 else if(ep)
                     printf("EP%i in len %i last %i (bufCtrl %08X ctrl %08X)\n", ep, len, last, *bufCtrl, *ctrl);
 
-                // send usbip reply
-                if(!ep && usbipControlSeqnum && usbipControlDir)
+                if(handled)
                 {
-                    usbip_client_reply(usbipLastClient, usbipControlSeqnum, dpram + 0x100, len);
+                    *bufCtrl &= 0x63FF;
 
-                    usbipControlSeqnum = 0;
-                }
-
-                *bufCtrl &= 0x63FF;
-
-                if(last)
-                {
-                    sieStatus |= (1 << 18); /*TRANS_COMPLETE*/
-                    
-                    if(*ctrl & (1 << 29))
-                        buffStatus |= 1 << (ep * 2); // EPx_IN
-                    
-                    updateInterrupts();
+                    if(last)
+                    {
+                        sieStatus |= (1 << 18); /*TRANS_COMPLETE*/
+                        
+                        if(*ctrl & (1 << 29))
+                            buffStatus |= 1 << (ep * 2); // EPx_IN
+                        
+                        updateInterrupts();
+                    }
                 }
             }
         }
@@ -206,26 +238,29 @@ void USB::ramWrite(uint32_t addr)
         {
             if(*bufCtrl & (1 << 10) && !(*bufCtrl & (1 << 15))) // buf 0 available and not full
             {
-                int len = *bufCtrl & 0x3FF;
+                uint32_t len = *bufCtrl & 0x3FF;
 
                 bool haveData = false;
                 
                 // copy usbip data and send reply
-                if(!ep && usbipControlSeqnum && !usbipControlDir)
+                if(usbipOutSeqnum[ep])
                 {
-                    if(usbipOutData)
+                    if(usbipOutData[ep])
                     {
-                        memcpy(dpram + 0x100, usbipOutData, usbipOutDataLen);
-                        delete[] usbipOutData;
-                        usbipOutData = nullptr;
+                        if(usbipOutDataLen[ep] < len)
+                            len = usbipOutDataLen[ep];
 
-                        len = usbipOutDataLen;
+                        auto buf = ep ? dpram + (*ctrl & 0xFFF) : dpram + 0x100; // ep0 fixed buffer
+                        memcpy(buf, usbipOutData[ep], len);
+                        delete[] usbipOutData[ep];
+                        usbipOutData[ep] = nullptr;
+
                         haveData = true;
                     }
 
-                    usbip_client_reply(usbipLastClient, usbipControlSeqnum, nullptr, len);
+                    usbip_client_reply(usbipLastClient, usbipOutSeqnum[ep], nullptr, len);
 
-                    usbipControlSeqnum = 0;
+                    usbipOutSeqnum[ep] = 0;
                 }
 
                 if(len == 0 || haveData)
@@ -251,20 +286,18 @@ void USB::ramWrite(uint32_t addr)
 
         if(*bufCtrl & (1 << 11)) // stall
         {
-            if(!ep)
-            {
-                // send usbip stall
-                // TODO EP_STALL_ARM
-                if(!ep && usbipControlSeqnum && usbipControlDir == in)
-                {
-                    usbip_client_stall(usbipLastClient, usbipControlSeqnum);
+            // send usbip stall
+            // TODO EP_STALL_ARM for EP0
 
-                    usbipControlSeqnum = 0;
-                }
+            auto &seqnum = in ? usbipInSeqnum[ep] : usbipOutSeqnum[ep];
+            if(seqnum)
+            {
+                usbip_client_stall(usbipLastClient, seqnum);
+
+                seqnum = 0;
             }
         }
     }
-
 }
 
 bool USB::getEnabled()
@@ -498,6 +531,8 @@ void USB::updateEnumeration()
                     usbipDev.user_data = this;
                     usbipDev.get_descriptor = ::usbipGetDescriptor;
                     usbipDev.control_request = ::usbipControlRequest;
+                    usbipDev.in = ::usbipIn;
+                    usbipDev.out = ::usbipOut;
 
                     usbip_add_device(&usbipDev);
 
@@ -567,8 +602,7 @@ bool USB::usbipGetDescriptor(struct usbip_client *client, uint32_t seqnum, uint8
     sieStatus |= (1 << 17)/*SETUP_REQ*/;
 
     usbipLastClient = client;
-    usbipControlSeqnum = seqnum;
-    usbipControlDir = true; // in
+    usbipInSeqnum[0] = seqnum;
 
     updateInterrupts();
 
@@ -579,15 +613,15 @@ bool USB::usbipControlRequest(struct usbip_client *client, uint32_t seqnum, uint
 {
     if(outData) // copy out data
     {
-        if(usbipOutData)
+        if(usbipOutData[0])
         {
             printf("out data leak?\n");
-            delete[] usbipOutData;
+            delete[] usbipOutData[0];
         }
 
-        usbipOutData = new uint8_t[length];
-        usbipOutDataLen = length;
-        memcpy(usbipOutData, outData, length);
+        usbipOutData[0] = new uint8_t[length];
+        usbipOutDataLen[0] = length;
+        memcpy(usbipOutData[0], outData, length);
     }
 
     // re-assemble setup packet
@@ -602,11 +636,48 @@ bool USB::usbipControlRequest(struct usbip_client *client, uint32_t seqnum, uint
 
     sieStatus |= (1 << 17)/*SETUP_REQ*/;
 
+    bool in = (requestType & 0x80) || !length; // 0-length always in?
+
     usbipLastClient = client;
-    usbipControlSeqnum = seqnum;
-    usbipControlDir = (requestType & 0x80) || !length; // 0-length always in?
+
+    if(in)
+        usbipInSeqnum[0] = seqnum;
+    else
+        usbipOutSeqnum[0] = seqnum;
 
     updateInterrupts();
 
     return true; // will send stall later if needed
+}
+
+bool USB::usbipIn(struct usbip_client *client, uint32_t seqnum, int ep, uint32_t length)
+{
+    usbipInSeqnum[ep] = seqnum;
+    usbipLastClient = client;
+
+    // pretend the buffer control register was updated to trigger the hooks
+    ramWrite(0x80 + ep * 8);
+
+    return true;
+}
+
+bool USB::usbipOut(struct usbip_client *client, uint32_t seqnum, int ep, uint32_t length, const uint8_t *data)
+{
+    if(usbipOutData[ep])
+    {
+        printf("out data leak?\n");
+        delete[] usbipOutData[ep];
+    }
+
+    usbipOutData[ep] = new uint8_t[length];
+    usbipOutDataLen[ep] = length;
+    memcpy(usbipOutData[ep], data, length);
+
+    usbipOutSeqnum[ep] = seqnum;
+    usbipLastClient = client;
+
+    // pretend the buffer control register was updated to trigger the hooks
+    ramWrite(0x80 + ep * 8 + 4);
+
+    return true;
 }
