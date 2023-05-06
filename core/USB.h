@@ -47,7 +47,9 @@ private:
     uint32_t sieCtrl;
     uint32_t sieStatus;
 
-    uint32_t buffStatus;
+    uint32_t buffStatus; // todo: both buffers
+
+    uint16_t bufferSelect;
 
     uint32_t interrupts;
     uint32_t interruptEnables;
@@ -71,6 +73,10 @@ private:
 
     uint32_t usbipInSeqnum[16];
     uint32_t usbipOutSeqnum[16];
+
+    uint8_t *usbipInData[16];
+    uint32_t usbipInDataLen[16];
+    uint32_t usbipInDataOffset[16];
 
     uint8_t *usbipOutData[16];
     uint32_t usbipOutDataLen[16];

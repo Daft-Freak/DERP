@@ -47,6 +47,7 @@ void USB::reset()
     sieCtrl = 0;
     sieStatus = 0;
     buffStatus = 0;
+    bufferSelect = 0;
 
     interrupts = 0;
     interruptEnables = 0;
@@ -75,6 +76,13 @@ void USB::reset()
         num = 0;
     for(auto &num : usbipOutSeqnum)
         num = 0;
+
+    for(auto &buf : usbipInData)
+        buf = nullptr;
+    for(auto &len : usbipInDataLen)
+        len = 0;
+    for(auto &off : usbipInDataOffset)
+        off = 0;
 
     for(auto &buf : usbipOutData)
         buf = nullptr;
@@ -156,16 +164,25 @@ void USB::ramWrite(uint32_t addr)
         auto bufCtrl = reinterpret_cast<uint32_t *>(dpram + addr);
         auto ctrl = ep == 0 ? &sieCtrl : reinterpret_cast<uint32_t *>(dpram + ep * 8 + (in ? 0 : 4)); // ep0 interrupt/buffer bits in SIE_CTRL
 
-        if(*ctrl & (1 << 30))
-            printf("ep%i db\n", ep);
+        bool doubleBuffer = *ctrl & (1 << 30);
+
+        if(doubleBuffer)
+        {
+            if(*bufCtrl & (1 << 12)) // reset to buffer 0
+                bufferSelect &= ~(1 << ep);
+        }
+
+        // get the ctrl halfword for the current buffer
+        int curBuffer = (bufferSelect >> ep) & 1;
+        uint32_t curBufferCtrl = *bufCtrl >> (curBuffer * 16);
 
         if(in)
         {
-            if(*bufCtrl & (1 << 10) && *bufCtrl & (1 << 15)) // buf 0 available and full
+            while(curBufferCtrl & (1 << 10) && curBufferCtrl & (1 << 15)) // buffer available and full
             {
                 // "transfer" it
-                int len = *bufCtrl & 0x3FF;
-                bool last = *bufCtrl & (1 << 14);
+                uint32_t len = curBufferCtrl & 0x3FF;
+                bool last = curBufferCtrl & (1 << 14);
 
                 bool handled = true;
 
@@ -175,9 +192,31 @@ void USB::ramWrite(uint32_t addr)
                     if(usbipInSeqnum[ep])
                     {
                         auto buf = ep ? dpram + (*ctrl & 0xFFF) : dpram + 0x100; // ep0 fixed buffer
-                        usbip_client_reply(usbipLastClient, usbipInSeqnum[ep], buf, len);
 
-                        usbipInSeqnum[ep] = 0;
+                        if(curBuffer)
+                            buf += 64;
+
+                        // multiple packet transfer
+                        if(usbipInData[ep])
+                        {
+                            if(usbipInDataLen[ep] - usbipInDataOffset[ep] < len)
+                                len = usbipInDataLen[ep] - usbipInDataOffset[ep];
+                
+                            memcpy(usbipInData[ep] + usbipInDataOffset[ep], buf, len);
+                            usbipInDataOffset[ep] += len;
+                        }
+
+                        // got all the data or not buffered
+                        if(!usbipInData[ep] || usbipInDataOffset[ep] == usbipInDataLen[ep])
+                        {
+                            if(usbipInData[ep])
+                                usbip_client_reply(usbipLastClient, usbipInSeqnum[ep], usbipInData[ep], usbipInDataOffset[ep]);
+                            else
+                                usbip_client_reply(usbipLastClient, usbipInSeqnum[ep], buf, len);
+
+                            usbipInSeqnum[ep] = 0;
+                            usbipInDataOffset[ep] = 0;
+                        }
                     }
                     else if(len) // do nothing, wait for the client
                     {
@@ -190,7 +229,7 @@ void USB::ramWrite(uint32_t addr)
 
                     while(len)
                     {
-                        int copyLen = std::min(len, static_cast<int>(sizeof(cdcInData) - cdcInOff));
+                        int copyLen = std::min(len, static_cast<uint32_t>(sizeof(cdcInData) - cdcInOff));
                         memcpy(cdcInData + cdcInOff, buf, copyLen);
                         cdcInOff += copyLen;
                         len -= copyLen;
@@ -220,18 +259,32 @@ void USB::ramWrite(uint32_t addr)
 
                 if(handled)
                 {
-                    *bufCtrl &= 0x63FF;
+                    if(curBuffer == 0)
+                        *bufCtrl &= 0xFFFF63FF;
+                    else
+                        *bufCtrl &= 0x63FFFFFF;
 
                     if(last)
-                    {
                         sieStatus |= (1 << 18); /*TRANS_COMPLETE*/
-                        
-                        if(*ctrl & (1 << 29))
-                            buffStatus |= 1 << (ep * 2); // EPx_IN
-                        
-                        updateInterrupts();
+
+                    // int for every buf or int on every two bufs and this is the second
+                    if(*ctrl & (1 << 29) || (curBuffer == 1 && *ctrl & (1 << 30)))
+                        buffStatus |= 1 << (ep * 2); // EPx_IN
+                    
+                    updateInterrupts();
+
+                    // swap buffers
+                    if(doubleBuffer)
+                    {
+                        bufferSelect ^= (1 << ep);
+                        curBuffer ^= 1;
                     }
+
+                    // re-read status (possibly for the other buffer)
+                    curBufferCtrl = *bufCtrl >> (curBuffer * 16);
                 }
+                else
+                    break;
             }
         }
         else
@@ -652,6 +705,14 @@ bool USB::usbipControlRequest(struct usbip_client *client, uint32_t seqnum, uint
 
 bool USB::usbipIn(struct usbip_client *client, uint32_t seqnum, int ep, uint32_t length)
 {
+    if(usbipInData[ep])
+        delete[] usbipInData[ep];
+
+    usbipInData[ep] = new uint8_t[length];
+
+    usbipInDataLen[ep] = length;
+    usbipInDataOffset[ep] = 0;
+
     usbipInSeqnum[ep] = seqnum;
     usbipLastClient = client;
 
