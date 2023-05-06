@@ -64,7 +64,7 @@ static int close_socket(int fd)
 #endif
 }
 
-static bool send_all(int fd, const void *data, size_t *len)
+static bool send_all(int fd, const void *data, size_t *len, int flags)
 {
     size_t total_sent = 0;
     size_t to_send = *len;
@@ -72,7 +72,7 @@ static bool send_all(int fd, const void *data, size_t *len)
 
     while(to_send)
     {
-        sent = send(fd, (char *)data + total_sent, to_send, 0);
+        sent = send(fd, (char *)data + total_sent, to_send, flags);
         if(sent == -1)
             break;
         total_sent += sent;
@@ -155,7 +155,7 @@ enum usbip_result usbip_client_reply(struct usbip_client *client, uint32_t seqnu
     reply_head.seqnum = htonl(seqnum);
 
     size_t len = sizeof(reply_head);
-    if(!send_all(client->fd, &reply_head, &len) || len < sizeof(reply_head))
+    if(!send_all(client->fd, &reply_head, &len, 0) || len < sizeof(reply_head))
         return usbip_error_socket;
 
     struct ret_submit reply = {0};
@@ -163,14 +163,14 @@ enum usbip_result usbip_client_reply(struct usbip_client *client, uint32_t seqnu
     reply.actual_length = htonl(data_len);
 
     len = sizeof(reply);
-    if(!send_all(client->fd, &reply, &len) || len < sizeof(reply))
+    if(!send_all(client->fd, &reply, &len, 0) || len < sizeof(reply))
         return usbip_error_socket;
 
     // send data
     if(data)
     {
         len = data_len;
-        if(!send_all(client->fd, data, &len) || len < data_len)
+        if(!send_all(client->fd, data, &len, 0) || len < data_len)
             return usbip_error_socket;
     }
 
@@ -185,7 +185,7 @@ enum usbip_result usbip_client_stall(struct usbip_client *client, uint32_t seqnu
     reply_head.seqnum = htonl(seqnum);
 
     size_t len = sizeof(reply_head);
-    if(!send_all(client->fd, &reply_head, &len) || len < sizeof(reply_head))
+    if(!send_all(client->fd, &reply_head, &len, 0) || len < sizeof(reply_head))
         return usbip_error_socket;
 
     struct ret_submit reply = {0};
@@ -193,7 +193,7 @@ enum usbip_result usbip_client_stall(struct usbip_client *client, uint32_t seqnu
     reply.status = htonl(-32); // EPIPE
 
     len = sizeof(reply);
-    if(!send_all(client->fd, &reply, &len) || len < sizeof(reply))
+    if(!send_all(client->fd, &reply, &len, 0) || len < sizeof(reply))
         return usbip_error_socket;
 
     return usbip_success;
@@ -233,7 +233,7 @@ static enum usbip_result send_devlist(int fd)
     reply_head.num_devices = htonl(num_devices);
 
     size_t len = sizeof(reply_head);
-    if(!send_all(fd, &reply_head, &len) || len != sizeof(reply_head))
+    if(!send_all(fd, &reply_head, &len, 0) || len != sizeof(reply_head))
         return usbip_error_socket;
 
 
@@ -247,7 +247,7 @@ static enum usbip_result send_devlist(int fd)
         fill_dev_reply(dev, &reply_dev);
 
         len = sizeof(reply_dev);
-        if(!send_all(fd, &reply_dev, &len) || len != sizeof(reply_dev))
+        if(!send_all(fd, &reply_dev, &len, 0) || len != sizeof(reply_dev))
             return usbip_error_socket;
 
         uint16_t cfg_desc_len = dev->config_descriptor[2] | dev->config_descriptor[3] << 8;
@@ -266,7 +266,7 @@ static enum usbip_result send_devlist(int fd)
                 reply_intf.bInterfaceProtocol = cfg_desc[off + 7];
 
                 len = sizeof(reply_intf);
-                if(!send_all(fd, &reply_intf, &len) || len != sizeof(reply_intf))
+                if(!send_all(fd, &reply_intf, &len, 0) || len != sizeof(reply_intf))
                     return usbip_error_socket;
             }
         }
@@ -309,14 +309,14 @@ static enum usbip_result handle_import(struct usbip_client *client)
         // device not found
         reply_head.status = htonl(1); // error
         size_t len = sizeof(reply_head);
-        if(!send_all(client->fd, &reply_head, &len) || len != sizeof(reply_head))
+        if(!send_all(client->fd, &reply_head, &len, 0) || len != sizeof(reply_head))
             return usbip_error_socket;
 
         return true;
     }
 
     size_t len = sizeof(reply_head);
-    if(!send_all(client->fd, &reply_head, &len) || len != sizeof(reply_head))
+    if(!send_all(client->fd, &reply_head, &len, 0) || len != sizeof(reply_head))
         return usbip_error_socket;
 
     // same as list
@@ -325,7 +325,7 @@ static enum usbip_result handle_import(struct usbip_client *client)
     fill_dev_reply(client->imported_device, &reply_dev);
 
     len = sizeof(reply_dev);
-    if(!send_all(client->fd, &reply_dev, &len) || len != sizeof(reply_dev))
+    if(!send_all(client->fd, &reply_dev, &len, 0) || len != sizeof(reply_dev))
         return usbip_error_socket;
 
     return usbip_success;
