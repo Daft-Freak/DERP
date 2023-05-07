@@ -77,6 +77,8 @@ private:
     int cdcInOff;
     uint8_t cdcInData[1024];
 
+    uint32_t shouldCheckBuffers;
+
     // usbip
     bool usbipEnabled = false;
     usbip_server *usbipServer = nullptr;

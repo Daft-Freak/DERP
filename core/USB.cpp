@@ -94,11 +94,27 @@ void USB::reset()
 
 void USB::update(uint64_t target)
 {
+    if(shouldCheckBuffers)
+    {
+        for(int i = 0; i < 16; i++)
+        {
+            if(shouldCheckBuffers & (1 << i))
+                checkBuffer(i, false);
+            if(shouldCheckBuffers & (1 << (i + 16)))
+                checkBuffer(i, true);
+        }
+
+        shouldCheckBuffers = 0;
+    }
+
     lastUpdate = target;
 }
 
 uint64_t USB::getNextInterruptTime(uint64_t target)
 {
+    if(shouldCheckBuffers)
+        return lastUpdate + 1; // "now"
+
     return target;
 }
 
@@ -173,7 +189,8 @@ void USB::ramWrite(uint32_t addr)
         bool in = !(addr & 4);
         int ep = (addr - 0x80) / 8;
 
-        checkBuffer(ep, in);
+        shouldCheckBuffers |= 1 << (ep + (in ? 16 : 0));
+        mem.calcNextInterruptTime();
     }
 }
 
@@ -764,7 +781,8 @@ bool USB::usbipIn(struct usbip_client *client, uint32_t seqnum, int ep, uint32_t
     usbipInSeqnum[ep] = seqnum;
     usbipLastClient = client;
 
-    checkBuffer(ep, true);
+    shouldCheckBuffers |= (1 << (ep + 16));
+    mem.calcNextInterruptTime();
 
     return true;
 }
@@ -785,7 +803,8 @@ bool USB::usbipOut(struct usbip_client *client, uint32_t seqnum, int ep, uint32_
     usbipOutSeqnum[ep] = seqnum;
     usbipLastClient = client;
 
-    checkBuffer(ep, false);
+    shouldCheckBuffers |= (1 << ep);
+    mem.calcNextInterruptTime();
 
     return true;
 }
