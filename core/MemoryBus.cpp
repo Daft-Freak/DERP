@@ -282,6 +282,7 @@ void MemoryBus::peripheralUpdate(uint64_t target)
     timer.update(target);
 
     dma.update(target);
+    usb.update(target);
 }
 
 void MemoryBus::peripheralUpdate(uint64_t target, uint32_t irqMask)
@@ -308,6 +309,7 @@ void MemoryBus::calcNextInterruptTime()
 
     nextInterruptTime = timer.getNextInterruptTime(nextInterruptTime);
     nextInterruptTime = dma.getNextInterruptTime(nextInterruptTime);
+    nextInterruptTime = usb.getNextInterruptTime(nextInterruptTime);
 }
 
 void MemoryBus::setInterruptUpdateCallback(InterruptUpdateCallback cb)
@@ -872,9 +874,15 @@ T MemoryBus::doAHBPeriphRead(ClockTarget &masterClock, uint32_t addr)
         return dma.regRead(addr & 0xFFFF);
     }
     else if(addr < 0x50101000) // USB DPRAM
+    {
+        usb.update(masterClock.getTime());
         return *reinterpret_cast<const T *>(usb.getRAM() + (addr & 0xFFF));
+    }
     else if(addr >= 0x50110000 && addr < 0x50200000) // USB regs
+    {
+        usb.update(masterClock.getTime());
         return usb.regRead(addr & 0xFFFF);
+    }
     else if(addr < 0x50300000)
     {
         if(addr == 0x50200004) // FSTAT
@@ -902,12 +910,14 @@ void MemoryBus::doAHBPeriphWrite(ClockTarget &masterClock, uint32_t addr, T data
     }
     else if(addr < 0x50101000) // USB DPRAM
     {
+        usb.update(masterClock.getTime());
         *reinterpret_cast<T *>(usb.getRAM() + (addr & 0xFFF)) = data;
         usb.ramWrite(addr & 0xFFF);
         return;
     }
     else if(addr >= 0x50110000 && addr < 0x50200000) // USB regs
     {
+        usb.update(masterClock.getTime());
         usb.regWrite(addr & 0xFFFF, data);
         return;
     }

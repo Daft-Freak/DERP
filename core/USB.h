@@ -13,6 +13,15 @@ public:
 
     void reset();
 
+    void update(uint64_t target);
+    void updateForInterrupts(uint64_t target)
+    {
+        if(interruptEnables)
+            update(target);
+    }
+
+    uint64_t getNextInterruptTime(uint64_t target);
+
     uint32_t regRead(uint32_t addr);
     void regWrite(uint32_t addr, uint32_t data);
 
@@ -41,6 +50,8 @@ private:
     void checkBuffer(int ep, bool in);
 
     MemoryBus &mem;
+
+    uint64_t lastUpdate = 0;
 
     uint8_t dpram[4 * 1024];
 

@@ -92,6 +92,16 @@ void USB::reset()
         off = 0;
 }
 
+void USB::update(uint64_t target)
+{
+    lastUpdate = target;
+}
+
+uint64_t USB::getNextInterruptTime(uint64_t target)
+{
+    return target;
+}
+
 uint32_t USB::regRead(uint32_t addr)
 {
     switch(addr)
