@@ -96,6 +96,8 @@ void USB::update(uint64_t target)
 {
     if(shouldCheckBuffers)
     {
+        usbipUpdate();
+
         for(int i = 0; i < 16; i++)
         {
             if(shouldCheckBuffers & (1 << i))
