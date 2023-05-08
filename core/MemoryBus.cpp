@@ -72,6 +72,9 @@ void MemoryBus::setCPUs(ARMv6MCore *cpus)
 
 void MemoryBus::reset()
 {
+    cpuCores[0].reset();
+    cpuCores[1].reset();
+
     clocks.reset();
     gpio.reset();
     uart[0].reset();

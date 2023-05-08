@@ -57,8 +57,6 @@ void ARMv6MCore::reset()
     // MPU_TYPE
     mpuRegs[0] = 8 << 8;
 
-    mem.reset();
-
     int cycles;
     reg(Reg::SP) = mem.read<uint32_t>(this, 0, cycles, false); // MSP
     updateTHUMBPC( mem.read<uint32_t>(this, 4, cycles, false) & ~ 1); // Reset vector

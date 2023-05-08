@@ -308,11 +308,9 @@ int main(int argc, char *argv[])
     auto &clocks = mem.getClocks();
 
     for(auto &core : cpuCores)
-    {
         clocks.addClockTarget(5, core.getClock());
 
-        core.reset();
-    }
+    mem.reset();
 
     // external hardware
     if(isPicoSystem)
