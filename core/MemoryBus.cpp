@@ -647,6 +647,11 @@ T MemoryBus::doAPBPeriphRead(ClockTarget &masterClock, uint32_t addr)
 
     switch(peripheral)
     {
+        case 0: // SYSINFO
+            if(periphAddr == 0x40) // GITREF_RP2040
+                return T(0xDF2040DF); // TODO: put a real value here?
+            break;
+
         case 2: // CLOCKS
             return clocks.regRead(periphAddr);
 
