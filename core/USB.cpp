@@ -611,7 +611,7 @@ void USB::checkBuffer(int ep, bool in)
                 if(usbipOutData[ep])
                 {
                     if(usbipOutDataLen[ep] - usbipOutDataOffset[ep] < len)
-                        len = usbipOutDataLen[ep];
+                        len = usbipOutDataLen[ep] - usbipOutDataOffset[ep];
 
                     auto buf = ep ? dpram + (*ctrl & 0xFFF) : dpram + 0x100; // ep0 fixed buffer
                     if(curBuffer)
