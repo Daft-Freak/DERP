@@ -737,10 +737,7 @@ void USB::checkBuffer(int ep, bool in)
                 curBufferCtrl = *bufCtrl >> (curBuffer * 16);
             }
             else
-            {
-                printf("EP%i out len %i\n", ep, len);
                 break;
-            }
         }
     }
 
