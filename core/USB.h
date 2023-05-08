@@ -64,6 +64,8 @@ private:
     uint32_t buffStatus[2];
     uint16_t bufferSelect;
 
+    uint32_t epAbort, epAbortDone;
+
     uint32_t interrupts;
     uint32_t interruptEnables;
 

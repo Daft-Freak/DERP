@@ -55,6 +55,8 @@ void USB::reset()
     buffStatus[0] = 0;
     buffStatus[1] = 0;
     bufferSelect = 0;
+    epAbort = 0;
+    epAbortDone = 0;
 
     interrupts = 0;
     interruptEnables = 0;
@@ -149,6 +151,11 @@ uint32_t USB::regRead(uint32_t addr)
             return (bothMask & bufferSelect) | (~bothMask & buffStatus[1]);
         }
 
+        case 0x60: // EP_ABORT
+            return epAbort;
+        case 0x64: // EP_ABORT_DONE
+            return epAbortDone;
+
         case 0x98: // INTS
             return interrupts & interruptEnables; // TODO: force
     }
@@ -204,6 +211,39 @@ void USB::regWrite(uint32_t addr, uint32_t data)
             }
 
             updateInterrupts();
+            return;
+
+        case 0x60: // EP_ABORT
+        {
+            auto old = epAbort;
+            if(updateReg(epAbort, data, atomic))
+            {
+                auto newSet = epAbort & ~old;
+                auto availMask = (1 << 10 | 1 << 26);
+                for(int ep = 0; ep < 16 && newSet; ep++, newSet >>= 2)
+                {
+                    if(newSet & 1)
+                    {
+                        auto bufCtrl = reinterpret_cast<uint32_t *>(dpram + 0x80 + ep * 8);
+                        bool avail = *bufCtrl & availMask;
+
+                        *bufCtrl &= ~availMask;
+                        epAbortDone |= 1 << (ep * 2);
+                    }
+                    if(newSet & 2)
+                    {
+                        auto bufCtrl = reinterpret_cast<uint32_t *>(dpram + 0x80 + ep * 8 + 4);
+                        bool avail = *bufCtrl & availMask;
+
+                        *bufCtrl &= ~availMask;
+                        epAbortDone |= 1 << (ep * 2 + 1);
+                    }
+                }
+            }
+            return;
+        }
+        case 0x64: // EP_ABORT_DONE
+            updateReg(epAbortDone, data, atomic);
             return;
 
         case 0x90: // INTE
