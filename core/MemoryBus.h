@@ -180,6 +180,8 @@ private:
     uint32_t flashAddr;
     int flashCmdOff = 0;
 
+    uint32_t psmOff = 0;
+
     // inter-core FIFO
     FIFO<uint32_t, 8> coreFIFO[2];
 

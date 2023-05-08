@@ -658,6 +658,13 @@ T MemoryBus::doAPBPeriphRead(ClockTarget &masterClock, uint32_t addr)
             break;
         }
 
+        case 4: // PSM
+        {
+            if(periphAddr == 4) // FRCE_OFF
+                return psmOff;
+            break;
+        }
+
         case 5: // IO_BANK0
             return gpio.regRead(periphAddr);
 
@@ -748,6 +755,19 @@ void MemoryBus::doAPBPeriphWrite(ClockTarget &masterClock, uint32_t addr, T data
         case 2: // CLOCKS
             clocks.regWrite(periphAddr, data);
             return;
+
+        case 4: // PSM
+        {
+            int atomic = periphAddr >> 12;
+            int addr = periphAddr & 0xFFF;
+            if(addr == 4) // FRCE_OFF
+            {
+                printf("PSM FRCE_OFF %i %08X\n", atomic, data);
+                updateReg(psmOff, data, atomic);
+                return;
+            }
+            break;
+        }
 
         case 5: // IO_BANK0
             gpio.regWrite(periphAddr, data);
