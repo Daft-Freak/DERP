@@ -129,6 +129,9 @@ uint32_t USB::regRead(uint32_t addr)
         case 0x40: // MAIN_CTRL
             return mainCtrl;
 
+        case 0x4C: // SIE_CTRL
+            return sieCtrl;
+
         case 0x58: // BUFF_STATUS
             return buffStatus;
 
