@@ -54,7 +54,7 @@ static inline uint32_t getStripedSRAMAddr(uint32_t addr)
     return bank * 64 * 1024 + word * 4 + (addr & 3);
 }
 
-MemoryBus::MemoryBus() : gpio(*this), uart{{*this, 0}, {*this, 1}}, timer(*this), dma(*this), usb(*this)
+MemoryBus::MemoryBus() : gpio(*this), uart{{*this, 0}, {*this, 1}}, watchdog(*this), timer(*this), dma(*this), usb(*this)
 {
     clocks.addClockTarget(4/*REF*/, watchdog.getClock());
 

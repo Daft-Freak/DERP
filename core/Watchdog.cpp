@@ -1,8 +1,10 @@
+#include <cstdio>
+
 #include "Watchdog.h"
 
 #include "MemoryBus.h"
 
-Watchdog::Watchdog()
+Watchdog::Watchdog(MemoryBus &mem) : mem(mem)
 {
 }
 
@@ -27,23 +29,47 @@ void Watchdog::update(uint64_t target)
     if(!passed)
         return;
 
-    if(!(tick & (1 << 9)))
+    if(!(tick & (1 << 9))) // enable tick
     {
         clock.addCycles(passed);
         return;
     }
 
+    // tick counter
     unsigned int tickCycles = tick & 0x1FF;
 
+    int ticksToAdd = 0;
+
     if(!tickCycles)
-        ticks += passed;
+        ticksToAdd = passed;
     else
     {
         tickCounter += passed;
         while(tickCounter >= tickCycles)
         {
             tickCounter -= tickCycles;
-            ticks++;
+            ticksToAdd++;
+        }
+    }
+
+    ticks += ticksToAdd;
+
+    // watchdog timer
+    if(ticksToAdd && (ctrl & (1 << 30))) // timer enable
+    {
+        ticksToAdd *= 2; // RP2040-E1
+
+        if(ticksToAdd > timer) // oops, missed it
+            ticksToAdd = timer;
+
+        timer -= ticksToAdd;
+
+        if(timer == 0)
+        {
+            //reset
+            // TODO: WDSEL
+            printf("Watchdog reset!\n");
+            mem.reset();
         }
     }
 

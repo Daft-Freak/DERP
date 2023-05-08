@@ -4,10 +4,12 @@
 
 #include "ClockTarget.h"
 
+class MemoryBus;
+
 class Watchdog final
 {
 public:
-    Watchdog();
+    Watchdog(MemoryBus &mem);
 
     void reset();
 
@@ -23,6 +25,8 @@ public:
     ClockTarget &getClock() {return clock;}
 
 private:
+    MemoryBus &mem;
+
     uint32_t ctrl;
     uint32_t scratch[8];
     uint32_t tick;
