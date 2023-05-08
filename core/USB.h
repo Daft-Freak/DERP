@@ -61,8 +61,7 @@ private:
     uint32_t sieCtrl;
     uint32_t sieStatus;
 
-    uint32_t buffStatus; // todo: both buffers
-
+    uint32_t buffStatus[2];
     uint16_t bufferSelect;
 
     uint32_t interrupts;

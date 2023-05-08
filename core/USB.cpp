@@ -52,7 +52,8 @@ void USB::reset()
     mainCtrl = 0;
     sieCtrl = 0;
     sieStatus = 0;
-    buffStatus = 0;
+    buffStatus[0] = 0;
+    buffStatus[1] = 0;
     bufferSelect = 0;
 
     interrupts = 0;
@@ -139,7 +140,14 @@ uint32_t USB::regRead(uint32_t addr)
             return sieCtrl;
 
         case 0x58: // BUFF_STATUS
-            return buffStatus;
+            return buffStatus[0] | buffStatus[1];
+
+        case 0x5C: // BUFF_CPU_SHOULD_HANDLE
+        {
+            // if both are ready set based on the buffer selector, otherwise set if second buf
+            auto bothMask = buffStatus[0] & buffStatus[1];
+            return (bothMask & bufferSelect) | (~bothMask & buffStatus[1]);
+        }
 
         case 0x98: // INTS
             return interrupts & interruptEnables; // TODO: force
@@ -176,7 +184,18 @@ void USB::regWrite(uint32_t addr, uint32_t data)
             return;
 
         case 0x58: // BUFF_STATUS
-            updateReg(buffStatus, data, atomic);
+            if(atomic == 3) // clear
+            {
+                auto bothMask = buffStatus[0] & buffStatus[1];
+                auto shouldHandle = (bothMask & bufferSelect) | (~bothMask & buffStatus[1]);
+                auto buf1Mask = data & shouldHandle;
+                auto buf0Mask = data & ~buf1Mask;
+
+                buffStatus[0] &= ~buf0Mask;
+                buffStatus[1] &= ~buf1Mask;
+            }
+            else
+                printf("USB BUFF_STATUS%s%08X\n", op[atomic], data);
 
             if(atomic == 3 && (data & 1)) // clearing ep0 in
             {
@@ -241,7 +260,7 @@ void USB::updateInterrupts()
         interrupts |= (1 << 12);
 
     // set buff status
-    if(buffStatus)
+    if(buffStatus[0] | buffStatus[1])
         interrupts |= (1 << 4);
 
     if(interrupts & interruptEnables)
@@ -482,16 +501,18 @@ void USB::checkBuffer(int ep, bool in)
     auto bufCtrl = reinterpret_cast<uint32_t *>(dpram + 0x80 + ep * 8 + (in ? 0 : 4));
     auto ctrl = ep == 0 ? &sieCtrl : reinterpret_cast<uint32_t *>(dpram + ep * 8 + (in ? 0 : 4)); // ep0 interrupt/buffer bits in SIE_CTRL
 
+    uint32_t epMask = 1 << (ep * 2 + !in);
+
     bool doubleBuffer = *ctrl & (1 << 30);
 
     if(doubleBuffer)
     {
         if(*bufCtrl & (1 << 12)) // reset to buffer 0
-            bufferSelect &= ~(1 << ep);
+            bufferSelect &= ~epMask;
     }
 
     // get the ctrl halfword for the current buffer
-    int curBuffer = (bufferSelect >> ep) & 1;
+    int curBuffer = (bufferSelect & epMask) ? 1 : 0;
     uint32_t curBufferCtrl = *bufCtrl >> (curBuffer * 16);
 
     if(in)
@@ -586,14 +607,14 @@ void USB::checkBuffer(int ep, bool in)
 
                 // int for every buf or int on every two bufs and this is the second
                 if(*ctrl & (1 << 29) || (curBuffer == 1 && *ctrl & (1 << 30)))
-                    buffStatus |= 1 << (ep * 2); // EPx_IN
+                    buffStatus[curBuffer] |= epMask; // EPx_IN
                 
                 updateInterrupts();
 
                 // swap buffers
                 if(doubleBuffer)
                 {
-                    bufferSelect ^= (1 << ep);
+                    bufferSelect ^= epMask;
                     curBuffer ^= 1;
                 }
 
@@ -663,14 +684,14 @@ void USB::checkBuffer(int ep, bool in)
                     
                 // int for every buf or int on every two bufs and this is the second
                 if(*ctrl & (1 << 29) || (curBuffer == 1 && *ctrl & (1 << 30)))
-                    buffStatus |= 1 << (ep * 2 + 1); // EPx_OUT
-                
+                    buffStatus[curBuffer] |= epMask; // EPx_OUT
+
                 updateInterrupts();
 
                 // swap buffers
                 if(doubleBuffer)
                 {
-                    bufferSelect ^= (1 << ep);
+                    bufferSelect ^= epMask;
                     curBuffer ^= 1;
                 }
 
