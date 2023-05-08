@@ -12,6 +12,7 @@ struct timeval;
 enum usbip_result {
     usbip_success = 0,
     usbip_disconnected,
+    usbip_not_ready,
     usbip_error,
     usbip_error_socket,
     usbip_error_unknown_command,

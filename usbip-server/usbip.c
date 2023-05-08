@@ -673,6 +673,8 @@ enum usbip_result usbip_server_update(struct usbip_server *server, struct timeva
     }
     else if(ready == -1)
         return usbip_error_socket;
+    else
+        return usbip_not_ready;
 
     // rebuilt sosket set if someone disconnected
     if(rebuild_set)
