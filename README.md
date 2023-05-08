@@ -39,13 +39,45 @@ picotool save -r 0 4000 bootrom.bin
 | PLL | Partial |
 | GPIO | Partial | Some input and interrupt handling
 | PIO | Minimal | PIO0 always returns all FIFOs empty + TXSTALL
-| USB | Minimal | RAM exists
+| USB | Partial | Optional device enumeration and USBIP server
 | UART | Minimal | Prints TX data
 | I2C | None |
 | SPI | Minimal | SPI0 TNF always set
 | PWM | Minimal | Register read/write handled
 | Timer | Partial |
-| Watchdog | Partial | Ticks for timer
+| Watchdog | Partial | Tick generation and reset timer
 | RTC | Minimal | Enough to get through init
 | ADC | None |
 | SSI | Minimal | Just enough to boot
+
+## USB
+
+Optional USB support can be enabled with:
+
+```
+./DERP_SDL --usb [...]
+```
+
+This will attempt to enumerate the device and print the output from a CDC interface if found.
+
+Alternatively:
+```
+./DERP_SDL --usbip [...]
+```
+
+Will enable a USBIP server. Which can be connected to using something like:
+(May require some extra `sudo`)
+
+```shell
+modprobe vhci-hcd
+
+# check for devices
+usbip list -r localhost
+
+# attach device
+usbip attach -r localhost -b 1-1
+```
+
+Launching without a .uf2 file does allow using the bootrom's loader. Though this is probably not a good idea...
+
+(Low level transfers/timings are not implemented so the transfer rate for USB data is... unpredictable)
