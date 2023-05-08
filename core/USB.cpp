@@ -518,7 +518,7 @@ void USB::checkBuffer(int ep, bool in)
                     }
 
                     // got all the data or not buffered
-                    if(!usbipInData[ep] || usbipInDataOffset[ep] == usbipInDataLen[ep])
+                    if(!usbipInData[ep] || usbipInDataOffset[ep] == usbipInDataLen[ep] || len < 64)
                     {
                         if(usbipInData[ep])
                             usbip_client_reply(usbipLastClient, usbipInSeqnum[ep], usbipInData[ep], usbipInDataOffset[ep]);
