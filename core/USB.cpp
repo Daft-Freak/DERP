@@ -60,6 +60,8 @@ void USB::reset()
     cdcInEP = cdcOutEP = 0;
     cdcInOff = 0;
 
+    shouldCheckBuffers = 0;
+
     if(usbipEnabled)
     {
         if(usbipServer)
