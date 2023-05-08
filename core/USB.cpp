@@ -225,7 +225,6 @@ void USB::regWrite(uint32_t addr, uint32_t data)
                     if(newSet & 1)
                     {
                         auto bufCtrl = reinterpret_cast<uint32_t *>(dpram + 0x80 + ep * 8);
-                        bool avail = *bufCtrl & availMask;
 
                         *bufCtrl &= ~availMask;
                         epAbortDone |= 1 << (ep * 2);
@@ -233,7 +232,6 @@ void USB::regWrite(uint32_t addr, uint32_t data)
                     if(newSet & 2)
                     {
                         auto bufCtrl = reinterpret_cast<uint32_t *>(dpram + 0x80 + ep * 8 + 4);
-                        bool avail = *bufCtrl & availMask;
 
                         *bufCtrl &= ~availMask;
                         epAbortDone |= 1 << (ep * 2 + 1);
