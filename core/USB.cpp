@@ -37,6 +37,12 @@ static bool usbipOut(struct usbip_client *client, uint32_t seqnum, int ep, uint3
     return usb->usbipOut(client, seqnum, ep, length, data);
 }
 
+static bool usbipUnlink(struct usbip_client *client, uint32_t seqnum, void *userData)
+{
+    auto usb = reinterpret_cast<USB*>(userData);
+    return usb->usbipUnlink(client, seqnum);
+}
+
 USB::USB(MemoryBus &mem) : mem(mem)
 {
 }
@@ -434,6 +440,7 @@ void USB::updateEnumeration()
                     usbipDev.control_request = ::usbipControlRequest;
                     usbipDev.in = ::usbipIn;
                     usbipDev.out = ::usbipOut;
+                    usbipDev.unlink = ::usbipUnlink;
 
                     usbip_add_device(&usbipDev);
 
@@ -814,4 +821,27 @@ bool USB::usbipOut(struct usbip_client *client, uint32_t seqnum, int ep, uint32_
     mem.calcNextInterruptTime();
 
     return true;
+}
+
+bool USB::usbipUnlink(struct usbip_client *client, uint32_t seqnum)
+{
+    for(auto &n : usbipInSeqnum)
+    {
+        if(n == seqnum)
+        {
+            n = 0;
+            return true;
+        }
+    }
+
+    for(auto &n : usbipOutSeqnum)
+    {
+        if(n == seqnum)
+        {
+            n = 0;
+            return true;
+        }
+    }
+
+    return true; // should be more strict here, but we're losing seqnums sometimes
 }

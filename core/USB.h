@@ -41,6 +41,7 @@ public:
     bool usbipControlRequest(struct usbip_client *client, uint32_t seqnum, uint8_t requestType, uint8_t request, uint16_t value, uint16_t index, uint16_t length, const uint8_t *outData);
     bool usbipIn(struct usbip_client *client, uint32_t seqnum, int ep, uint32_t length);
     bool usbipOut(struct usbip_client *client, uint32_t seqnum, int ep, uint32_t length, const uint8_t *data);
+    bool usbipUnlink(struct usbip_client *client, uint32_t seqnum);
 
 private:
     void updateInterrupts();
