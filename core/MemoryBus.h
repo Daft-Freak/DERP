@@ -137,6 +137,7 @@ private:
     const uint8_t *bootROM = nullptr;
 
     uint8_t qspiFlash[16 * 1024 * 1024]; // max
+    uint8_t xipCache[16 * 1024];
 
     uint8_t sram[264 * 1024]; // first 256k pre-striped
 
@@ -173,6 +174,8 @@ private:
     uint32_t pwmTOP[8];
 
     uint32_t rtcCtrl = 0;
+
+    uint32_t xipCtrlCtrl = 0;
 
     std::queue<uint32_t> ssiRx;
 

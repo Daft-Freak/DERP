@@ -24,18 +24,19 @@ bool updateReg(uint32_t &curVal, uint32_t newVal, int atomic)
 
 enum MemoryRegion
 {
-    Region_ROM         = 0x00,
-    Region_XIP         = 0x10,
-    Region_XIP_NoAlloc = 0x11,
-    Region_XIP_NoCache = 0x12,
-    Region_XIP_NoCNoA  = 0x13,
-    Region_XIP_Ctrl    = 0x14,
-    Region_XIP_SSI     = 0x18,
-    Region_SRAM        = 0x20,
-    Region_APBPeriph   = 0x40,
-    Region_AHBPeriph   = 0x50,
-    Region_IOPORT      = 0xD0,
-    Region_CPUInternal = 0xE0,
+    Region_ROM           = 0x00,
+    Region_XIP           = 0x10,
+    Region_XIP_NoAlloc   = 0x11,
+    Region_XIP_NoCache   = 0x12,
+    Region_XIP_NoCNoA    = 0x13,
+    Region_XIP_Ctrl      = 0x14,
+    Region_XIP_CacheSRAM = 0x15,
+    Region_XIP_SSI       = 0x18,
+    Region_SRAM          = 0x20,
+    Region_APBPeriph     = 0x40,
+    Region_AHBPeriph     = 0x50,
+    Region_IOPORT        = 0xD0,
+    Region_CPUInternal   = 0xE0,
 };
 
 template uint8_t MemoryBus::read(BusMasterPtr master, uint32_t addr, int &cycles, bool sequential);
@@ -120,6 +121,14 @@ T MemoryBus::read(BusMasterPtr master, uint32_t addr, int &cycles, bool sequenti
             accessCycles(1);
             return doXIPCtrlRead<T>(addr);
 
+        case Region_XIP_CacheSRAM:
+            if(!(xipCtrlCtrl & 1)) // cache disabled
+            {
+                accessCycles(1);
+                return doRead<T>(xipCache, addr); // this one mirrors
+            }
+            break;
+
         case Region_XIP_SSI:
             accessCycles(1);
             return doXIPSSIRead<T>(addr);
@@ -177,6 +186,15 @@ void MemoryBus::write(BusMasterPtr master, uint32_t addr, T data, int &cycles, b
             accessCycles(1);
             doXIPCtrlWrite<T>(addr, data);
             return;
+
+        case Region_XIP_CacheSRAM:
+            if(!(xipCtrlCtrl & 1)) // cache disabled
+            {
+                accessCycles(1);
+                doWrite<T>(xipCache, addr, data); // this one mirrors
+                return;
+            }
+            break;
 
         case Region_XIP_SSI:
             accessCycles(1);
@@ -382,6 +400,9 @@ static const char *ctrlRegNames[]
 template<class T>
 T MemoryBus::doXIPCtrlRead(uint32_t addr)
 {
+    if(addr == 0)
+        return xipCtrlCtrl;
+
     printf("XIP ctrl R %s (%08X)\n", ctrlRegNames[(addr & 0xFF) / 4], addr);
     return 0;
 }
@@ -389,6 +410,9 @@ T MemoryBus::doXIPCtrlRead(uint32_t addr)
 template<class T>
 void MemoryBus::doXIPCtrlWrite(uint32_t addr, T data)
 {
+    if(addr == 0)
+        xipCtrlCtrl = data;
+
     printf("XIP ctrl W %s (%08X) = %08X\n", ctrlRegNames[(addr & 0xFF) / 4], addr, data);
 }
 
