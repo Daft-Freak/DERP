@@ -42,6 +42,7 @@ struct usbip_device
     bool (*control_request)(struct usbip_client *client, uint32_t seqnum, uint8_t request_type, uint8_t request, uint16_t value, uint16_t index, uint16_t length, const uint8_t *out_data, void *user_data);
     bool (*in)(struct usbip_client *client, uint32_t seqnum, int ep, uint32_t length, void *user_data);
     bool (*out)(struct usbip_client *client, uint32_t seqnum, int ep, uint32_t length, const uint8_t *data, void *user_data);
+    bool (*unlink)(struct usbip_client *client, uint32_t seqnum, void *user_data);
 };
 
 void usbip_add_device(struct usbip_device *device);

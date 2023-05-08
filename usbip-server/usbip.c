@@ -468,7 +468,26 @@ enum usbip_result usbip_client_recv(struct usbip_client *client)
                                  head.seqnum, head.devid, head.direction, head.ep,
                                  cmd_data.unlink_seqnum);
 
-                    // todo
+                    struct usbip_header_basic reply_head = {0};
+
+                    reply_head.command = htonl(4);
+                    reply_head.seqnum = htonl(head.seqnum);
+
+                    size_t len = sizeof(reply_head);
+                    if(!send_all(client->fd, &reply_head, &len, 0) || len < sizeof(reply_head))
+                        return usbip_error_socket;
+
+                    struct ret_unlink reply = {0};
+
+                    struct usbip_device *dev = client->imported_device;
+                    bool unlinked = !dev->unlink || dev->unlink(client, cmd_data.unlink_seqnum, dev->user_data);
+
+                    if(unlinked)
+                        reply.status = htonl(-104/*ECONNRESET*/);
+
+                    len = sizeof(reply);
+                    if(!send_all(client->fd, &reply, &len, 0) || len < sizeof(reply))
+                        return usbip_error_socket;
 
                     break;
                 }
