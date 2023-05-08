@@ -297,6 +297,9 @@ void MemoryBus::peripheralUpdate(uint64_t target, uint32_t irqMask)
 
     if(irqMask & (1 << 11/*DMA_IRQ_0*/ | 1 << 12/*DMA_IRQ_1*/))
         dma.updateForInterrupts(target);
+
+    if(irqMask & (1 << 5/*USBCTRL_IRQ*/))
+        usb.updateForInterrupts(target);
 }
 
 void MemoryBus::calcNextInterruptTime()
