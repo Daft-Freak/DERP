@@ -5,6 +5,7 @@ target_sources(DERPCore INTERFACE
     Clocks.cpp
     DMA.cpp
     GPIO.cpp
+    Logging.cpp
     MemoryBus.cpp
     Timer.cpp
     UART.cpp
