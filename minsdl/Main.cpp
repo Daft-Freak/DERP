@@ -99,6 +99,21 @@ static Board stringToBoard(std::string_view str)
     return Board::Pico;
 }
 
+static void getBoardScreenSize(Board board, int &w, int &h)
+{
+    switch(board)
+    {
+        case Board::PimoroniPicoSystem:
+            w = 240;
+            h = 240;
+            break;
+
+        default:
+            w = 0;
+            h = 0;
+    }
+}
+
 static bool parseUF2(std::ifstream &file)
 {
     while(!file.eof())
@@ -309,11 +324,14 @@ int main(int argc, char *argv[])
             board = Board::PimoroniPicoSystem;
     }
 
+    // default board if still not set
     if(board == Board::Unknown)
     {
         std::cout << "Board not specified, falling back to \"pico\"\n"; 
         board = Board::Pico;
     }
+
+    getBoardScreenSize(board, screenWidth, screenHeight);
 
     // emu init
     mem.setCPUs(cpuCores);
@@ -357,15 +375,23 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    auto window = SDL_CreateWindow("DaftBoySDL", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
-                                   screenWidth * screenScale, screenHeight * screenScale,
-                                   SDL_WINDOW_RESIZABLE);
+    bool boardHasScreen = screenWidth && screenHeight;
+    SDL_Window *window = nullptr;
+    SDL_Renderer *renderer = nullptr;
+    SDL_Texture *texture = nullptr;
 
-    auto renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_PRESENTVSYNC);
-    SDL_RenderSetLogicalSize(renderer, screenWidth, screenHeight);
-    SDL_RenderSetIntegerScale(renderer, SDL_TRUE);
+    if(boardHasScreen)
+    {
+        window = SDL_CreateWindow("DaftBoySDL", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
+                                    screenWidth * screenScale, screenHeight * screenScale,
+                                    SDL_WINDOW_RESIZABLE);
 
-    auto texture = SDL_CreateTexture(renderer, picosystemSDK ? SDL_PIXELFORMAT_ARGB4444 : SDL_PIXELFORMAT_BGR565, SDL_TEXTUREACCESS_STREAMING, screenWidth, screenHeight);
+        renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_PRESENTVSYNC);
+        SDL_RenderSetLogicalSize(renderer, screenWidth, screenHeight);
+        SDL_RenderSetIntegerScale(renderer, SDL_TRUE);
+
+        texture = SDL_CreateTexture(renderer, picosystemSDK ? SDL_PIXELFORMAT_ARGB4444 : SDL_PIXELFORMAT_BGR565, SDL_TEXTUREACCESS_STREAMING, screenWidth, screenHeight);
+    }
 
     auto lastTick = SDL_GetTicks();
 
@@ -381,12 +407,15 @@ int main(int argc, char *argv[])
         // update freq info
         if(now - lastFreqUpdate >= 1000)
         {
-            auto time = now - lastFreqUpdate;
-            int speedPercent = static_cast<uint64_t>(cpuCycles) * 1000 / time * 100 / clocks.getClockFrequency(5);
-            char buf[50];
-
-            snprintf(buf, sizeof(buf), "DERP | SYS: %iMHz (%i%%)", cpuCycles / (1000 * time), speedPercent);
-            SDL_SetWindowTitle(window, buf);
+            if(window)
+            {
+                auto time = now - lastFreqUpdate;
+                int speedPercent = static_cast<uint64_t>(cpuCycles) * 1000 / time * 100 / clocks.getClockFrequency(5);
+                char buf[50];
+            
+                snprintf(buf, sizeof(buf), "DERP | SYS: %iMHz (%i%%)", cpuCycles / (1000 * time), speedPercent);
+                SDL_SetWindowTitle(window, buf);
+            }
 
             cpuCycles = 0;
             lastFreqUpdate = now;
@@ -426,16 +455,22 @@ int main(int argc, char *argv[])
 
         lastTick = now;
 
-        // TODO: sync
-        SDL_UpdateTexture(texture, nullptr, screenData, screenWidth * 2);
-        SDL_RenderClear(renderer);
-        SDL_RenderCopy(renderer, texture, nullptr, nullptr);
-        SDL_RenderPresent(renderer);
+        if(renderer)
+        {
+            // TODO: sync
+            SDL_UpdateTexture(texture, nullptr, screenData, screenWidth * 2);
+            SDL_RenderClear(renderer);
+            SDL_RenderCopy(renderer, texture, nullptr, nullptr);
+            SDL_RenderPresent(renderer);
+        }
     }
 
-    SDL_DestroyTexture(texture);
-    SDL_DestroyRenderer(renderer);
-    SDL_DestroyWindow(window);
+    if(texture)
+        SDL_DestroyTexture(texture);
+    if(renderer)
+        SDL_DestroyRenderer(renderer);
+    if(window)
+        SDL_DestroyWindow(window);
 
     return 0;
 }
