@@ -9,6 +9,7 @@
 
 enum class Board
 {
+    Unknown = -1,
     Pico = 0,
     PimoroniPicoSystem,
 };
@@ -22,7 +23,7 @@ static uint8_t bootROM[0x4000];
 
 static std::ifstream uf2File;
 
-static Board board = Board::Pico;
+static Board board = Board::Unknown;
 
 uint16_t screenData[240 * 240];
 
@@ -179,7 +180,7 @@ static bool parseUF2(std::ifstream &file)
                     std::cout << "\t" << idStr->second << ": " << str << "\n";
 
                 // detect board
-                if(id == 0xb63cffbb/*pico_board*/)
+                if(id == 0xb63cffbb/*pico_board*/ && board == Board::Unknown)
                     board = stringToBoard(str);
             }
         }
@@ -266,6 +267,8 @@ int main(int argc, char *argv[])
             screenScale = std::stoi(argv[++i]);
         else if(arg == "--picosystem-sdk")
             picosystemSDK = true;
+        else if(arg == "--board" && i + 1 < argc)
+            board = stringToBoard(argv[++i]);
         else if(arg == "--usb")
             usbEnabled = true;
         else if(arg == "--usbip")
@@ -278,7 +281,7 @@ int main(int argc, char *argv[])
     }
 
     if(i == argc)
-        std::cout << "No ROM specified!\n";
+        std::cout << "No file specified!\n";
     else
         romFilename = argv[i];
 
@@ -304,6 +307,12 @@ int main(int argc, char *argv[])
         // picosystem SDK does not require the correct board to be set... so most uf2s don't
         if(picosystemSDK)
             board = Board::PimoroniPicoSystem;
+    }
+
+    if(board == Board::Unknown)
+    {
+        std::cout << "Board not specified, falling back to \"pico\"\n"; 
+        board = Board::Pico;
     }
 
     // emu init
