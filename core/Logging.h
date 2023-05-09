@@ -20,6 +20,7 @@ namespace Logging
     enum class Component
     {
         Other,
+        ArmCore,
     };
 
     constexpr int toMask(Level l){return 1 << static_cast<int>(l);}

@@ -31,6 +31,8 @@ namespace Logging
         {
             case Component::Other:
                 return "other";
+            case Component::ArmCore:
+                return "armcore";
         }
 
         return "?";
@@ -53,7 +55,7 @@ namespace Logging
         auto compStr = componentToString(component);
 
         int levelPad = 16 - strlen(levelStr);
-        int compPad = 6 - strlen(compStr);
+        int compPad = 8 - strlen(compStr);
 
         printf("[%s]%*s[%s]%*s%s\n", levelStr, levelPad, "", compStr, compPad, "", buf);
 

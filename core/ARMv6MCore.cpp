@@ -8,6 +8,11 @@
 #include <utility>
 
 #include "ARMv6MCore.h"
+#include "Logging.h"
+
+using Logging::logf;
+using LogLevel = Logging::Level;
+constexpr auto logComponent = Logging::Component::ArmCore;
 
 #ifdef _MSC_VER
 #define __builtin_unreachable() __assume(false)
@@ -140,11 +145,11 @@ void ARMv6MCore::fault(const char *desc)
     auto curException = cpsr & 0x3F;
     if(curException == 2 /*NMI*/ || curException == 3 /*HardFault*/)
     {
-        printf("Lockup (%s) in %s at ~%08X\n", desc, curException == 2 ? "NMI" : "HardFault", reg(Reg::PC));
+        logf(LogLevel::Error, logComponent, "Lockup (%s) in %s at ~%08X", desc, curException == 2 ? "NMI" : "HardFault", reg(Reg::PC));
         exit(1);
     }
 
-    printf("Fault (%s) at ~%08X\n", desc, reg(Reg::PC));
+    logf(LogLevel::Error, logComponent, "Fault (%s) at ~%08X", desc, reg(Reg::PC));
 
     exceptionPending |= 1ull << 3; // HardFault
     checkPendingExceptions();
@@ -196,7 +201,7 @@ uint32_t ARMv6MCore::readReg(uint32_t addr)
             return mpuRegs[((addr & 0xFF) - 0x90) / 4];
     }
 
-    printf("CPUI R %08X\n", addr);
+    logf(LogLevel::NotImplemented, logComponent,"CPUI R %08X", addr);
     return 0;
 }
 
@@ -259,7 +264,7 @@ void ARMv6MCore::writeReg(uint32_t addr, uint32_t data)
             return;
     }
 
-    printf("CPUI W %08X = %08X\n", addr, data);
+    logf(LogLevel::NotImplemented, logComponent, "CPUI W %08X = %08X", addr, data);
 }
 
 uint8_t ARMv6MCore::readMem8(uint32_t addr, int &cycles, bool sequential)
@@ -1013,7 +1018,7 @@ int ARMv6MCore::doTHUMBMisc(uint16_t opcode, uint32_t pc)
                     break;
 
                 case 0x2: 
-                    printf("Invalid opcode %04X @%08X\n", opcode, pc - 4);
+                    logf(LogLevel::Error, logComponent, "Invalid opcode %04X @%08X", opcode, pc - 4);
                     fault("Undefined instruction");
                     break;
 
@@ -1069,7 +1074,7 @@ int ARMv6MCore::doTHUMBMisc(uint16_t opcode, uint32_t pc)
         }
     }
 
-    printf("Unhandled opcode %04X @%08X\n", opcode, pc - 4);
+    logf(LogLevel::Error, logComponent, "Unhandled opcode %04X @%08X", opcode, pc - 4);
     fault("Undefined instruction");
     return pcSCycles;
 }
@@ -1480,7 +1485,7 @@ int ARMv6MCore::doTHUMB32BitInstruction(uint16_t opcode, uint32_t pc)
         }
     }
 
-    printf("Unhandled opcode %08X @%08X\n",opcode32, pc - 6);
+    logf(LogLevel::Error, logComponent, "Unhandled opcode %08X @%08X",opcode32, pc - 6);
     fault("Undefined instruction");
     return pcSCycles;
 }
