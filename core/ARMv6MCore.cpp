@@ -1014,7 +1014,7 @@ int ARMv6MCore::doTHUMBMisc(uint16_t opcode, uint32_t pc)
 
                 case 0x2: 
                     printf("Invalid opcode %04X @%08X\n", opcode, pc - 4);
-                    exit(1);
+                    fault("Undefined instruction");
                     break;
 
                 case 0x3: // REVSH
