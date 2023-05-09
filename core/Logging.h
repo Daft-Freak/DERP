@@ -21,6 +21,7 @@ namespace Logging
     {
         Other,
         ArmCore,
+        MemoryBus,
     };
 
     constexpr int toMask(Level l){return 1 << static_cast<int>(l);}

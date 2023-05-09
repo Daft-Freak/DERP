@@ -33,6 +33,8 @@ namespace Logging
                 return "other";
             case Component::ArmCore:
                 return "armcore";
+            case Component::MemoryBus:
+                return "membus";
         }
 
         return "?";

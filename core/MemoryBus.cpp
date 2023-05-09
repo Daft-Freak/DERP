@@ -5,6 +5,11 @@
 #include "MemoryBus.h"
 
 #include "ARMv6MCore.h"
+#include "Logging.h"
+
+using Logging::logf;
+using LogLevel = Logging::Level;
+constexpr auto logComponent = Logging::Component::MemoryBus;
 
 bool updateReg(uint32_t &curVal, uint32_t newVal, int atomic)
 {
@@ -403,7 +408,7 @@ T MemoryBus::doXIPCtrlRead(uint32_t addr)
     if(addr == 0)
         return xipCtrlCtrl;
 
-    printf("XIP ctrl R %s (%08X)\n", ctrlRegNames[(addr & 0xFF) / 4], addr);
+    logf(LogLevel::NotImplemented, logComponent, "XIP ctrl R %s (%08X)", ctrlRegNames[(addr & 0xFF) / 4], addr);
     return 0;
 }
 
@@ -413,7 +418,7 @@ void MemoryBus::doXIPCtrlWrite(uint32_t addr, T data)
     if(addr == 0)
         xipCtrlCtrl = data;
 
-    printf("XIP ctrl W %s (%08X) = %08X\n", ctrlRegNames[(addr & 0xFF) / 4], addr, data);
+    logf(LogLevel::NotImplemented, logComponent, "XIP ctrl W %s (%08X) = %08X", ctrlRegNames[(addr & 0xFF) / 4], addr, data);
 }
 
 static const char *ssiRegNames[]
@@ -507,7 +512,7 @@ T MemoryBus::doXIPSSIRead(uint32_t addr)
             return v;
         }
     }
-    printf("XIP SSI R %s (%08X)\n", ssiRegNames[(addr & 0xFF) / 4], addr);
+    logf(LogLevel::NotImplemented, logComponent, "XIP SSI R %s (%08X)", ssiRegNames[(addr & 0xFF) / 4], addr);
     return 0;
 }
 
@@ -600,7 +605,7 @@ void MemoryBus::doXIPSSIWrite(uint32_t addr, T data)
                 else if(flashCmd == 0x4B) // unique id
                     flashCmdOff++;
                 else if(flashCmd && flashCmd != 0xFF)
-                    printf("XIP SSI write %08X\n", data);
+                    logf(LogLevel::NotImplemented, logComponent, "XIP SSI write %08X", data);
 
                 ssiRx.push(0); //
             }
@@ -608,7 +613,7 @@ void MemoryBus::doXIPSSIWrite(uint32_t addr, T data)
             return;
         }
     }
-    printf("XIP SSI W %s (%08X) = %08X\n", ssiRegNames[(addr & 0xFF) / 4], addr, data);
+    logf(LogLevel::NotImplemented, logComponent, "XIP SSI W %s (%08X) = %08X", ssiRegNames[(addr & 0xFF) / 4], addr, data);
 }
 
 template<class T>
@@ -619,7 +624,7 @@ T MemoryBus::doSRAMRead(uint32_t addr) const
     if (addr < 0x20042000)
         return *reinterpret_cast<const T *>(sram + (addr & 0xFFFFF));
 
-    printf("SRAM R %08X\n", addr);
+    logf(LogLevel::NotImplemented, logComponent, "SRAM R %08X", addr);
     return doOpenRead<T>(addr);
 }
 
@@ -632,7 +637,7 @@ void MemoryBus::doSRAMWrite(uint32_t addr, T data)
         return;
     }
 
-    printf("SRAM W %08X = %08X\n", addr, data);
+    logf(LogLevel::NotImplemented, logComponent, "SRAM W %08X = %08X", addr, data);
 }
 
 static const char *apbPeriphNames[]{
@@ -687,7 +692,7 @@ T MemoryBus::doAPBPeriphRead(ClockTarget &masterClock, uint32_t addr)
             // boot hack
             if(addr == 0x4000C008)
             {
-                printf("R RESET_DONE\n");
+                logf(LogLevel::NotImplemented, logComponent, "R RESET_DONE");
                 return static_cast<T>(~0);
             }
             break;
@@ -774,7 +779,7 @@ T MemoryBus::doAPBPeriphRead(ClockTarget &masterClock, uint32_t addr)
             break;
     }
 
-    printf("APBP R %s %04X\n", apbPeriphNames[peripheral], addr & 0x3FFF);
+    logf(LogLevel::NotImplemented, logComponent, "APBP R %s %04X", apbPeriphNames[peripheral], addr & 0x3FFF);
 
     return doOpenRead<T>(addr);
 }
@@ -797,7 +802,7 @@ void MemoryBus::doAPBPeriphWrite(ClockTarget &masterClock, uint32_t addr, T data
             int addr = periphAddr & 0xFFF;
             if(addr == 4) // FRCE_OFF
             {
-                printf("PSM FRCE_OFF %i %08X\n", atomic, data);
+                logf(LogLevel::NotImplemented, logComponent, "PSM FRCE_OFF %i %08X", atomic, data);
                 updateReg(psmOff, data, atomic);
                 return;
             }
@@ -917,7 +922,7 @@ void MemoryBus::doAPBPeriphWrite(ClockTarget &masterClock, uint32_t addr, T data
             break;
     }
 
-    printf("APBP W %s %04X = %08X\n", apbPeriphNames[peripheral], addr & 0x3FFF, data);
+    logf(LogLevel::NotImplemented, logComponent, "APBP W %s %04X = %08X", apbPeriphNames[peripheral], addr & 0x3FFF, data);
 }
 
 template<class T>
@@ -945,7 +950,7 @@ T MemoryBus::doAHBPeriphRead(ClockTarget &masterClock, uint32_t addr)
         if(addr == 0x50200008) // FDEBUG
             return T(0xF << 24); // all TXSTALL
 
-        printf("PIO0 R %08X\n", addr);
+        logf(LogLevel::NotImplemented, logComponent, "PIO0 R %08X", addr);
     }
     else if(addr < 0x50400000)
     {
@@ -954,10 +959,10 @@ T MemoryBus::doAHBPeriphRead(ClockTarget &masterClock, uint32_t addr)
         if(addr == 0x50300008) // FDEBUG
             return T(0xF << 24); // all TXSTALL
 
-        printf("PIO1 R %08X\n", addr);
+        logf(LogLevel::NotImplemented, logComponent, "PIO1 R %08X", addr);
     }
     else
-        printf("AHBP R %08X\n", addr);
+        logf(LogLevel::NotImplemented, logComponent, "AHBP R %08X", addr);
 
     return doOpenRead<T>(addr);
 }
@@ -990,17 +995,17 @@ void MemoryBus::doAHBPeriphWrite(ClockTarget &masterClock, uint32_t addr, T data
         if(addr == 0x50200010) // TXF0
         {}
         else
-            printf("PIO0 W %08X = %08X\n", addr, data);
+            logf(LogLevel::NotImplemented, logComponent, "PIO0 W %08X = %08X", addr, data);
     }
     else if(addr < 0x50400000)
     {
         if(addr == 0x50300010) // TXF0
         {}
         else
-            printf("PIO1 W %08X = %08X\n", addr, data);
+            logf(LogLevel::NotImplemented, logComponent, "PIO1 W %08X = %08X", addr, data);
     }
     else
-        printf("AHBP W %08X = %08X\n", addr, data);
+        logf(LogLevel::NotImplemented, logComponent, "AHBP W %08X = %08X", addr, data);
 }
 
 template<class T>
@@ -1017,7 +1022,7 @@ T MemoryBus::doIOPORTRead(ClockTarget &masterClock, int core, uint32_t addr)
         case 8:  // GPIO_HI_IN
         {
             // boot hack
-            printf("R GPIO_HI_IN\n");
+            logf(LogLevel::NotImplemented, logComponent, "R GPIO_HI_IN");
             return 2;
         }
 
@@ -1087,7 +1092,7 @@ T MemoryBus::doIOPORTRead(ClockTarget &masterClock, int core, uint32_t addr)
         }
     }
 
-    printf("IOPORT R %08X\n", addr);
+    logf(LogLevel::NotImplemented, logComponent, "IOPORT R %08X", addr);
     return doOpenRead<T>(addr);
 }
 
@@ -1205,7 +1210,7 @@ void MemoryBus::doIOPORTWrite(ClockTarget &masterClock, int core, uint32_t addr,
             return;
         }
     }
-    printf("IOPORT W %08X = %08X\n", addr, data);
+    logf(LogLevel::NotImplemented, logComponent, "IOPORT W %08X = %08X", addr, data);
 }
 
 template<class T>
