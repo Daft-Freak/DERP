@@ -947,6 +947,15 @@ T MemoryBus::doAHBPeriphRead(ClockTarget &masterClock, uint32_t addr)
 
         printf("PIO0 R %08X\n", addr);
     }
+    else if(addr < 0x50400000)
+    {
+        if(addr == 0x50300004) // FSTAT
+            return T(0x0F000F00); // all FIFOs empty
+        if(addr == 0x50300008) // FDEBUG
+            return T(0xF << 24); // all TXSTALL
+
+        printf("PIO1 R %08X\n", addr);
+    }
     else
         printf("AHBP R %08X\n", addr);
 
@@ -982,6 +991,13 @@ void MemoryBus::doAHBPeriphWrite(ClockTarget &masterClock, uint32_t addr, T data
         {}
         else
             printf("PIO0 W %08X = %08X\n", addr, data);
+    }
+    else if(addr < 0x50400000)
+    {
+        if(addr == 0x50300010) // TXF0
+        {}
+        else
+            printf("PIO1 W %08X = %08X\n", addr, data);
     }
     else
         printf("AHBP W %08X = %08X\n", addr, data);
