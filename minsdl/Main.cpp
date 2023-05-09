@@ -7,6 +7,12 @@
 
 #include "ARMv6MCore.h"
 
+enum class Board
+{
+    Pico = 0,
+    PimoroniPicoSystem,
+};
+
 static bool quit = false;
 
 static MemoryBus mem;
@@ -16,8 +22,7 @@ static uint8_t bootROM[0x4000];
 
 static std::ifstream uf2File;
 
-// TODO: maybe an enum if other boards get supported
-static bool isPicoSystem = false;
+static Board board = Board::Pico;
 
 uint16_t screenData[240 * 240];
 
@@ -79,6 +84,18 @@ static void pollEvents()
                 break;
         }
     }
+}
+
+static Board stringToBoard(std::string_view str)
+{
+    if(str == "pico")
+        return Board::Pico;
+
+    if(str == "pimoroni_picosystem")
+        return Board::PimoroniPicoSystem;
+
+    std::cout << "Unknown board \"" << str << "\", falling back to \"pico\"\n"; 
+    return Board::Pico;
 }
 
 static bool parseUF2(std::ifstream &file)
@@ -162,8 +179,8 @@ static bool parseUF2(std::ifstream &file)
                     std::cout << "\t" << idStr->second << ": " << str << "\n";
 
                 // detect board
-                if(id == 0xb63cffbb/*pico_board*/ && std::string_view(str) == "pimoroni_picosystem")
-                    isPicoSystem = true;
+                if(id == 0xb63cffbb/*pico_board*/)
+                    board = stringToBoard(str);
             }
         }
 
@@ -286,7 +303,7 @@ int main(int argc, char *argv[])
 
         // picosystem SDK does not require the correct board to be set... so most uf2s don't
         if(picosystemSDK)
-            isPicoSystem = true;
+            board = Board::PimoroniPicoSystem;
     }
 
     // emu init
@@ -313,7 +330,7 @@ int main(int argc, char *argv[])
     mem.reset();
 
     // external hardware
-    if(isPicoSystem)
+    if(board == Board::PimoroniPicoSystem)
     {
         mem.setInterruptUpdateCallback(onInterruptUpdate);
         mem.setGetNextInterruptTimeCallback(onGetNextInterruptTime);
@@ -382,7 +399,7 @@ int main(int argc, char *argv[])
         // sync peripherals
         mem.peripheralUpdate(time);
 
-        if(isPicoSystem)
+        if(board == Board::PimoroniPicoSystem)
             displayUpdate(time);
 
         // attempt to connect USB
