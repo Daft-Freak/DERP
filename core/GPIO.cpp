@@ -19,6 +19,12 @@ void GPIO::reset()
     for(auto &reg : proc0InterruptEnables)
         reg = 0;
 
+    for(auto &reg : padControl)
+        reg = 0b0110110;
+
+    padControl[30] = 0b1111010;
+    padControl[31] = 0b0111010;
+
     inputs = 0;
     outputs = 0;
 }
@@ -66,6 +72,9 @@ void GPIO::setInputs(uint32_t inputs)
 
 void GPIO::setOutputs(uint32_t outputs)
 {
+    if(this->outputs == outputs)
+        return;
+
     printf("GPIO out %08X\n", outputs);
     this->outputs = outputs;
 }
@@ -143,7 +152,17 @@ void GPIO::regWrite(uint32_t addr, uint32_t data)
 
 uint32_t GPIO::padsRegRead(uint32_t addr)
 {
-    printf("PADS_BANK0 R %04X\n", addr);
+    if(addr == 0)
+    {
+        printf("PADS_BANK0 R VOLTAGE_SELECT\n");
+    }
+    else if(addr <= 0x80)
+    {
+        int gpio = addr / 4 - 1;
+        return padControl[gpio];
+    }
+    else
+        printf("PADS_BANK0 R %04X\n", addr);
 
     return 0xBADADD55;
 }
@@ -155,5 +174,16 @@ void GPIO::padsRegWrite(uint32_t addr, uint32_t data)
 
     static const char *op[]{" = ", " ^= ", " |= ", " &= ~"};
 
-    printf("PADS_BANK0 W %04X%s%08X\n", addr, op[atomic], data);
+    if(addr == 0)
+    {
+        printf("PADS_BANK0 VOLTAGE_SELECT%s%08X\n", op[atomic], data);
+    }
+    else if(addr <= 0x80)
+    {
+        int gpio = addr / 4 - 1;
+        if(updateReg(padControl[gpio], data, atomic))
+            printf("PADS_BANK0 GPIO%i%s%02X\n", gpio, op[atomic], data);
+    }
+    else
+        printf("PADS_BANK0 W %04X%s%08X\n", addr, op[atomic], data);
 }

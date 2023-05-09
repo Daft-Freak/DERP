@@ -52,6 +52,8 @@ private:
     uint32_t interrupts[4];
     uint32_t proc0InterruptEnables[4]; // TODO: proc1
 
+    uint32_t padControl[32]; // GPIO0-29, SWCLK, SWD
+
     uint32_t inputs;
     uint32_t outputs;
 
