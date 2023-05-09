@@ -3,6 +3,11 @@
 #include "UART.h"
 
 #include "MemoryBus.h"
+#include "Logging.h"
+
+using Logging::logf;
+using LogLevel = Logging::Level;
+constexpr auto logComponent = Logging::Component::UART;
 
 UART::UART(MemoryBus &mem, int index) : mem(mem), index(index)
 {
@@ -34,7 +39,7 @@ uint32_t UART::regRead(uint32_t addr)
             return cr;
     }
 
-    printf("UART%i R %04X\n", index, addr);
+    logf(LogLevel::NotImplemented, logComponent, "%i R %04X", index, addr);
 
     return 0xBADADD55;
 }
@@ -52,13 +57,13 @@ void UART::regWrite(uint32_t addr, uint32_t data)
             txData[txDataOff++] = data;
             if(data == '\n')
             {
-                printf("UART%i: %.*s", index, txDataOff, txData);
+                logf(LogLevel::Info, logComponent, "%i: %.*s", index, txDataOff - 1, txData);
                 txDataOff = 0;
             }
             else if(txDataOff == sizeof(txData))
             {
                 txDataOff = 0;
-                printf("Dropping UART%i data\n", index);
+                logf(LogLevel::Warning, logComponent, "Dropping UART%i data", index);
             }
             return;
         case 0x24: // UARTIBRD
@@ -75,5 +80,5 @@ void UART::regWrite(uint32_t addr, uint32_t data)
             return;
     }
 
-    printf("UART%i W %04X%s%08X\n", index, addr, op[atomic], data);
+    logf(LogLevel::NotImplemented, logComponent, "%i W %04X%s%08X", index, addr, op[atomic], data);
 }

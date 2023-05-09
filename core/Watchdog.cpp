@@ -3,6 +3,11 @@
 #include "Watchdog.h"
 
 #include "MemoryBus.h"
+#include "Logging.h"
+
+using Logging::logf;
+using LogLevel = Logging::Level;
+constexpr auto logComponent = Logging::Component::Watchdog;
 
 Watchdog::Watchdog(MemoryBus &mem) : mem(mem)
 {
@@ -68,7 +73,7 @@ void Watchdog::update(uint64_t target)
         {
             //reset
             // TODO: WDSEL
-            printf("Watchdog reset!\n");
+            logf(LogLevel::Info, logComponent, "Watchdog reset!");
             mem.reset();
         }
     }

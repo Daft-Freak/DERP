@@ -33,8 +33,20 @@ namespace Logging
                 return "other";
             case Component::ArmCore:
                 return "armcore";
+            case Component::Clocks:
+                return "clocks";
+            case Component::DMA:
+                return "dma";
+            case Component::GPIO:
+                return "gpio";
             case Component::MemoryBus:
                 return "membus";
+            case Component::Timer:
+                return "timer";
+            case Component::UART:
+                return "uart";
+            case Component::Watchdog:
+                return "watchdog";
         }
 
         return "?";
@@ -57,7 +69,7 @@ namespace Logging
         auto compStr = componentToString(component);
 
         int levelPad = 16 - strlen(levelStr);
-        int compPad = 8 - strlen(compStr);
+        int compPad = 9 - strlen(compStr);
 
         printf("[%s]%*s[%s]%*s%s\n", levelStr, levelPad, "", compStr, compPad, "", buf);
 

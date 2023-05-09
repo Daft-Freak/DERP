@@ -4,6 +4,11 @@
 #include "DMA.h"
 
 #include "MemoryBus.h"
+#include "Logging.h"
+
+using Logging::logf;
+using LogLevel = Logging::Level;
+constexpr auto logComponent = Logging::Component::DMA;
 
 DMA::DMA(MemoryBus &mem) : mem(mem)
 {
@@ -225,7 +230,7 @@ uint32_t DMA::regRead(uint32_t addr)
             case 0x41C: // INTS1
                 return interrupts & interruptEnables[1]; // TODO: force
         }
-        printf("DMA R %08X\n", addr);
+        logf(LogLevel::NotImplemented, logComponent, "R %08X", addr);
     }
     return 0xBADADD55;
 }
@@ -309,6 +314,6 @@ void DMA::regWrite(uint32_t addr, uint32_t data)
                 return;
         }
 
-        printf("DMA W %03X%s%08X\n", addr, op[atomic], data);
+        logf(LogLevel::NotImplemented, logComponent, "W %03X%s%08X", addr, op[atomic], data);
     }
 }

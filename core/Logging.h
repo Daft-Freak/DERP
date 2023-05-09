@@ -20,8 +20,15 @@ namespace Logging
     enum class Component
     {
         Other,
+
         ArmCore,
+        Clocks,
+        DMA,
+        GPIO,
         MemoryBus,
+        Timer,
+        UART,
+        Watchdog,
     };
 
     constexpr int toMask(Level l){return 1 << static_cast<int>(l);}

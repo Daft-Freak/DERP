@@ -3,6 +3,11 @@
 #include "Timer.h"
 
 #include "MemoryBus.h"
+#include "Logging.h"
+
+using Logging::logf;
+using LogLevel = Logging::Level;
+constexpr auto logComponent = Logging::Component::Timer;
 
 Timer::Timer(MemoryBus &mem) : mem(mem)
 {
@@ -115,7 +120,7 @@ uint32_t Timer::regRead(uint32_t addr)
             return interruptEnables;
     }
 
-    printf("TIMER R %04X\n", addr);
+    logf(LogLevel::NotImplemented, logComponent, "R %04X", addr);
     return 0;
 }
 
@@ -167,9 +172,9 @@ void Timer::regWrite(uint32_t addr, uint32_t data)
         case 0x3C: // INTF
             updateReg(interruptForce, data, atomic);
             if(interruptForce)
-                printf("Forced timer intr %x\n", interruptForce); // TODO
+                logf(LogLevel::NotImplemented, logComponent, "Forced timer intr %x", interruptForce); // TODO
             return;
     }
 
-    printf("TIMER W %04X = %08X\n", addr, data);
+    logf(LogLevel::NotImplemented, logComponent, "W %04X = %08X", addr, data);
 }

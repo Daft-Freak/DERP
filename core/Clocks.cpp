@@ -3,6 +3,11 @@
 #include "Clocks.h"
 
 #include "MemoryBus.h"
+#include "Logging.h"
+
+using Logging::logf;
+using LogLevel = Logging::Level;
+constexpr auto logComponent = Logging::Component::Clocks;
 
 static const char *clockNames[]{"GPOUT0", "GPOUT1", "GPOUT2", "GPOUT3", "REF", "SYS", "PERI", "USB", "ADC", "RTC"};
 
@@ -85,7 +90,7 @@ uint32_t Clocks::regRead(uint32_t addr)
         }
     }
     else
-        printf("CLOCKS R %04X\n", addr);
+        logf(LogLevel::NotImplemented, logComponent, "R %04X", addr);
 
     return 0xBADADD55;
 }
@@ -121,7 +126,7 @@ void Clocks::regWrite(uint32_t addr, uint32_t data)
         }
     }
     else
-        printf("CLOCKS W %04X%s%08X\n", addr, op[atomic], data);
+        logf(LogLevel::NotImplemented, logComponent, "W %04X%s%08X", addr, op[atomic], data);
 }
 
 uint32_t Clocks::pllSysRegRead(uint32_t addr)
@@ -165,7 +170,7 @@ void Clocks::pllSysRegWrite(uint32_t addr, uint32_t data)
     // (REF / REFDIV) * FBDIV / (POSTDIV1 * POSTDIV2)
     int ref = 12 * 1000 * 1000; // assume 12MHz
     int freq = (ref / (pllSysCS & 0x3F)) * pllSysFBDIV / (((pllSysPRIM >> 16) & 7) * ((pllSysPRIM >> 12) & 7));
-    printf("PLL_SYS = (%i / %i) * %i / (%i * %i) = %i\n", ref, pllSysCS & 0x3F, pllSysFBDIV, (pllSysPRIM >> 16) & 7, (pllSysPRIM >> 12) & 7, freq);
+    logf(LogLevel::Debug, logComponent, "PLL_SYS = (%i / %i) * %i / (%i * %i) = %i", ref, pllSysCS & 0x3F, pllSysFBDIV, (pllSysPRIM >> 16) & 7, (pllSysPRIM >> 12) & 7, freq);
 }
 
 uint32_t Clocks::pllUSBRegRead(uint32_t addr)
@@ -209,7 +214,7 @@ void Clocks::pllUSBRegWrite(uint32_t addr, uint32_t data)
     // (REF / REFDIV) * FBDIV / (POSTDIV1 * POSTDIV2)
     int ref = 12 * 1000 * 1000; // assume 12MHz
     int freq = (ref / (pllSysCS & 0x3F)) * pllUSBFBDIV / (((pllUSBPRIM >> 16) & 7) * ((pllUSBPRIM >> 12) & 7));
-    printf("PLL_USB = (%i / %i) * %i / (%i * %i) = %i\n", ref, pllUSBCS & 0x3F, pllUSBFBDIV, (pllUSBPRIM >> 16) & 7, (pllUSBPRIM >> 12) & 7, freq);
+    logf(LogLevel::Debug, logComponent, "PLL_USB = (%i / %i) * %i / (%i * %i) = %i", ref, pllUSBCS & 0x3F, pllUSBFBDIV, (pllUSBPRIM >> 16) & 7, (pllUSBPRIM >> 12) & 7, freq);
 }
 
 void Clocks::calcFreq(int clock)
@@ -352,6 +357,6 @@ void Clocks::calcFreq(int clock)
             it->second.setFrequency(getClockFrequency(clock));
 
         // debug
-        printf("CLK_%s: %i -> %iHz\n", clockNames[clock], oldFreq, clockFreq[clock]);
+        logf(LogLevel::Debug, logComponent, "CLK_%s: %i -> %iHz", clockNames[clock], oldFreq, clockFreq[clock]);
     }
 }

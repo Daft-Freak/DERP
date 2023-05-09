@@ -3,6 +3,11 @@
 #include "GPIO.h"
 
 #include "MemoryBus.h"
+#include "Logging.h"
+
+using Logging::logf;
+using LogLevel = Logging::Level;
+constexpr auto logComponent = Logging::Component::GPIO;
 
 GPIO::GPIO(MemoryBus &mem) : mem(mem)
 {
@@ -75,7 +80,7 @@ void GPIO::setOutputs(uint32_t outputs)
     if(this->outputs == outputs)
         return;
 
-    printf("GPIO out %08X\n", outputs);
+    logf(LogLevel::Debug, logComponent, "out %08X", outputs);
     this->outputs = outputs;
 }
 
@@ -112,7 +117,7 @@ uint32_t GPIO::regRead(uint32_t addr)
         return interrupts[index] & proc0InterruptEnables[index];
     }
 
-    printf("IO_BANK0 R %04X\n", addr);
+    logf(LogLevel::NotImplemented, logComponent, "IO_BANK0 R %04X", addr);
 
     return 0xBADADD55;
 }
@@ -147,14 +152,14 @@ void GPIO::regWrite(uint32_t addr, uint32_t data)
         return;
     }
 
-    printf("IO_BANK0 W %04X%s%08X\n", addr, op[atomic], data);
+    logf(LogLevel::NotImplemented, logComponent, "IO_BANK0 W %04X%s%08X", addr, op[atomic], data);
 }
 
 uint32_t GPIO::padsRegRead(uint32_t addr)
 {
     if(addr == 0)
     {
-        printf("PADS_BANK0 R VOLTAGE_SELECT\n");
+        logf(LogLevel::NotImplemented, logComponent, "PADS_BANK0 R VOLTAGE_SELECT");
     }
     else if(addr <= 0x80)
     {
@@ -162,7 +167,7 @@ uint32_t GPIO::padsRegRead(uint32_t addr)
         return padControl[gpio];
     }
     else
-        printf("PADS_BANK0 R %04X\n", addr);
+        logf(LogLevel::Error, logComponent, "PADS_BANK0 R %04X", addr);
 
     return 0xBADADD55;
 }
@@ -176,14 +181,14 @@ void GPIO::padsRegWrite(uint32_t addr, uint32_t data)
 
     if(addr == 0)
     {
-        printf("PADS_BANK0 VOLTAGE_SELECT%s%08X\n", op[atomic], data);
+        logf(LogLevel::NotImplemented, logComponent, "PADS_BANK0 VOLTAGE_SELECT%s%08X", op[atomic], data);
     }
     else if(addr <= 0x80)
     {
         int gpio = addr / 4 - 1;
         if(updateReg(padControl[gpio], data, atomic))
-            printf("PADS_BANK0 GPIO%i%s%02X\n", gpio, op[atomic], data);
+            logf(LogLevel::NotImplemented, logComponent, "PADS_BANK0 GPIO%i%s%02X", gpio, op[atomic], data);
     }
     else
-        printf("PADS_BANK0 W %04X%s%08X\n", addr, op[atomic], data);
+        logf(LogLevel::Error, logComponent, "PADS_BANK0 W %04X%s%08X", addr, op[atomic], data);
 }
