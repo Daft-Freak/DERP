@@ -12,6 +12,7 @@ enum class Board
     Unknown = -1,
     Pico = 0,
     PimoroniPicoSystem,
+    PimoroniTufty2040,
 };
 
 static bool quit = false;
@@ -25,7 +26,7 @@ static std::ifstream uf2File;
 
 static Board board = Board::Unknown;
 
-uint16_t screenData[240 * 240];
+uint16_t screenData[320 * 240];
 
 static uint32_t buttonState = 0;
 static unsigned int displayScanline = 0;
@@ -95,6 +96,9 @@ static Board stringToBoard(std::string_view str)
     if(str == "pimoroni_picosystem")
         return Board::PimoroniPicoSystem;
 
+    if(str == "pimoroni_tufty2040")
+        return Board::PimoroniTufty2040;
+
     std::cout << "Unknown board \"" << str << "\", falling back to \"pico\"\n"; 
     return Board::Pico;
 }
@@ -105,6 +109,10 @@ static void getBoardScreenSize(Board board, int &w, int &h)
     {
         case Board::PimoroniPicoSystem:
             w = 240;
+            h = 240;
+            break;
+        case Board::PimoroniTufty2040:
+            w = 320;
             h = 240;
             break;
 
@@ -390,7 +398,17 @@ int main(int argc, char *argv[])
         SDL_RenderSetLogicalSize(renderer, screenWidth, screenHeight);
         SDL_RenderSetIntegerScale(renderer, SDL_TRUE);
 
-        texture = SDL_CreateTexture(renderer, picosystemSDK ? SDL_PIXELFORMAT_ARGB4444 : SDL_PIXELFORMAT_BGR565, SDL_TEXTUREACCESS_STREAMING, screenWidth, screenHeight);
+        Uint32 format;
+
+        // TODO: implement screen registers instead of guessing
+        if(picosystemSDK)
+            format = SDL_PIXELFORMAT_ARGB4444;
+        else if(board == Board::PimoroniPicoSystem) // assume 32blit-sdk
+            format = SDL_PIXELFORMAT_BGR565;
+        else
+            format = SDL_PIXELFORMAT_RGB565;
+
+        texture = SDL_CreateTexture(renderer, format, SDL_TEXTUREACCESS_STREAMING, screenWidth, screenHeight);
     }
 
     auto lastTick = SDL_GetTicks();
