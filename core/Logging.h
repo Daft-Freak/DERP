@@ -28,6 +28,7 @@ namespace Logging
         MemoryBus,
         Timer,
         UART,
+        USB,
         Watchdog,
     };
 

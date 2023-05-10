@@ -12,6 +12,11 @@
 #include "USB.h"
 
 #include "MemoryBus.h"
+#include "Logging.h"
+
+using Logging::logf;
+using LogLevel = Logging::Level;
+constexpr auto logComponent = Logging::Component::USB;
 
 static bool usbipGetDescriptor(struct usbip_client *client, uint32_t seqnum, uint8_t descType, uint8_t descIndex, uint16_t setupIndex, uint16_t setupLength, void *userData)
 {
@@ -80,7 +85,7 @@ void USB::reset()
         }
 
         if(usbip_create_server(&usbipServer, "::1", 0) != usbip_success)
-            printf("USBIP server create failed!\n");
+            logf(LogLevel::Error, logComponent, "USBIP server create failed!");
     }
 
     for(auto &num : usbipInSeqnum)
@@ -160,7 +165,7 @@ uint32_t USB::regRead(uint32_t addr)
             return interrupts & interruptEnables; // TODO: force
     }
 
-    printf("USB R %04X\n", addr);
+    logf(LogLevel::NotImplemented, logComponent, "R %04X", addr);
 
     return 0xBADADD55;
 }
@@ -202,7 +207,7 @@ void USB::regWrite(uint32_t addr, uint32_t data)
                 buffStatus[1] &= ~buf1Mask;
             }
             else
-                printf("USB BUFF_STATUS%s%08X\n", op[atomic], data);
+                logf(LogLevel::NotImplemented, logComponent, "BUFF_STATUS%s%08X", op[atomic], data);
 
             if(atomic == 3 && (data & 1)) // clearing ep0 in
             {
@@ -249,7 +254,7 @@ void USB::regWrite(uint32_t addr, uint32_t data)
             return;
     }
 
-    printf("USB W %04X%s%08X\n", addr, op[atomic], data);
+    logf(LogLevel::NotImplemented, logComponent, "W %04X%s%08X", addr, op[atomic], data);
 }
 
 void USB::ramWrite(uint32_t addr)
@@ -334,23 +339,23 @@ void USB::updateEnumeration()
         
         case 2: // read device descriptor
         {
-            printf("USB device descriptor:\n");
+            logf(LogLevel::Debug, logComponent, "USB device descriptor:");
             auto buf = dpram + 0x100;
 
-            printf("\tbLength            %i\n", buf[0]);
-            printf("\tbDescriptorType    %i\n", buf[1]);
-            printf("\tbcdUSB             %i.%02i\n", buf[3], buf[2]);
-            printf("\tbDeviceClass       %i\n", buf[4]);
-            printf("\tbDeviceSubClass    %i\n", buf[5]);
-            printf("\tbDeviceProtocol    %i\n", buf[6]);
-            printf("\tbMaxPacketSize     %i\n", buf[7]);
-            printf("\tidVendor           %04X\n", buf[8] | (buf[9] << 8));
-            printf("\tidProduct          %04X\n", buf[10] | (buf[11] << 8));
-            printf("\tbcdDevice          %i.%02i\n", buf[13], buf[12]);
-            printf("\tiManufacturer      %i\n", buf[14]);
-            printf("\tiProduct           %i\n", buf[15]);
-            printf("\tiSerialNumber      %i\n", buf[16]);
-            printf("\tbNumConfigurations %i\n", buf[17]);
+            logf(LogLevel::Debug, logComponent, "\tbLength            %i", buf[0]);
+            logf(LogLevel::Debug, logComponent, "\tbDescriptorType    %i", buf[1]);
+            logf(LogLevel::Debug, logComponent, "\tbcdUSB             %i.%02i", buf[3], buf[2]);
+            logf(LogLevel::Debug, logComponent, "\tbDeviceClass       %i", buf[4]);
+            logf(LogLevel::Debug, logComponent, "\tbDeviceSubClass    %i", buf[5]);
+            logf(LogLevel::Debug, logComponent, "\tbDeviceProtocol    %i", buf[6]);
+            logf(LogLevel::Debug, logComponent, "\tbMaxPacketSize     %i", buf[7]);
+            logf(LogLevel::Debug, logComponent, "\tidVendor           %04X", buf[8] | (buf[9] << 8));
+            logf(LogLevel::Debug, logComponent, "\tidProduct          %04X", buf[10] | (buf[11] << 8));
+            logf(LogLevel::Debug, logComponent, "\tbcdDevice          %i.%02i", buf[13], buf[12]);
+            logf(LogLevel::Debug, logComponent, "\tiManufacturer      %i", buf[14]);
+            logf(LogLevel::Debug, logComponent, "\tiProduct           %i", buf[15]);
+            logf(LogLevel::Debug, logComponent, "\tiSerialNumber      %i", buf[16]);
+            logf(LogLevel::Debug, logComponent, "\tbNumConfigurations %i", buf[17]);
 
             memcpy(deviceDesc, buf, 18);
 
@@ -382,7 +387,7 @@ void USB::updateEnumeration()
         {
             auto buf = dpram + 0x100;
             configDescLen = buf[2] | buf[3] << 8;
-            printf("USB config desc len %i\n", configDescLen);
+            logf(LogLevel::Debug, logComponent, "USB config desc len %i", configDescLen);
 
             // now get the whole thing
             setupPacket(0x80, 6 /*GET_DESCRIPTOR*/, 2 << 8 /*configuration*/, 0, configDescLen);
@@ -407,16 +412,16 @@ void USB::updateEnumeration()
 
             if(configDescOffset == configDescLen)
             {
-                printf("USB configuration descriptor:\n");
+                logf(LogLevel::Debug, logComponent, "USB configuration descriptor:");
 
-                printf("\tbLength             %i\n", configDesc[0]);
-                printf("\tbDescriptorType     %i\n", configDesc[1]);
-                printf("\twTotalLength        %04X\n", configDesc[2] | configDesc[3] << 8);
-                printf("\tbNumInterfaces      %i\n", configDesc[4]);
-                printf("\tbConfigurationValue %i\n", configDesc[5]);
-                printf("\tiConfiguration      %i\n", configDesc[6]);
-                printf("\tbmAttributes        %02X\n", configDesc[7]);
-                printf("\tbMaxPower           %i\n", configDesc[8]);
+                logf(LogLevel::Debug, logComponent, "\tbLength             %i", configDesc[0]);
+                logf(LogLevel::Debug, logComponent, "\tbDescriptorType     %i", configDesc[1]);
+                logf(LogLevel::Debug, logComponent, "\twTotalLength        %04X", configDesc[2] | configDesc[3] << 8);
+                logf(LogLevel::Debug, logComponent, "\tbNumInterfaces      %i", configDesc[4]);
+                logf(LogLevel::Debug, logComponent, "\tbConfigurationValue %i", configDesc[5]);
+                logf(LogLevel::Debug, logComponent, "\tiConfiguration      %i", configDesc[6]);
+                logf(LogLevel::Debug, logComponent, "\tbmAttributes        %02X", configDesc[7]);
+                logf(LogLevel::Debug, logComponent, "\tbMaxPower           %i", configDesc[8]);
 
                 // interfaces
                 auto desc = configDesc + 9;
@@ -428,16 +433,16 @@ void USB::updateEnumeration()
 
                     if(desc[1] == 4)
                     {
-                        printf("\tinterface descriptor:\n");
-                        printf("\t\tbLength            %i\n", desc[0]);
-                        printf("\t\tbDescriptorType    %i\n", desc[1]);
-                        printf("\t\tbInterfaceNumber   %i\n", desc[2]);
-                        printf("\t\tbAlternateSetting  %i\n", desc[3]);
-                        printf("\t\tbNumEndpoints      %i\n", desc[4]);
-                        printf("\t\tbInterfaceClass    %i\n", desc[5]);
-                        printf("\t\tbInterfaceSubClass %i\n", desc[6]);
-                        printf("\t\tbInterfaceProtocol %i\n", desc[7]);
-                        printf("\t\tiInterface         %i\n", desc[8]);
+                        logf(LogLevel::Debug, logComponent, "\tinterface descriptor:");
+                        logf(LogLevel::Debug, logComponent, "\t\tbLength            %i", desc[0]);
+                        logf(LogLevel::Debug, logComponent, "\t\tbDescriptorType    %i", desc[1]);
+                        logf(LogLevel::Debug, logComponent, "\t\tbInterfaceNumber   %i", desc[2]);
+                        logf(LogLevel::Debug, logComponent, "\t\tbAlternateSetting  %i", desc[3]);
+                        logf(LogLevel::Debug, logComponent, "\t\tbNumEndpoints      %i", desc[4]);
+                        logf(LogLevel::Debug, logComponent, "\t\tbInterfaceClass    %i", desc[5]);
+                        logf(LogLevel::Debug, logComponent, "\t\tbInterfaceSubClass %i", desc[6]);
+                        logf(LogLevel::Debug, logComponent, "\t\tbInterfaceProtocol %i", desc[7]);
+                        logf(LogLevel::Debug, logComponent, "\t\tiInterface         %i", desc[8]);
 
                         int numEP = desc[4];
 
@@ -454,13 +459,13 @@ void USB::updateEnumeration()
 
                             if(desc[1] == 5)
                             {
-                                printf("\t\tendpoint descriptor:\n");
-                                printf("\t\t\tbLength          %i\n", desc[0]);
-                                printf("\t\t\tbDescriptorType  %i\n", desc[1]);
-                                printf("\t\t\tbEndpointAddress %02X\n", desc[2]);
-                                printf("\t\t\tbmAttributes     %i\n", desc[3]);
-                                printf("\t\t\twMaxPacketSize   %04X\n", desc[4] | desc[5] << 8);
-                                printf("\t\t\tbInterval        %i\n", desc[6]);
+                                logf(LogLevel::Debug, logComponent, "\t\tendpoint descriptor:");
+                                logf(LogLevel::Debug, logComponent, "\t\t\tbLength          %i", desc[0]);
+                                logf(LogLevel::Debug, logComponent, "\t\t\tbDescriptorType  %i", desc[1]);
+                                logf(LogLevel::Debug, logComponent, "\t\t\tbEndpointAddress %02X", desc[2]);
+                                logf(LogLevel::Debug, logComponent, "\t\t\tbmAttributes     %i", desc[3]);
+                                logf(LogLevel::Debug, logComponent, "\t\t\twMaxPacketSize   %04X", desc[4] | desc[5] << 8);
+                                logf(LogLevel::Debug, logComponent, "\t\t\tbInterval        %i", desc[6]);
                                 ep++;
 
                                 if(intClass == 10 /*CDC Data*/)
@@ -472,14 +477,14 @@ void USB::updateEnumeration()
                                 }
                             }
                             else
-                                printf("\t\tdesc %i len %i\n", desc[1], desc[0]);
+                                logf(LogLevel::Debug, logComponent, "\t\tdesc %i len %i", desc[1], desc[0]);
 
                             desc += desc[0];
                         }
                     }
                     else
                     {
-                        printf("\tdesc %i len %i\n", desc[1], desc[0]);
+                        logf(LogLevel::Debug, logComponent, "\tdesc %i len %i", desc[1], desc[0]);
                         desc += desc[0];
                     }
                 }
@@ -520,7 +525,7 @@ void USB::updateEnumeration()
         {
             if(cdcInEP && cdcOutEP)
             {
-                printf("Found USB CDC IN %02X OUT %02X\n", cdcInEP, cdcOutEP);
+                logf(LogLevel::Info, logComponent, "Found USB CDC IN %02X OUT %02X", cdcInEP, cdcOutEP);
                 // setup the CDC interface if found
                 setupPacket(0x21/*class, interface*/, 0x22 /*SET_CONTROL_LINE_STATE*/, 3, 0, 0);
             }
@@ -614,7 +619,7 @@ void USB::checkBuffer(int ep, bool in)
                     while(newLine)
                     {
                         int off = newLine - cdcInData;
-                        printf("USBCDC: %.*s", off + 1, cdcInData);
+                        logf(LogLevel::Info, logComponent, "CDC: %.*s", off, cdcInData);
 
                         if(off != (cdcInOff - 1))
                             memmove(cdcInData, newLine + 1, cdcInOff - (off + 1));
@@ -626,12 +631,12 @@ void USB::checkBuffer(int ep, bool in)
                     if(cdcInOff == sizeof(cdcInData))
                     {
                         cdcInOff = 0;
-                        printf("Dropping CDC data\n");
+                        logf(LogLevel::Warning, logComponent, "Dropping CDC data");
                     }
                 }
             }
             else if(ep)
-                printf("EP%i in len %i last %i (bufCtrl %08X ctrl %08X)\n", ep, len, last, *bufCtrl, *ctrl);
+                logf(LogLevel::Debug, logComponent, "EP%i in len %i last %i (bufCtrl %08X ctrl %08X)", ep, len, last, *bufCtrl, *ctrl);
 
             if(handled)
             {
@@ -801,10 +806,7 @@ bool USB::usbipControlRequest(struct usbip_client *client, uint32_t seqnum, uint
     if(outData) // copy out data
     {
         if(usbipOutData[0])
-        {
-            printf("out data leak?\n");
             delete[] usbipOutData[0];
-        }
 
         usbipOutData[0] = new uint8_t[length];
         usbipOutDataLen[0] = length;
@@ -860,10 +862,7 @@ bool USB::usbipIn(struct usbip_client *client, uint32_t seqnum, int ep, uint32_t
 bool USB::usbipOut(struct usbip_client *client, uint32_t seqnum, int ep, uint32_t length, const uint8_t *data)
 {
     if(usbipOutData[ep])
-    {
-        printf("out data leak?\n");
         delete[] usbipOutData[ep];
-    }
 
     usbipOutData[ep] = new uint8_t[length];
     usbipOutDataLen[ep] = length;

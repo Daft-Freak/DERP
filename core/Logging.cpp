@@ -45,6 +45,8 @@ namespace Logging
                 return "timer";
             case Component::UART:
                 return "uart";
+            case Component::USB:
+                return "usb";
             case Component::Watchdog:
                 return "watchdog";
         }
