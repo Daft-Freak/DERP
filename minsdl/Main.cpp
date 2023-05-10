@@ -272,6 +272,32 @@ static uint64_t onGetNextInterruptTime(uint64_t time)
     return ret;
 }
 
+static void handleLogArg(const char *arg)
+{
+    bool enable = true;
+    if(arg[0] == '-')
+    {
+        enable = false;
+        arg++;
+    }
+
+    std::string_view str(arg);
+
+    auto level = Logging::stringToLevel(str);
+    if(level != LogLevel::Invalid)
+    {
+        Logging::setEnabled(level, enable);
+        return;
+    }
+
+    auto component = Logging::stringToComponent(str);
+    if(component != Logging::Component::Invalid)
+    {
+        Logging::setEnabled(component, enable);
+        return;
+    }
+}
+
 int main(int argc, char *argv[])
 {
     int screenWidth = 240;
@@ -282,6 +308,10 @@ int main(int argc, char *argv[])
     bool usbEnabled = false;
 
     std::string romFilename;
+
+    // disable some log levels by default
+    Logging::setEnabled(LogLevel::Debug, false);
+    Logging::setEnabled(LogLevel::NotImplemented, false); // very noisy (for now?)
 
     int i = 1;
 
@@ -302,6 +332,8 @@ int main(int argc, char *argv[])
             usbEnabled = true;
             mem.getUSB().setUSBIPEnabled(true);
         }
+        else if(arg == "--log" && i + 1 < argc)
+            handleLogArg(argv[++i]);
         else
             break;
     }
