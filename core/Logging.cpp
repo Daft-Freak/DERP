@@ -1,4 +1,5 @@
 #include <cstdarg>
+#include <cstdint>
 #include <cstdio>
 #include <cstring>
 
@@ -6,7 +7,13 @@
 
 namespace Logging
 {
-    const char *levelToString(Level level)
+    static uint32_t levelMask = ~0;
+    static uint32_t componentMask = ~0;
+
+    constexpr uint32_t toMask(Level l){return 1 << static_cast<int>(l);}
+    constexpr uint32_t toMask(Component c){return 1 << static_cast<int>(c);}
+
+    static const char *levelToString(Level level)
     {
         switch(level)
         {
@@ -20,12 +27,14 @@ namespace Logging
                 return "not implemented";
             case Level::Error:
                 return "error";
-        }
 
-        return "?";
+            case Level::Invalid:
+            default:
+                return "?";
+        }
     }
 
-    const char *componentToString(Component comp)
+    static const char *componentToString(Component comp)
     {
         switch(comp)
         {
@@ -51,14 +60,87 @@ namespace Logging
                 return "usb";
             case Component::Watchdog:
                 return "watchdog";
+            
+            case Component::Invalid:
+            default:
+                return "?";
         }
-
-        return "?";
     }
 
+    Level stringToLevel(std::string_view str)
+    {
+        if(str == "debug")
+            return Level::Debug;
+        if(str == "info")
+            return Level::Info;
+        if(str == "warning")
+            return Level::Warning;
+        if(str == "not implemented" || str == "notimplemented")
+            return Level::NotImplemented;
+        if(str == "error")
+            return Level::Error;
+
+        return Level::Invalid;
+    }
+
+    Component stringToComponent(std::string_view str)
+    {
+        if(str == "other")
+            return Component::Other;
+        if(str == "armcore")
+            return Component::ArmCore;
+        if(str == "clocks")
+            return Component::Clocks;
+        if(str == "dma")
+            return Component::DMA;
+        if(str == "gpio")
+            return Component::GPIO;
+        if(str == "main")
+            return Component::Main;
+        if(str == "membus")
+            return Component::MemoryBus;
+        if(str == "timer")
+            return Component::Timer;
+        if(str == "uart")
+            return Component::UART;
+        if(str == "usb")
+            return Component::USB;
+        if(str == "watchdog")
+            return Component::Watchdog;
+
+        return Component::Invalid;
+    }
+
+    void setEnabled(Level level, bool enabled)
+    {
+        if(level == Level::Invalid)
+            return;
+        
+        if(enabled)
+            levelMask |= toMask(level);
+        else
+            levelMask &= ~toMask(level);
+    }
+
+    void setEnabled(Component component, bool enabled)
+    {
+        if(component == Component::Invalid)
+            return;
+        
+        if(enabled)
+            componentMask |= toMask(component);
+        else
+            componentMask &= ~toMask(component);
+    }
 
     void vlogf(Level level, Component component, const char *format, va_list args)
     {
+        if(level == Level::Invalid || component == Component::Invalid)
+            return;
+
+        if(!(levelMask & toMask(level)) || !(componentMask & toMask(component)))
+            return;
+
         // get length
         va_list tmp_args;
         va_copy(tmp_args, args);
@@ -67,7 +149,6 @@ namespace Logging
 
         auto buf = new char[len];
         vsnprintf(buf, len, format, args);
-        va_end(args);
         
         auto levelStr = levelToString(level);
         auto compStr = componentToString(component);
@@ -86,6 +167,8 @@ namespace Logging
         va_start(args, format);
 
         vlogf(Level::Info, Component::Other, format, args);
+
+        va_end(args);
     }
 
     void logf(Level level, Component component, const char *format, ...)
@@ -94,5 +177,7 @@ namespace Logging
         va_start(args, format);
 
         vlogf(level, component, format, args);
+
+        va_end(args);
     }
 }

@@ -1,4 +1,5 @@
 #pragma once
+#include <string_view>
 
 #ifdef __GNUC__
 #define printf_attrib(x, y) [[gnu::format(printf, x, y)]]
@@ -10,7 +11,9 @@ namespace Logging
 {
     enum class Level
     {
-        Debug,
+        Invalid = -1,
+
+        Debug = 0,
         Info,
         Warning,
         NotImplemented,
@@ -19,7 +22,8 @@ namespace Logging
 
     enum class Component
     {
-        Other,
+        Invalid = -1,
+        Other = 0,
 
         ArmCore,
         Clocks,
@@ -33,8 +37,11 @@ namespace Logging
         Watchdog,
     };
 
-    constexpr int toMask(Level l){return 1 << static_cast<int>(l);}
-    constexpr int toMask(Component c){return 1 << static_cast<int>(c);}
+    Level stringToLevel(std::string_view str);
+    Component stringToComponent(std::string_view str);
+
+    void setEnabled(Level level, bool enabled);
+    void setEnabled(Component component, bool enabled);
 
     printf_attrib(1, 2)
     void logf(const char *format, ...);
