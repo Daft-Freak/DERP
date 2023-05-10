@@ -6,6 +6,11 @@
 #include <SDL.h>
 
 #include "ARMv6MCore.h"
+#include "Logging.h"
+
+using Logging::logf;
+using LogLevel = Logging::Level;
+constexpr auto logComponent = Logging::Component::Main;
 
 enum class Board
 {
@@ -99,7 +104,7 @@ static Board stringToBoard(std::string_view str)
     if(str == "pimoroni_tufty2040")
         return Board::PimoroniTufty2040;
 
-    std::cout << "Unknown board \"" << str << "\", falling back to \"pico\"\n"; 
+    logf(LogLevel::Warning, logComponent, "Unknown board \"%.*s\", falling back to \"pico\"", int(str.length()), str.data()); 
     return Board::Pico;
 }
 
@@ -131,7 +136,7 @@ static bool parseUF2(std::ifstream &file)
 
         if(block.magicStart[0] != uf2MagicStart0 || block.magicStart[1] != uf2MagicStart1 || block.magicEnd != uf2MagicEnd)
         {
-            std::cerr << "Bad UF2 block magic!\n";
+            logf(LogLevel::Error, logComponent, "Bad UF2 block magic!");
             return false;
         }
 
@@ -139,7 +144,7 @@ static bool parseUF2(std::ifstream &file)
         if(ptr)
             memcpy(ptr, block.payload, block.payloadSize);
         else
-            std::cerr << "Can't write UF2 payload to " << std::hex << block.addr << std::dec << "!\n";
+            logf(LogLevel::Warning, logComponent, "Can't write UF2 payload to %08X!", block.addr);
     }
 
     // parse binary info
@@ -179,7 +184,7 @@ static bool parseUF2(std::ifstream &file)
 
     if (infoStartAddr)
     {
-        std::cout << "binary_info:\n";
+        logf(LogLevel::Info, logComponent, "binary_info:");
 
         for (auto addr = infoStartAddr; addr < infoEndAddr; addr += 4)
         {
@@ -200,15 +205,13 @@ static bool parseUF2(std::ifstream &file)
 
                 auto idStr = raspberryPiIdMap.find(id);
                 if(idStr != raspberryPiIdMap.end())
-                    std::cout << "\t" << idStr->second << ": " << str << "\n";
+                    logf(LogLevel::Info, logComponent, "\t%s: %s", idStr->second, str);
 
                 // detect board
                 if(id == 0xb63cffbb/*pico_board*/ && board == Board::Unknown)
                     board = stringToBoard(str);
             }
         }
-
-        std::cout << "\n";
     }
 
     return true;
@@ -304,7 +307,7 @@ int main(int argc, char *argv[])
     }
 
     if(i == argc)
-        std::cout << "No file specified!\n";
+        logf(LogLevel::Info, logComponent, "No file specified!");
     else
         romFilename = argv[i];
 
@@ -323,7 +326,7 @@ int main(int argc, char *argv[])
 
         if(!uf2File || !parseUF2(uf2File))
         {
-            std::cerr << "Failed to open UF2 \"" << romFilename << "\"\n";
+            logf(LogLevel::Error, logComponent, "Failed to open UF2 \"%s\"", romFilename.c_str());
             return 1;
         }
 
@@ -335,7 +338,7 @@ int main(int argc, char *argv[])
     // default board if still not set
     if(board == Board::Unknown)
     {
-        std::cout << "Board not specified, falling back to \"pico\"\n"; 
+        logf(LogLevel::Info, logComponent, "Board not specified, falling back to \"pico\""); 
         board = Board::Pico;
     }
 
@@ -353,7 +356,7 @@ int main(int argc, char *argv[])
     }
     else
     {
-        std::cerr << "bootrom.bin not found \n";
+        logf(LogLevel::Error, logComponent, "bootrom.bin not found!");
         return 1;
     }
 
@@ -379,7 +382,7 @@ int main(int argc, char *argv[])
     // SDL init
     if(SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) != 0)
     {
-        std::cerr << "Failed to init SDL!\n";
+        logf(LogLevel::Error, logComponent, "Failed to init SDL!");
         return 1;
     }
 

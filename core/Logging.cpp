@@ -39,6 +39,8 @@ namespace Logging
                 return "dma";
             case Component::GPIO:
                 return "gpio";
+            case Component::Main:
+                return "main";
             case Component::MemoryBus:
                 return "membus";
             case Component::Timer:

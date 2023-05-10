@@ -25,6 +25,7 @@ namespace Logging
         Clocks,
         DMA,
         GPIO,
+        Main,
         MemoryBus,
         Timer,
         UART,
