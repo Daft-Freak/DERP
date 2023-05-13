@@ -2,6 +2,7 @@
 
 #include <cstdint>
 
+class ARMv6MCore;
 class GDBServer final
 {
 public:
@@ -12,7 +13,12 @@ public:
 
     bool update();
 
+    void setCPUs(ARMv6MCore *cpus, size_t numCPUs);
+
 private:
+    bool handleReadRegisters(int fd);
+
+    bool sendReply(int fd, const char *reply, size_t len);
     bool sendEmptyReply(int fd);
     bool sendNegAck(int fd);
 
@@ -21,4 +27,7 @@ private:
 
     uint16_t port;
     int listenFd = -1, clientFd = -1;
+
+    ARMv6MCore *cpus = nullptr;
+    size_t numCPUs = 0;
 };

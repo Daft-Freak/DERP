@@ -1,5 +1,7 @@
 #include <charconv>
 #include <cstdio>
+#include <cstring>
+#include <string_view>
 #include <vector>
 
 #if defined(_WIN32)
@@ -14,6 +16,7 @@
 #endif
 
 #include "GDBServer.h"
+#include "ARMv6MCore.h"
 
 GDBServer::GDBServer(uint16_t port) : port(port)
 {
@@ -129,7 +132,7 @@ bool GDBServer::update()
         {
             // read
             char c;
-            auto received = recv(fd, &c, 1, 0);
+            auto received = recv(clientFd, &c, 1, 0);
 
             if(received > 0)
             {
@@ -147,7 +150,7 @@ bool GDBServer::update()
 
                         do
                         {
-                            received = recv(fd, &c, 1, 0);
+                            received = recv(clientFd, &c, 1, 0);
 
                             if(received <= 0)
                                 break;
@@ -156,11 +159,13 @@ bool GDBServer::update()
                         } while (c != '#');
 
                         char cs[2];
-                        received = recv(fd, &cs, 2, MSG_WAITALL);
+                        received = recv(clientFd, &cs, 2, MSG_WAITALL);
 
                         if(received == 2)
                         {
                             command.back() = 0; // replace # with null
+
+                            // verify checksum
                             uint8_t checksum = 0;
                             std::from_chars(cs, cs + 2, checksum, 16);
 
@@ -168,12 +173,24 @@ bool GDBServer::update()
                             for(auto &c : command)
                                 calcChecksum += c;
 
-                            printf("gdb: %s cs %02X / %02X\n", command.data(), checksum, calcChecksum);
-
                             if(calcChecksum != checksum)
                                 return sendNegAck(clientFd);
+
+                            // handle command
+                            std::string_view commandStr(command.data());
+
+                            if(commandStr == "?") // initial halt reason
+                            {
+                                // FIXME: probably should've halted the cpu...
+                                sendReply(clientFd, "S05", 3); // It's a trap!
+                            }
+                            else if(commandStr == "g") // read regs
+                                return handleReadRegisters(clientFd);
                             else
+                            {
+                                printf("gdb: %s cs %02X / %02X\n", command.data() - 1, checksum, calcChecksum);
                                 return sendEmptyReply(clientFd);
+                            }
                         }
 
                         break;
@@ -198,6 +215,77 @@ bool GDBServer::update()
         return false;
 
     return true;
+}
+
+// cpu specific bits
+void GDBServer::setCPUs(ARMv6MCore *cpus, size_t numCPUs)
+{
+    this->cpus = cpus;
+    this->numCPUs = numCPUs;
+}
+
+bool GDBServer::handleReadRegisters(int fd)
+{
+    const int numRegs = 16, numFPARegs = 8, numFlagsRegs = 2;
+    char reply[(numRegs * 4 + numFPARegs * 12 + numFlagsRegs * 4) * 2 + 1]; // * 2 chars per byte
+
+    int cpsrOff = numRegs * 8 + numFPARegs * 24 + 8; // second flags reg
+
+    // r0-15
+    auto regs = cpus[0].regs; // TODO: threads
+    for(int i = 0; i < 16; i++)
+    {
+        auto swapped = regs[i] >> 24 | regs[i] << 24 | (regs[i] & 0xFF0000) >> 8 | (regs[i] & 0xFF00) << 8;
+        snprintf(reply + i * 8, 9/*+null*/, "%08X", swapped);
+    }
+
+    // fill fpa regs
+    for(size_t i = 16 * 8; i < sizeof(reply) - 8; i++)
+        reply[i] = 'x';
+    
+    // cpsr
+    auto cpsr = cpus[0].cpsr;
+    auto swapped = cpsr >> 24 | cpsr << 24 | (cpsr & 0xFF0000) >> 8 | (cpsr & 0xFF00) << 8;
+    snprintf(reply + cpsrOff, 9/*+null*/, "%08X", swapped);
+
+    return sendReply(fd, reply, sizeof(reply) - 1);
+}
+
+// reply helpers
+bool GDBServer::sendReply(int fd, const char *reply, size_t len)
+{
+    auto buf = new uint8_t[len + 5];
+
+    buf[0] = '+'; // ack
+
+    // reply data
+    buf[1] = '$';
+    memcpy(buf + 2, reply, len);
+
+    // checksum
+    uint8_t checksum = 0;
+    for(size_t i = 0; i < len; i++)
+        checksum += reply[i];
+
+    auto toHex = [](int i)
+    {
+        if(i < 10)
+            return '0' + i;
+        else
+            return 'A' + i - 10;
+    };
+
+    auto off = len + 2;
+    buf[off++] = '#';
+    buf[off++] = toHex(checksum / 16);
+    buf[off++] = toHex(checksum % 16);
+
+    size_t sendLen = off;
+    bool ret = sendAll(fd, buf, sendLen, 0) && sendLen == off;
+
+    delete[] buf;
+
+    return ret;
 }
 
 bool GDBServer::sendEmptyReply(int fd)

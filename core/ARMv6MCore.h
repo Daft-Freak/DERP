@@ -26,6 +26,8 @@ public:
     ClockTarget &getClock() {return clock;}
 
 private:
+    friend class GDBServer; // needs ALL the CPU internals
+
     enum class Reg
     {
         R0 = 0,
