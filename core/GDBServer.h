@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <string_view>
 
 class ARMv6MCore;
 class GDBServer final
@@ -17,6 +18,7 @@ public:
 
 private:
     bool handleReadRegisters(int fd);
+    bool handleReadMemory(int fd, std::string_view command);
 
     bool sendReply(int fd, const char *reply, size_t len);
     bool sendEmptyReply(int fd);

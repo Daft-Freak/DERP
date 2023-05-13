@@ -1,7 +1,6 @@
 #include <charconv>
 #include <cstdio>
 #include <cstring>
-#include <string_view>
 #include <vector>
 
 #if defined(_WIN32)
@@ -17,6 +16,15 @@
 
 #include "GDBServer.h"
 #include "ARMv6MCore.h"
+
+static void byteToHex(char *out, uint8_t byte)
+{
+    int hi = byte / 16;
+    int lo = byte % 16;
+
+    out[0] = hi < 10 ? ('0' + hi) : ('A' + hi - 10);
+    out[1] = lo < 10 ? ('0' + lo) : ('A' + lo - 10);
+}
 
 GDBServer::GDBServer(uint16_t port) : port(port)
 {
@@ -186,6 +194,8 @@ bool GDBServer::update()
                             }
                             else if(commandStr == "g") // read regs
                                 return handleReadRegisters(clientFd);
+                            else if(commandStr[0] == 'm') // read mem
+                                return handleReadMemory(clientFd, commandStr);
                             else
                             {
                                 printf("gdb: %s cs %02X / %02X\n", command.data(), checksum, calcChecksum);
@@ -251,10 +261,44 @@ bool GDBServer::handleReadRegisters(int fd)
     return sendReply(fd, reply, sizeof(reply) - 1);
 }
 
+bool GDBServer::handleReadMemory(int fd, std::string_view command)
+{
+    // parse
+    uint32_t addr, len;
+
+    // address
+    auto res = std::from_chars(command.data() + 1, command.data() + command.length(), addr, 16);
+
+    if(res.ec != std::errc{})
+        return sendEmptyReply(fd);
+
+    // length
+    res = std::from_chars(res.ptr + 1, command.data() + command.length(), len, 16);
+
+    if(res.ec != std::errc{})
+        return sendEmptyReply(fd);
+
+    // read
+    auto reply = new char[len * 2];
+
+    int cycles;
+    for(uint32_t i = 0; i < len; i++)
+    {
+        auto b = cpus[0].readMem8(addr + i, cycles); // TODO: more direct?
+        byteToHex(reply + i * 2, b);
+    }
+
+    bool ret = sendReply(fd, reply, len * 2);
+
+    delete[] reply;
+
+    return ret;
+}
+
 // reply helpers
 bool GDBServer::sendReply(int fd, const char *reply, size_t len)
 {
-    auto buf = new uint8_t[len + 5];
+    auto buf = new char[len + 5];
 
     buf[0] = '+'; // ack
 
@@ -267,18 +311,10 @@ bool GDBServer::sendReply(int fd, const char *reply, size_t len)
     for(size_t i = 0; i < len; i++)
         checksum += reply[i];
 
-    auto toHex = [](int i)
-    {
-        if(i < 10)
-            return '0' + i;
-        else
-            return 'A' + i - 10;
-    };
-
     auto off = len + 2;
     buf[off++] = '#';
-    buf[off++] = toHex(checksum / 16);
-    buf[off++] = toHex(checksum % 16);
+    byteToHex(buf + off, checksum);
+    off += 2;
 
     size_t sendLen = off;
     bool ret = sendAll(fd, buf, sendLen, 0) && sendLen == off;
