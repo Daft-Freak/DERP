@@ -4,6 +4,7 @@ target_sources(DERPCore INTERFACE
     ARMv6MCore.cpp
     Clocks.cpp
     DMA.cpp
+    GDBServer.cpp
     GPIO.cpp
     Logging.cpp
     MemoryBus.cpp
