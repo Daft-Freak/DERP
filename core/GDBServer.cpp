@@ -159,6 +159,11 @@ bool GDBServer::update()
             {
                 switch(c)
                 {
+                    case 3: // ctrl-c
+                        haltCPUs();
+                        sendReply(clientFd, "S05", 3); // It's a trap!
+                        break;
+
                     case '+': // pos ack
                         break;
                     case '-': // neg ack
