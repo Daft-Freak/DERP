@@ -207,8 +207,12 @@ bool GDBServer::update()
                                 return handleContinue(clientFd);
                             else if(commandStr == "g") // read regs
                                 return handleReadRegisters(clientFd);
+                            else if(commandStr[0] == 'G') // write regs
+                                return handleWriteRegisters(clientFd, commandStr);
                             else if(commandStr[0] == 'm') // read mem
                                 return handleReadMemory(clientFd, commandStr);
+                            else if(commandStr[0] == 'M') // write mem
+                                return handleWriteMemory(clientFd, commandStr);
                             else if(commandStr[0] == 'Z') // add breakpoint
                                 return handleAddBreakpoint(clientFd, commandStr);
                             else if(commandStr[0] == 'z') // remove breakpoint
@@ -296,6 +300,48 @@ bool GDBServer::handleReadRegisters(int fd)
     return sendReply(fd, reply, sizeof(reply) - 1);
 }
 
+bool GDBServer::handleWriteRegisters(int fd, std::string_view command)
+{
+    const int numRegs = 16, numFPARegs = 8, numFlagsRegs = 2;
+    const int expectedLen = (numRegs * 4 + numFPARegs * 12 + numFlagsRegs * 4) * 2;
+    int cpsrOff = numRegs * 8 + numFPARegs * 24 + 8; // second flags reg
+
+    if(command.length() - 1 != expectedLen)
+        return sendEmptyReply(fd);
+
+    // parse r0-15
+    auto regs = cpus[0].regs; // TODO: threads
+
+    auto p = command.data() + 1;
+    uint32_t val;
+
+    for(int i = 0; i < 16; i++)
+    {
+        auto res = std::from_chars(p, p + 8, val, 16);
+
+        if(res.ec != std::errc{})
+            break;
+
+        auto swapped = val >> 24 | val << 24 | (val & 0xFF0000) >> 8 | (val & 0xFF00) << 8;
+
+        regs[i] = swapped;
+
+        p = res.ptr;
+    }
+
+    // parse CPSR
+    p = command.data() + 1 + cpsrOff;
+    auto res = std::from_chars(p, p + 8, val, 16);
+
+    if(res.ec == std::errc{})
+    {
+        auto swapped = val >> 24 | val << 24 | (val & 0xFF0000) >> 8 | (val & 0xFF00) << 8;
+        cpus[0].cpsr = swapped;
+    }
+
+    return sendReply(fd, "OK", 2);
+}
+
 bool GDBServer::handleReadMemory(int fd, std::string_view command)
 {
     // parse
@@ -328,6 +374,44 @@ bool GDBServer::handleReadMemory(int fd, std::string_view command)
     delete[] reply;
 
     return ret;
+}
+
+bool GDBServer::handleWriteMemory(int fd, std::string_view command)
+{
+    // parse
+    uint32_t addr, len;
+
+    // address
+    auto res = std::from_chars(command.data() + 1, command.data() + command.length(), addr, 16);
+
+    if(res.ec != std::errc{})
+        return sendEmptyReply(fd);
+
+    // length
+    res = std::from_chars(res.ptr + 1, command.data() + command.length(), len, 16);
+
+    if(res.ec != std::errc{})
+        return sendEmptyReply(fd);
+
+    if(*res.ptr != ':')
+        return sendEmptyReply(fd); // E?
+
+    res.ptr++;
+
+    // write
+    int cycles;
+    uint8_t b;
+    for(uint32_t i = 0; i < len; i++)
+    {
+        res = std::from_chars(res.ptr, res.ptr + 2, b, 16);
+
+        if(res.ec != std::errc{})
+            return sendEmptyReply(fd); // should probably send whatever error is appropritate...
+
+        cpus[0].writeMem8(addr + i, b, cycles); // TODO: more direct?
+    }
+
+    return sendReply(fd, "OK", 2);
 }
 
 bool GDBServer::handleAddBreakpoint(int fd, std::string_view command)

@@ -20,7 +20,9 @@ private:
     void haltCPUs();
     bool handleContinue(int fd);
     bool handleReadRegisters(int fd);
+    bool handleWriteRegisters(int fd, std::string_view command);
     bool handleReadMemory(int fd, std::string_view command);
+    bool handleWriteMemory(int fd, std::string_view command);
     bool handleAddBreakpoint(int fd, std::string_view command);
     bool handleRemoveBreakpoint(int fd, std::string_view command);
 
