@@ -40,7 +40,7 @@ bool GDBServer::start()
     
     int yes = 1;
 
-    if(setsockopt(listenFd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(int)) == -1)
+    if(setsockopt(listenFd, SOL_SOCKET, SO_REUSEADDR, reinterpret_cast<char *>(&yes), sizeof(int)) == -1)
     {
         close(listenFd);
         return false;
@@ -48,7 +48,7 @@ bool GDBServer::start()
 
     // allow IPv4 connections
     yes = 0; // no
-    if(setsockopt(listenFd, IPPROTO_IPV6, IPV6_V6ONLY, &yes, sizeof(int)) == -1)
+    if(setsockopt(listenFd, IPPROTO_IPV6, IPV6_V6ONLY, reinterpret_cast<char *>(&yes), sizeof(int)) == -1)
     {
         close(listenFd);
         return false;
@@ -140,7 +140,7 @@ bool GDBServer::update()
                     printf("new connection from %s port %s\n", hoststr, portstr);
 
                 int yes = 1;
-                setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &yes, sizeof(int));
+                setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, reinterpret_cast<char *>(&yes), sizeof(int));
 
                 clientFd = fd;
 
@@ -186,7 +186,7 @@ bool GDBServer::update()
                         } while (c != '#');
 
                         char cs[2];
-                        received = recv(clientFd, &cs, 2, MSG_WAITALL);
+                        received = recv(clientFd, cs, 2, MSG_WAITALL);
 
                         if(received == 2)
                         {
@@ -514,7 +514,7 @@ bool GDBServer::sendAll(int fd, const void *data, size_t &len, int flags)
 {
     size_t total_sent = 0;
     size_t to_send = len;
-    ssize_t sent = 0;
+    int sent = 0;
 
     while(to_send)
     {
