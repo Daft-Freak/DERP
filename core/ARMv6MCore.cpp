@@ -34,6 +34,7 @@ void ARMv6MCore::reset()
 
     sleeping = false;
     eventFlag = false;
+    debugHalted = false;
 
     clock.reset();
 
@@ -81,6 +82,9 @@ unsigned int ARMv6MCore::update(uint64_t target)
 
     while(clock.getTime() < target)
     {
+        if(debugHalted)
+            break;
+
         uint32_t exec = 1;
 
         if(!sleeping)
@@ -122,6 +126,9 @@ unsigned int ARMv6MCore::update(uint64_t target)
             }
         }
         while(sleeping && curTime < target);
+
+        if(!breakpoints.empty() && breakpoints.find(reg(Reg::PC)) != breakpoints.end())
+            debugHalted = true;
     }
 
     return cycles;

@@ -94,6 +94,16 @@ void GDBServer::stop()
 
 bool GDBServer::update()
 {
+
+    // TODO: threads
+    if(cpus && cpus[0].debugHalted && !cpuHalted && clientFd != -1)
+    {
+        // cpu probably hit a breakpoint
+        sendReply(clientFd, "S05", 3); // It's a trap!
+        // TODO: something like T05thread:n;hwbreak ?
+        cpuHalted = true;
+    }
+
     fd_set set;
 
     FD_ZERO(&set);
@@ -133,6 +143,9 @@ bool GDBServer::update()
                 setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &yes, sizeof(int));
 
                 clientFd = fd;
+
+                // halt the CPUs on connection
+                haltCPUs();
             }
         }
         
@@ -188,14 +201,17 @@ bool GDBServer::update()
                             std::string_view commandStr(command.data());
 
                             if(commandStr == "?") // initial halt reason
-                            {
-                                // FIXME: probably should've halted the cpu...
                                 sendReply(clientFd, "S05", 3); // It's a trap!
-                            }
+                            else if(commandStr == "c") // continue
+                                return handleContinue(clientFd);
                             else if(commandStr == "g") // read regs
                                 return handleReadRegisters(clientFd);
                             else if(commandStr[0] == 'm') // read mem
                                 return handleReadMemory(clientFd, commandStr);
+                            else if(commandStr[0] == 'Z') // add breakpoint
+                                return handleAddBreakpoint(clientFd, commandStr);
+                            else if(commandStr[0] == 'z') // remove breakpoint
+                                return handleRemoveBreakpoint(clientFd, commandStr);
                             else
                             {
                                 printf("gdb: %s cs %02X / %02X\n", command.data(), checksum, calcChecksum);
@@ -232,6 +248,24 @@ void GDBServer::setCPUs(ARMv6MCore *cpus, size_t numCPUs)
 {
     this->cpus = cpus;
     this->numCPUs = numCPUs;
+}
+
+void GDBServer::haltCPUs()
+{
+    for(size_t i = 0; i < numCPUs; i++)
+        cpus[i].debugHalted = true;
+
+    cpuHalted = true;
+}
+
+bool GDBServer::handleContinue(int fd)
+{
+    for(size_t i = 0; i < numCPUs; i++)
+        cpus[i].debugHalted = false;
+
+    cpuHalted = false;
+
+    return sendPosAck(fd); // will reply when we stop
 }
 
 bool GDBServer::handleReadRegisters(int fd)
@@ -295,6 +329,50 @@ bool GDBServer::handleReadMemory(int fd, std::string_view command)
     return ret;
 }
 
+bool GDBServer::handleAddBreakpoint(int fd, std::string_view command)
+{
+    int type = command[1] - '0';
+
+    if(type != 0) // software breakpoint
+        return sendEmptyReply(fd);
+
+    // parse
+    uint32_t addr;
+
+    // address
+    auto res = std::from_chars(command.data() + 3, command.data() + command.length(), addr, 16);
+
+    if(res.ec != std::errc{})
+        return sendEmptyReply(fd);
+
+    // TODO: threads
+    cpus[0].breakpoints.insert(addr);
+
+    return sendReply(fd, "OK", 2);
+}
+
+bool GDBServer::handleRemoveBreakpoint(int fd, std::string_view command)
+{
+    int type = command[1] - '0';
+
+    if(type != 0) // software breakpoint
+        return sendEmptyReply(fd);
+
+    // parse
+    uint32_t addr;
+
+    // address
+    auto res = std::from_chars(command.data() + 3, command.data() + command.length(), addr, 16);
+
+    if(res.ec != std::errc{})
+        return sendEmptyReply(fd);
+    
+    // TODO: threads
+    cpus[0].breakpoints.erase(addr);
+
+    return sendReply(fd, "OK", 2);
+}
+
 // reply helpers
 bool GDBServer::sendReply(int fd, const char *reply, size_t len)
 {
@@ -328,6 +406,12 @@ bool GDBServer::sendEmptyReply(int fd)
 {
     size_t len = 5;
     return sendAll(fd, "+$#00", len, 0) && len == 5;
+}
+
+bool GDBServer::sendPosAck(int fd)
+{
+    size_t len = 1;
+    return sendAll(fd, "+", len, 0) && len == 1;
 }
 
 bool GDBServer::sendNegAck(int fd)

@@ -1,5 +1,6 @@
 #pragma once
 #include <cstdint>
+#include <set>
 
 #include "ClockTarget.h"
 #include "MemoryBus.h"
@@ -145,6 +146,10 @@ private:
     // exceptions
     uint64_t exceptionPending, exceptionActive;
     bool needException = false;
+
+    // debugging
+    bool debugHalted;
+    std::set<uint32_t> breakpoints;
 
     // "real" time for synchronisation/scheduling
     ClockTarget clock;
