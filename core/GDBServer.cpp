@@ -160,6 +160,7 @@ bool GDBServer::update()
                 switch(c)
                 {
                     case '+': // pos ack
+                        break;
                     case '-': // neg ack
                         printf("gdb: ack %c\n", c);
                         break;
