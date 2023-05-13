@@ -188,7 +188,7 @@ bool GDBServer::update()
                                 return handleReadRegisters(clientFd);
                             else
                             {
-                                printf("gdb: %s cs %02X / %02X\n", command.data() - 1, checksum, calcChecksum);
+                                printf("gdb: %s cs %02X / %02X\n", command.data(), checksum, calcChecksum);
                                 return sendEmptyReply(clientFd);
                             }
                         }
