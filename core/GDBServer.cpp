@@ -205,7 +205,7 @@ bool GDBServer::update()
                                 return sendNegAck(clientFd);
 
                             // handle command
-                            std::string_view commandStr(command.data());
+                            std::string_view commandStr(command.data(), command.size() - 1);
 
                             if(commandStr == "?") // initial halt reason
                                 sendReply(clientFd, "S05", 3); // It's a trap!
