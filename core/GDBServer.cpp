@@ -564,6 +564,7 @@ bool GDBServer::handleXfer(int fd, std::string_view command)
     <memory type="flash" start="0x10000000" length="0x1000000">
         <property name="blocksize">0x1000</property>
     </memory>
+    <memory type="ram" start="0x11000000" length="0xef000000"/>
 </memory-map>
             )";
             static const size_t memoryMapLen = strlen(memoryMap);
