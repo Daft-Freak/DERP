@@ -6,6 +6,7 @@
 #include <SDL.h>
 
 #include "ARMv6MCore.h"
+#include "GDBServer.h"
 #include "Logging.h"
 
 using Logging::logf;
@@ -24,6 +25,8 @@ static bool quit = false;
 
 static MemoryBus mem;
 static ARMv6MCore cpuCores[2]{mem, mem};
+
+static GDBServer gdbServer;
 
 static uint8_t bootROM[0x4000];
 
@@ -306,6 +309,7 @@ int main(int argc, char *argv[])
 
     bool picosystemSDK = false;
     bool usbEnabled = false;
+    bool gdbEnabled = false;
 
     std::string romFilename;
 
@@ -334,6 +338,8 @@ int main(int argc, char *argv[])
         }
         else if(arg == "--log" && i + 1 < argc)
             handleLogArg(argv[++i]);
+        else if(arg == "--gdb")
+            gdbEnabled = true;
         else
             break;
     }
@@ -411,6 +417,13 @@ int main(int argc, char *argv[])
         clocks.addClockTarget(-1, displayClock);
     }
 
+    if(gdbEnabled)
+    {
+        gdbServer.setCPUs(cpuCores, 2);
+        if(!gdbServer.start())
+            logf(LogLevel::Error, logComponent, "Failed to start GDB server!");
+    }
+
     // SDL init
     if(SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) != 0)
     {
@@ -486,6 +499,9 @@ int main(int argc, char *argv[])
         // TODO: more sync
         auto time = cpuCores[0].getClock().getTime();
         cpuCores[1].update(time);
+
+        if(gdbEnabled && !gdbServer.update())
+            logf(LogLevel::Error, logComponent, "Failed to update GDB server!");
 
         // sync peripherals
         mem.peripheralUpdate(time);
