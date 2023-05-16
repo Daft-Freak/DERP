@@ -225,6 +225,12 @@ bool GDBServer::update()
                                 return handleRemoveBreakpoint(clientFd, commandStr);
                             else if(commandStr.compare(0, 6, "qRcmd,") == 0) // commands
                                 return handleCommand(clientFd, commandStr);
+                            else if(commandStr.compare(0, 12, "vFlashErase:") == 0)
+                                return handleFlashErase(clientFd, commandStr);
+                            else if(commandStr.compare(0, 12, "vFlashWrite:") == 0)
+                                return handleFlashWrite(clientFd, commandStr);
+                            else if(commandStr == "vFlashDone")
+                                return sendReply(clientFd, "OK", 2);
                             else
                             {
                                 printf("gdb: %s cs %02X / %02X\n", command.data(), checksum, calcChecksum);
@@ -496,6 +502,66 @@ bool GDBServer::handleCommand(int fd, std::string_view command)
 
     printf("gdb qRcmd: %.*s\n", int(decCommand.length()), decCommand.data());
     return sendEmptyReply(fd);
+}
+
+bool GDBServer::handleFlashErase(int fd, std::string_view command)
+{
+    // parse
+    uint32_t addr, len;
+
+    // address
+    auto res = std::from_chars(command.data() + 12, command.data() + command.length(), addr, 16);
+
+    if(res.ec != std::errc{})
+        return sendEmptyReply(fd);
+
+    // length
+    res = std::from_chars(res.ptr + 1, command.data() + command.length(), len, 16);
+
+    if(res.ec != std::errc{})
+        return sendEmptyReply(fd);
+
+    printf("flash erase %08X len %i\n", addr, len);
+    
+    // yep, we definitely erased it...
+    return sendReply(fd, "OK", 2);
+}
+
+bool GDBServer::handleFlashWrite(int fd, std::string_view command)
+{
+    // parse
+    uint32_t addr, len = 0;
+
+    // address
+    auto res = std::from_chars(command.data() + 12, command.data() + command.length(), addr, 16);
+
+    if(res.ec != std::errc{})
+        return sendEmptyReply(fd);
+
+    if(addr < 0x10000000 || addr >= 0x11000000)
+        return sendReply(fd, "E.memtype", 9);
+
+    // write
+    auto p = res.ptr + 1;
+    auto end = command.data() + command.length();
+
+    auto out = cpus[0].getMem().mapAddress(addr);
+
+    while(p != end)
+    {
+        uint8_t b = *p++;
+
+        if(b == '}')
+            b = *p++ ^ 0x20;
+
+        *out++ = b;
+
+        len++;
+    }
+
+    printf("flash write %08X len %i\n", addr, len);
+    
+    return sendReply(fd, "OK", 2);
 }
 
 // reply helpers
