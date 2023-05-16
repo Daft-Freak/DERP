@@ -432,7 +432,7 @@ bool GDBServer::handleAddBreakpoint(int fd, std::string_view command)
 {
     int type = command[1] - '0';
 
-    if(type != 0) // software breakpoint
+    if(type != 0 && type != 1) // software or hardware breakpoint
         return sendEmptyReply(fd);
 
     // parse
@@ -454,7 +454,7 @@ bool GDBServer::handleRemoveBreakpoint(int fd, std::string_view command)
 {
     int type = command[1] - '0';
 
-    if(type != 0) // software breakpoint
+    if(type != 0 && type != 1) // software or hardware breakpoint
         return sendEmptyReply(fd);
 
     // parse
