@@ -25,6 +25,7 @@ private:
     bool handleWriteMemory(int fd, std::string_view command);
     bool handleAddBreakpoint(int fd, std::string_view command);
     bool handleRemoveBreakpoint(int fd, std::string_view command);
+    bool handleCommand(int fd, std::string_view command);
 
     bool sendReply(int fd, const char *reply, size_t len);
     bool sendEmptyReply(int fd);

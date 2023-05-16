@@ -1,6 +1,7 @@
 #include <charconv>
 #include <cstdio>
 #include <cstring>
+#include <string>
 #include <vector>
 
 #if defined(_WIN32)
@@ -222,6 +223,8 @@ bool GDBServer::update()
                                 return handleAddBreakpoint(clientFd, commandStr);
                             else if(commandStr[0] == 'z') // remove breakpoint
                                 return handleRemoveBreakpoint(clientFd, commandStr);
+                            else if(commandStr.compare(0, 6, "qRcmd,") == 0) // commands
+                                return handleCommand(clientFd, commandStr);
                             else
                             {
                                 printf("gdb: %s cs %02X / %02X\n", command.data(), checksum, calcChecksum);
@@ -461,6 +464,38 @@ bool GDBServer::handleRemoveBreakpoint(int fd, std::string_view command)
     cpus[0].breakpoints.erase(addr);
 
     return sendReply(fd, "OK", 2);
+}
+
+bool GDBServer::handleCommand(int fd, std::string_view command)
+{
+    std::string decCommand((command.length() - 6) / 2, '\0');
+
+    auto p = command.data() + 6;
+    auto end = command.data() + command.length();
+
+    int off = 0;
+    while(p < end)
+    {
+        char c;
+        auto res = std::from_chars(p, p + 2, c, 16);
+
+        if(res.ec != std::errc{})
+            break;
+
+        decCommand[off++] = c;
+
+        p = res.ptr;
+    }
+
+    if(decCommand == "reset halt")
+    {
+        cpus[0].getMem().reset();
+        haltCPUs();
+        return sendReply(fd, "OK", 2);
+    }
+
+    printf("gdb qRcmd: %.*s\n", int(decCommand.length()), decCommand.data());
+    return sendEmptyReply(fd);
 }
 
 // reply helpers
