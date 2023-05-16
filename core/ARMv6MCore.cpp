@@ -32,6 +32,8 @@ void ARMv6MCore::reset()
     primask = control = 0;
     curSP = Reg::MSP;
 
+    pcPtr = nullptr;
+
     sleeping = false;
     eventFlag = false;
     debugHalted = false;
