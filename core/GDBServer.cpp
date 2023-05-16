@@ -549,7 +549,8 @@ bool GDBServer::handleXfer(int fd, std::string_view command)
 
     if(operation == "read")
     {
-        if(res.ptr != command.end())
+        auto cmdEnd = command.data() + command.length();
+        if(res.ptr != cmdEnd)
             return sendReply(fd, "E00", 3);
 
         if(object == "memory-map")
