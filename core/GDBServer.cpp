@@ -225,6 +225,10 @@ bool GDBServer::update()
                                 return handleRemoveBreakpoint(clientFd, commandStr);
                             else if(commandStr.compare(0, 6, "qRcmd,") == 0) // commands
                                 return handleCommand(clientFd, commandStr);
+                            else if(commandStr.compare(0, 11, "qSupported:") == 0)
+                                return sendReply(clientFd, "qXfer:memory-map:read+", 22);
+                            else if(commandStr.compare(0, 6, "qXfer:") == 0)
+                                return handleXfer(clientFd, commandStr);
                             else if(commandStr.compare(0, 12, "vFlashErase:") == 0)
                                 return handleFlashErase(clientFd, commandStr);
                             else if(commandStr.compare(0, 12, "vFlashWrite:") == 0)
@@ -501,6 +505,93 @@ bool GDBServer::handleCommand(int fd, std::string_view command)
     }
 
     printf("gdb qRcmd: %.*s\n", int(decCommand.length()), decCommand.data());
+    return sendEmptyReply(fd);
+}
+
+bool GDBServer::handleXfer(int fd, std::string_view command)
+{
+    // parse
+    auto prevColon = 5;
+    auto colon = command.find_first_of(':', prevColon + 1);
+    if(colon == std::string_view::npos)
+        return sendReply(fd, "E00", 3);
+
+    auto object = command.substr(prevColon + 1, colon - prevColon - 1);
+
+    prevColon = colon;
+    colon = command.find_first_of(':', prevColon + 1);
+    if(colon == std::string_view::npos)
+        return sendReply(fd, "E00", 3);
+
+    auto operation = command.substr(prevColon + 1, colon - prevColon - 1);
+
+    prevColon = colon;
+    colon = command.find_first_of(':', prevColon + 1);
+    if(colon == std::string_view::npos)
+        return sendReply(fd, "E00", 3);
+
+    auto annex = command.substr(prevColon + 1, colon - prevColon - 1);
+
+    prevColon = colon;
+
+    // offset
+    uint32_t offset, length;
+    auto res = std::from_chars(command.data() + prevColon + 1, command.data() + command.length(), offset, 16);
+
+    if(res.ec != std::errc{})
+        return sendReply(fd, "E00", 3);
+
+    // length
+    res = std::from_chars(res.ptr + 1, command.data() + command.length(), length, 16);
+
+    if(res.ec != std::errc{})
+        return sendReply(fd, "E00", 3);
+
+    if(operation == "read")
+    {
+        if(res.ptr != command.end())
+            return sendReply(fd, "E00", 3);
+
+        if(object == "memory-map")
+        {
+            if(annex != "")
+                return sendReply(fd, "E00", 3);
+
+            // minimal map with only flash region
+            static const char *memoryMap = R"(<?xml version="1.0"?>
+<!DOCTYPE memory-map PUBLIC "+//IDN gnu.org//DTD GDB Memory Map V1.0//EN" "http://sourceware.org/gdb/gdb-memory-map.dtd">
+<memory-map>
+    <memory type="flash" start="0x10000000" length="0x1000000">
+        <property name="blocksize">0x1000</property>
+    </memory>
+</memory-map>
+            )";
+            static const size_t memoryMapLen = strlen(memoryMap);
+
+            int replyLen = 0;
+
+            if(offset < memoryMapLen)
+                replyLen = length < memoryMapLen ? length : memoryMapLen;
+
+            if(!replyLen)
+                return sendReply(fd, "l", 1); // no more data
+            
+            // reply m + data
+            // TODO: skipping escapes due to no #$*} in the data
+            auto replyBuf = new char[replyLen + 1];
+            replyBuf[0] = 'm';
+            memcpy(replyBuf + 1, memoryMap + offset, replyLen);
+
+            auto ret = sendReply(fd, replyBuf, replyLen + 1);
+
+            delete[] replyBuf;
+
+            return ret;
+        }
+    }
+
+    printf("gdb qXfer: %.*s %.*s %.*s off %u len %u\n", int(object.length()), object.data(), int(operation.length()), operation.data(), int(annex.length()), annex.data(), offset, length);
+
     return sendEmptyReply(fd);
 }
 
