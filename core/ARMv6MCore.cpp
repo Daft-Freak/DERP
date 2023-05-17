@@ -91,6 +91,9 @@ unsigned int ARMv6MCore::update(uint64_t target)
 
         if(!sleeping)
         {
+            if(!breakpoints.empty() && breakpoints.find(loReg(Reg::PC) - 2) != breakpoints.end())
+                debugHalted = true;
+
             // CPU
             exec = executeTHUMBInstruction();
         }
@@ -128,9 +131,6 @@ unsigned int ARMv6MCore::update(uint64_t target)
             }
         }
         while(sleeping && curTime < target);
-
-        if(!breakpoints.empty() && breakpoints.find(reg(Reg::PC) - 2) != breakpoints.end())
-            debugHalted = true;
     }
 
     return cycles;
