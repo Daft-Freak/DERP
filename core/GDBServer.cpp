@@ -138,9 +138,9 @@ bool GDBServer::update(bool block)
             socklen_t addrLen = sizeof(remoteAddr);
             auto remoteSockaddr = reinterpret_cast<sockaddr *>(&remoteAddr);
 
-            int fd = accept(listenFd, remoteSockaddr, &addrLen);
+            int newFd = accept(listenFd, remoteSockaddr, &addrLen);
 
-            if(fd == -1)
+            if(newFd == -1)
                 return false;
             else
             {
@@ -153,9 +153,9 @@ bool GDBServer::update(bool block)
                     logf(LogLevel::Info, logComponent, "new connection from %s port %s", hoststr, portstr);
 
                 int yes = 1;
-                setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, reinterpret_cast<char *>(&yes), sizeof(int));
+                setsockopt(newFd, IPPROTO_TCP, TCP_NODELAY, reinterpret_cast<char *>(&yes), sizeof(int));
 
-                clientFd = fd;
+                clientFd = newFd;
 
                 // halt the CPUs on connection
                 haltCPUs();
@@ -211,8 +211,8 @@ bool GDBServer::update(bool block)
                             std::from_chars(cs, cs + 2, checksum, 16);
 
                             uint8_t calcChecksum = 0;
-                            for(auto &c : command)
-                                calcChecksum += c;
+                            for(auto &cmdChar : command)
+                                calcChecksum += cmdChar;
 
                             if(calcChecksum != checksum)
                                 return sendNegAck(clientFd);
@@ -555,7 +555,7 @@ bool GDBServer::handleCommand(int fd, std::string_view command)
 bool GDBServer::handleXfer(int fd, std::string_view command)
 {
     // parse
-    auto prevColon = 5;
+    size_t prevColon = 5;
     auto colon = command.find_first_of(':', prevColon + 1);
     if(colon == std::string_view::npos)
         return sendReply(fd, "E00", 3);
@@ -614,7 +614,7 @@ bool GDBServer::handleXfer(int fd, std::string_view command)
             )";
             static const size_t memoryMapLen = strlen(memoryMap);
 
-            int replyLen = 0;
+            size_t replyLen = 0;
 
             if(offset < memoryMapLen)
                 replyLen = length < memoryMapLen ? length : memoryMapLen;
