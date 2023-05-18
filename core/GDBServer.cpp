@@ -95,14 +95,17 @@ void GDBServer::stop()
 
 bool GDBServer::update(bool block)
 {
-
-    // TODO: threads
-    if(cpus && cpus[0].debugHalted && !cpuHalted && clientFd != -1)
+    if(cpuMutex.try_lock())
     {
-        // cpu probably hit a breakpoint
-        sendReply(clientFd, "S05", 3); // It's a trap!
-        // TODO: something like T05thread:n;hwbreak ?
-        cpuHalted = true;
+        // TODO: threads
+        if(cpus && cpus[0].debugHalted && !cpuHalted && clientFd != -1)
+        {
+            // cpu probably hit a breakpoint
+            sendReply(clientFd, "S05", 3); // It's a trap!
+            // TODO: something like T05thread:n;hwbreak ?
+            cpuHalted = true;
+        }
+        cpuMutex.unlock();
     }
 
     fd_set set;
@@ -280,6 +283,8 @@ void GDBServer::setCPUs(ARMv6MCore *cpus, size_t numCPUs)
 
 void GDBServer::haltCPUs()
 {
+    std::lock_guard lock(cpuMutex);
+
     for(size_t i = 0; i < numCPUs; i++)
         cpus[i].debugHalted = true;
 
@@ -288,12 +293,16 @@ void GDBServer::haltCPUs()
 
 void GDBServer::setAttachedToCPUs(bool attached)
 {
+    std::lock_guard lock(cpuMutex);
+
     for(size_t i = 0; i < numCPUs; i++)
         cpus[i].debuggerAttached = attached;
 }
 
 bool GDBServer::handleContinue(int fd)
 {
+    std::lock_guard lock(cpuMutex);
+
     for(size_t i = 0; i < numCPUs; i++)
         cpus[i].debugHalted = false;
 
@@ -304,6 +313,8 @@ bool GDBServer::handleContinue(int fd)
 
 bool GDBServer::handleReadRegisters(int fd)
 {
+    std::lock_guard lock(cpuMutex);
+
     const int numRegs = 16, numFPARegs = 8, numFlagsRegs = 2;
     char reply[(numRegs * 4 + numFPARegs * 12 + numFlagsRegs * 4) * 2 + 1]; // * 2 chars per byte
 
@@ -331,6 +342,8 @@ bool GDBServer::handleReadRegisters(int fd)
 
 bool GDBServer::handleWriteRegisters(int fd, std::string_view command)
 {
+    std::lock_guard lock(cpuMutex);
+
     const int numRegs = 16, numFPARegs = 8, numFlagsRegs = 2;
     const int expectedLen = (numRegs * 4 + numFPARegs * 12 + numFlagsRegs * 4) * 2;
     int cpsrOff = numRegs * 8 + numFPARegs * 24 + 8; // second flags reg
@@ -373,6 +386,8 @@ bool GDBServer::handleWriteRegisters(int fd, std::string_view command)
 
 bool GDBServer::handleReadMemory(int fd, std::string_view command)
 {
+    std::lock_guard lock(cpuMutex);
+
     // parse
     uint32_t addr, len;
 
@@ -407,6 +422,8 @@ bool GDBServer::handleReadMemory(int fd, std::string_view command)
 
 bool GDBServer::handleWriteMemory(int fd, std::string_view command)
 {
+    std::lock_guard lock(cpuMutex);
+
     // parse
     uint32_t addr, len;
 
@@ -445,6 +462,8 @@ bool GDBServer::handleWriteMemory(int fd, std::string_view command)
 
 bool GDBServer::handleAddBreakpoint(int fd, std::string_view command)
 {
+    std::lock_guard lock(cpuMutex);
+
     int type = command[1] - '0';
 
     if(type != 0 && type != 1) // software or hardware breakpoint
@@ -467,6 +486,8 @@ bool GDBServer::handleAddBreakpoint(int fd, std::string_view command)
 
 bool GDBServer::handleRemoveBreakpoint(int fd, std::string_view command)
 {
+    std::lock_guard lock(cpuMutex);
+
     int type = command[1] - '0';
 
     if(type != 0 && type != 1) // software or hardware breakpoint
@@ -510,6 +531,8 @@ bool GDBServer::handleCommand(int fd, std::string_view command)
 
     if(decCommand == "reset halt")
     {
+        std::lock_guard lock(cpuMutex);
+
         cpus[0].getMem().reset();
         haltCPUs();
         return sendReply(fd, "OK", 2);
@@ -633,6 +656,8 @@ bool GDBServer::handleFlashErase(int fd, std::string_view command)
 
 bool GDBServer::handleFlashWrite(int fd, std::string_view command)
 {
+    std::lock_guard lock(cpuMutex);
+
     // parse
     uint32_t addr, len = 0;
 

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <mutex>
 #include <string_view>
 
 class ARMv6MCore;
@@ -15,6 +16,8 @@ public:
     bool update(bool block = false);
 
     void setCPUs(ARMv6MCore *cpus, size_t numCPUs);
+
+    std::mutex &getCPUMutex() {return cpuMutex;}
 
 private:
     void haltCPUs();
@@ -46,4 +49,6 @@ private:
     size_t numCPUs = 0;
 
     bool cpuHalted = false;
+
+    std::mutex cpuMutex;
 };

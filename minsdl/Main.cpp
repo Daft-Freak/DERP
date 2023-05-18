@@ -1,6 +1,7 @@
 #include <fstream>
 #include <iostream>
 #include <string>
+#include <thread>
 #include <unordered_map>
 
 #include <SDL.h>
@@ -247,6 +248,20 @@ static uint64_t onGetNextInterruptTime(uint64_t time)
     return ret;
 }
 
+static void runGDBServer()
+{
+    gdbServer.setCPUs(cpuCores, 2);
+
+    if(!gdbServer.start())
+        logf(LogLevel::Error, logComponent, "Failed to start GDB server!");
+
+    while(!quit)
+    {
+        if(!gdbServer.update(true))
+           logf(LogLevel::Error, logComponent, "Failed to update GDB server!");
+    }
+}
+
 static void pollEvents()
 {
     SDL_Event event;
@@ -306,6 +321,8 @@ int main(int argc, char *argv[])
     int screenWidth = 240;
     int screenHeight = 240;
     int screenScale = 5;
+
+    std::thread gdbServerThread;
 
     bool picosystemSDK = false;
     bool usbEnabled = false;
@@ -418,11 +435,7 @@ int main(int argc, char *argv[])
     }
 
     if(gdbEnabled)
-    {
-        gdbServer.setCPUs(cpuCores, 2);
-        if(!gdbServer.start())
-            logf(LogLevel::Error, logComponent, "Failed to start GDB server!");
-    }
+        gdbServerThread = std::thread(runGDBServer);
 
     // SDL init
     if(SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) != 0)
@@ -493,6 +506,10 @@ int main(int argc, char *argv[])
         if(elapsed > 30)
             elapsed = 30;
 
+        // lock cpu access around updates
+        if(gdbEnabled)
+            gdbServer.getCPUMutex().unlock();
+
         cpuCycles += cpuCores[0].run(elapsed);
 
         // sync core 1
@@ -500,11 +517,11 @@ int main(int argc, char *argv[])
         auto time = cpuCores[0].getClock().getTime();
         cpuCores[1].update(time);
 
-        if(gdbEnabled && !gdbServer.update())
-            logf(LogLevel::Error, logComponent, "Failed to update GDB server!");
-
         // sync peripherals
         mem.peripheralUpdate(time);
+
+        if(gdbEnabled)
+            gdbServer.getCPUMutex().unlock();
 
         if(board == Board::PimoroniPicoSystem)
             displayUpdate(time);
@@ -541,5 +558,7 @@ int main(int argc, char *argv[])
     if(window)
         SDL_DestroyWindow(window);
 
+    if(gdbEnabled)
+        gdbServerThread.join();
     return 0;
 }
