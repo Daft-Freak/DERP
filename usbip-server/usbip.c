@@ -84,6 +84,11 @@ static bool send_all(int fd, const void *data, size_t *len, int flags)
     return sent != -1;
 }
 
+static ssize_t recv_all(int fd, void *data, size_t len, int flags)
+{
+    return recv(fd, data, len, flags | MSG_WAITALL);
+}
+
 // device
 void usbip_add_device(struct usbip_device *device)
 {
@@ -222,7 +227,7 @@ static void fill_dev_reply(const struct usbip_device *dev, struct devlist_reply_
 static enum usbip_result send_devlist(int fd)
 {
     uint8_t buf[4];
-    ssize_t received = recv(fd, buf, 4, MSG_WAITALL); // status
+    ssize_t received = recv_all(fd, buf, 4, 0); // status
     if(received != 4)
         return usbip_error_socket;
 
@@ -279,7 +284,7 @@ static enum usbip_result send_devlist(int fd)
 static enum usbip_result handle_import(struct usbip_client *client)
 {
     uint8_t buf[36];
-    ssize_t received = recv(client->fd, buf, 36, MSG_WAITALL); // status + busid
+    ssize_t received = recv_all(client->fd, buf, 36, 0); // status + busid
     if(received != 36)
         return usbip_error_socket;
 
@@ -339,7 +344,7 @@ static enum usbip_result handle_submit(struct usbip_client *client, struct usbip
     struct cmd_submit cmd_data;
 
     // recv command
-    ssize_t received = recv(client->fd, &cmd_data, sizeof(cmd_data), MSG_WAITALL);
+    ssize_t received = recv_all(client->fd, &cmd_data, sizeof(cmd_data), 0);
     if(received != sizeof(cmd_data))
         return usbip_error_socket;
 
@@ -361,7 +366,7 @@ static enum usbip_result handle_submit(struct usbip_client *client, struct usbip
     {
         out_data = malloc(cmd_data.transfer_buffer_length);
 
-        received = recv(client->fd, out_data, cmd_data.transfer_buffer_length, MSG_WAITALL);
+        received = recv_all(client->fd, out_data, cmd_data.transfer_buffer_length, 0);
         if(received != cmd_data.transfer_buffer_length)
             return usbip_error_socket;
     }
@@ -423,7 +428,7 @@ static enum usbip_result handle_submit(struct usbip_client *client, struct usbip
 enum usbip_result usbip_client_recv(struct usbip_client *client)
 {
     uint8_t buf[4];
-    ssize_t received = recv(client->fd, buf, 4, MSG_WAITALL);
+    ssize_t received = recv_all(client->fd, buf, 4, 0);
 
     if(received == 0)
         return usbip_disconnected;
@@ -439,7 +444,7 @@ enum usbip_result usbip_client_recv(struct usbip_client *client)
             struct usbip_header_basic head;
             head.command = buf[0] << 24 | buf[1] << 16 | buf[2] << 8 | buf[3];
 
-            received = recv(client->fd, ((uint8_t *)&head) + 4, sizeof(head) - 4, MSG_WAITALL);
+            received = recv_all(client->fd, ((uint8_t *)&head) + 4, sizeof(head) - 4, 0);
             if(received != sizeof(head) - 4)
                 return usbip_error_socket;
 
@@ -458,7 +463,7 @@ enum usbip_result usbip_client_recv(struct usbip_client *client)
                 {
                     struct cmd_unlink cmd_data;
 
-                    received = recv(client->fd, &cmd_data, sizeof(cmd_data), MSG_WAITALL);
+                    received = recv_all(client->fd, &cmd_data, sizeof(cmd_data), 0);
                     if(received != sizeof(cmd_data))
                         return usbip_error_socket;
 
