@@ -157,8 +157,8 @@ namespace Logging
         auto levelStr = levelToString(level);
         auto compStr = componentToString(component);
 
-        auto levelPad = 16 - strlen(levelStr);
-        auto compPad = 9 - strlen(compStr);
+        int levelPad = 16 - strlen(levelStr);
+        int compPad = 9 - strlen(compStr);
 
         printf("[%s]%*s[%s]%*s%s\n", levelStr, levelPad, "", compStr, compPad, "", buf);
 
