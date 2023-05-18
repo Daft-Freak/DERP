@@ -701,7 +701,7 @@ uint32_t MemoryBus::doAPBPeriphRead(ClockTarget &masterClock, uint32_t addr)
             if(addr == 0x4000C008)
             {
                 logf(LogLevel::NotImplemented, logComponent, "R RESET_DONE");
-                return ~0;
+                return ~0u;
             }
             break;
         }
