@@ -7,8 +7,8 @@
 
 namespace Logging
 {
-    static uint32_t levelMask = ~0;
-    static uint32_t componentMask = ~0;
+    static uint32_t levelMask = ~0u;
+    static uint32_t componentMask = ~0u;
 
     constexpr uint32_t toMask(Level l){return 1 << static_cast<int>(l);}
     constexpr uint32_t toMask(Component c){return 1 << static_cast<int>(c);}
@@ -157,8 +157,8 @@ namespace Logging
         auto levelStr = levelToString(level);
         auto compStr = componentToString(component);
 
-        int levelPad = 16 - strlen(levelStr);
-        int compPad = 9 - strlen(compStr);
+        auto levelPad = 16 - strlen(levelStr);
+        auto compPad = 9 - strlen(compStr);
 
         printf("[%s]%*s[%s]%*s%s\n", levelStr, levelPad, "", compStr, compPad, "", buf);
 
