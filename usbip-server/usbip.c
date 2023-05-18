@@ -166,7 +166,7 @@ enum usbip_result usbip_client_reply(struct usbip_client *client, uint32_t seqnu
 
     struct ret_submit reply = {0};
 
-    reply.actual_length = htonl(data_len);
+    reply.actual_length = htonl((uint32_t)data_len);
 
     len = sizeof(reply);
     if(!send_all(client->fd, &reply, &len, 0) || len < sizeof(reply))
@@ -196,7 +196,7 @@ enum usbip_result usbip_client_stall(struct usbip_client *client, uint32_t seqnu
 
     struct ret_submit reply = {0};
 
-    reply.status = htonl(-32); // EPIPE
+    reply.status = htonl((uint32_t)-32); // EPIPE
 
     len = sizeof(reply);
     if(!send_all(client->fd, &reply, &len, 0) || len < sizeof(reply))
@@ -367,7 +367,7 @@ static enum usbip_result handle_submit(struct usbip_client *client, struct usbip
         out_data = malloc(cmd_data.transfer_buffer_length);
 
         received = recv_all(client->fd, out_data, cmd_data.transfer_buffer_length, 0);
-        if(received != cmd_data.transfer_buffer_length)
+        if(received != (ssize_t)cmd_data.transfer_buffer_length)
             return usbip_error_socket;
     }
 
@@ -488,7 +488,7 @@ enum usbip_result usbip_client_recv(struct usbip_client *client)
                     bool unlinked = !dev->unlink || dev->unlink(client, cmd_data.unlink_seqnum, dev->user_data);
 
                     if(unlinked)
-                        reply.status = htonl(-104/*ECONNRESET*/);
+                        reply.status = htonl((uint32_t)-104/*ECONNRESET*/);
 
                     len = sizeof(reply);
                     if(!send_all(client->fd, &reply, &len, 0) || len < sizeof(reply))
