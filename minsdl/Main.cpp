@@ -68,34 +68,6 @@ static const std::unordered_map<SDL_Keycode, int> picosystemKeyMap {
     {SDLK_v,      1 << 16},
 };
 
-static void pollEvents()
-{
-    SDL_Event event;
-    while(SDL_PollEvent(&event))
-    {
-        switch(event.type)
-        {
-            case SDL_KEYDOWN:
-            {
-                auto it = picosystemKeyMap.find(event.key.keysym.sym);
-                if(it != picosystemKeyMap.end())
-                    buttonState |= it->second;
-                break;
-            }
-            case SDL_KEYUP:
-            {
-                auto it = picosystemKeyMap.find(event.key.keysym.sym);
-                if(it != picosystemKeyMap.end())
-                    buttonState &= ~it->second;
-                break;
-            }
-            case SDL_QUIT:
-                quit = true;
-                break;
-        }
-    }
-}
-
 static Board stringToBoard(std::string_view str)
 {
     if(str == "pico")
@@ -273,6 +245,34 @@ static uint64_t onGetNextInterruptTime(uint64_t time)
     auto ret = displayClock.getTimeToCycles(lines);
 
     return ret;
+}
+
+static void pollEvents()
+{
+    SDL_Event event;
+    while(SDL_PollEvent(&event))
+    {
+        switch(event.type)
+        {
+            case SDL_KEYDOWN:
+            {
+                auto it = picosystemKeyMap.find(event.key.keysym.sym);
+                if(it != picosystemKeyMap.end())
+                    buttonState |= it->second;
+                break;
+            }
+            case SDL_KEYUP:
+            {
+                auto it = picosystemKeyMap.find(event.key.keysym.sym);
+                if(it != picosystemKeyMap.end())
+                    buttonState &= ~it->second;
+                break;
+            }
+            case SDL_QUIT:
+                quit = true;
+                break;
+        }
+    }
 }
 
 static void handleLogArg(const char *arg)
