@@ -1045,7 +1045,10 @@ int ARMv6MCore::doTHUMBMisc(uint16_t opcode, uint32_t pc)
             return doTHUMB14PushPop(opcode, pc);
 
         case 0xE: // BKPT
-            fault("Unhandled BKPT"); // don't implement debugging
+            if(debuggerAttached)
+                debugHalted = true;
+            else
+                fault("Unhandled BKPT");
             return pcSCycles;
 
         case 0xF: // hints
