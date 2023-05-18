@@ -91,7 +91,10 @@ unsigned int ARMv6MCore::update(uint64_t target)
         if(!sleeping)
         {
             if(debuggerAttached && breakpoints.find(loReg(Reg::PC) - 2) != breakpoints.end())
+            {
                 debugHalted = true;
+                break;
+            }
 
             // CPU
             exec = executeTHUMBInstruction();

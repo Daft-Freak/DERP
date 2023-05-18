@@ -324,7 +324,12 @@ bool GDBServer::handleReadRegisters(int fd)
     auto regs = cpus[0].regs; // TODO: threads
     for(int i = 0; i < 16; i++)
     {
-        auto swapped = regs[i] >> 24 | regs[i] << 24 | (regs[i] & 0xFF0000) >> 8 | (regs[i] & 0xFF00) << 8;
+        auto r = regs[i];
+
+        if(i == 15)
+            r -= 2;
+
+        auto swapped = r >> 24 | r << 24 | (r & 0xFF0000) >> 8 | (r & 0xFF00) << 8;
         snprintf(reply + i * 8, 9/*+null*/, "%08X", swapped);
     }
 
