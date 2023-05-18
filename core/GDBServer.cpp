@@ -147,6 +147,7 @@ bool GDBServer::update()
 
                 // halt the CPUs on connection
                 haltCPUs();
+                setAttachedToCPUs(true);
             }
         }
         
@@ -279,6 +280,12 @@ void GDBServer::haltCPUs()
         cpus[i].debugHalted = true;
 
     cpuHalted = true;
+}
+
+void GDBServer::setAttachedToCPUs(bool attached)
+{
+    for(size_t i = 0; i < numCPUs; i++)
+        cpus[i].debuggerAttached = attached;
 }
 
 bool GDBServer::handleContinue(int fd)

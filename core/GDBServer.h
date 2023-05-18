@@ -18,6 +18,7 @@ public:
 
 private:
     void haltCPUs();
+    void setAttachedToCPUs(bool attached);
     bool handleContinue(int fd);
     bool handleReadRegisters(int fd);
     bool handleWriteRegisters(int fd, std::string_view command);

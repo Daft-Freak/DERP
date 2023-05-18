@@ -20,7 +20,7 @@ constexpr auto logComponent = Logging::Component::ArmCore;
 
 // FIXME: this still thinks it's an ARMv4T
 
-ARMv6MCore::ARMv6MCore(MemoryBus &mem) : mem(mem)
+ARMv6MCore::ARMv6MCore(MemoryBus &mem) : debugHalted(false), debuggerAttached(false), mem(mem)
 {}
 
 void ARMv6MCore::reset()
@@ -36,7 +36,6 @@ void ARMv6MCore::reset()
 
     sleeping = false;
     eventFlag = false;
-    debugHalted = false;
 
     clock.reset();
 
@@ -91,7 +90,7 @@ unsigned int ARMv6MCore::update(uint64_t target)
 
         if(!sleeping)
         {
-            if(!breakpoints.empty() && breakpoints.find(loReg(Reg::PC) - 2) != breakpoints.end())
+            if(debuggerAttached && breakpoints.find(loReg(Reg::PC) - 2) != breakpoints.end())
                 debugHalted = true;
 
             // CPU

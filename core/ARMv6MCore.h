@@ -149,6 +149,7 @@ private:
 
     // debugging
     bool debugHalted;
+    bool debuggerAttached;
     std::set<uint32_t> breakpoints;
 
     // "real" time for synchronisation/scheduling
