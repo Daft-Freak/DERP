@@ -1,11 +1,13 @@
 #include <fstream>
 #include <iostream>
 #include <string>
+#include <thread>
 #include <unordered_map>
 
 #include <SDL.h>
 
 #include "ARMv6MCore.h"
+#include "GDBServer.h"
 #include "Logging.h"
 
 using Logging::logf;
@@ -24,6 +26,8 @@ static bool quit = false;
 
 static MemoryBus mem;
 static ARMv6MCore cpuCores[2]{mem, mem};
+
+static GDBServer gdbServer;
 
 static uint8_t bootROM[0x4000];
 
@@ -64,34 +68,6 @@ static const std::unordered_map<SDL_Keycode, int> picosystemKeyMap {
     {SDLK_c,      1 << 17},
     {SDLK_v,      1 << 16},
 };
-
-static void pollEvents()
-{
-    SDL_Event event;
-    while(SDL_PollEvent(&event))
-    {
-        switch(event.type)
-        {
-            case SDL_KEYDOWN:
-            {
-                auto it = picosystemKeyMap.find(event.key.keysym.sym);
-                if(it != picosystemKeyMap.end())
-                    buttonState |= it->second;
-                break;
-            }
-            case SDL_KEYUP:
-            {
-                auto it = picosystemKeyMap.find(event.key.keysym.sym);
-                if(it != picosystemKeyMap.end())
-                    buttonState &= ~it->second;
-                break;
-            }
-            case SDL_QUIT:
-                quit = true;
-                break;
-        }
-    }
-}
 
 static Board stringToBoard(std::string_view str)
 {
@@ -272,6 +248,48 @@ static uint64_t onGetNextInterruptTime(uint64_t time)
     return ret;
 }
 
+static void runGDBServer()
+{
+    gdbServer.setCPUs(cpuCores, 2);
+
+    if(!gdbServer.start())
+        logf(LogLevel::Error, logComponent, "Failed to start GDB server!");
+
+    while(!quit)
+    {
+        if(!gdbServer.update(true))
+           logf(LogLevel::Error, logComponent, "Failed to update GDB server!");
+    }
+}
+
+static void pollEvents()
+{
+    SDL_Event event;
+    while(SDL_PollEvent(&event))
+    {
+        switch(event.type)
+        {
+            case SDL_KEYDOWN:
+            {
+                auto it = picosystemKeyMap.find(event.key.keysym.sym);
+                if(it != picosystemKeyMap.end())
+                    buttonState |= it->second;
+                break;
+            }
+            case SDL_KEYUP:
+            {
+                auto it = picosystemKeyMap.find(event.key.keysym.sym);
+                if(it != picosystemKeyMap.end())
+                    buttonState &= ~it->second;
+                break;
+            }
+            case SDL_QUIT:
+                quit = true;
+                break;
+        }
+    }
+}
+
 static void handleLogArg(const char *arg)
 {
     bool enable = true;
@@ -304,8 +322,11 @@ int main(int argc, char *argv[])
     int screenHeight = 240;
     int screenScale = 5;
 
+    std::thread gdbServerThread;
+
     bool picosystemSDK = false;
     bool usbEnabled = false;
+    bool gdbEnabled = false;
 
     std::string romFilename;
 
@@ -334,6 +355,8 @@ int main(int argc, char *argv[])
         }
         else if(arg == "--log" && i + 1 < argc)
             handleLogArg(argv[++i]);
+        else if(arg == "--gdb")
+            gdbEnabled = true;
         else
             break;
     }
@@ -411,6 +434,9 @@ int main(int argc, char *argv[])
         clocks.addClockTarget(-1, displayClock);
     }
 
+    if(gdbEnabled)
+        gdbServerThread = std::thread(runGDBServer);
+
     // SDL init
     if(SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) != 0)
     {
@@ -480,6 +506,10 @@ int main(int argc, char *argv[])
         if(elapsed > 30)
             elapsed = 30;
 
+        // lock cpu access around updates
+        if(gdbEnabled)
+            gdbServer.getCPUMutex().unlock();
+
         cpuCycles += cpuCores[0].run(elapsed);
 
         // sync core 1
@@ -489,6 +519,9 @@ int main(int argc, char *argv[])
 
         // sync peripherals
         mem.peripheralUpdate(time);
+
+        if(gdbEnabled)
+            gdbServer.getCPUMutex().unlock();
 
         if(board == Board::PimoroniPicoSystem)
             displayUpdate(time);
@@ -525,5 +558,7 @@ int main(int argc, char *argv[])
     if(window)
         SDL_DestroyWindow(window);
 
+    if(gdbEnabled)
+        gdbServerThread.join();
     return 0;
 }

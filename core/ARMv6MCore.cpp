@@ -20,7 +20,7 @@ constexpr auto logComponent = Logging::Component::ArmCore;
 
 // FIXME: this still thinks it's an ARMv4T
 
-ARMv6MCore::ARMv6MCore(MemoryBus &mem) : mem(mem)
+ARMv6MCore::ARMv6MCore(MemoryBus &mem) : debugHalted(false), debuggerAttached(false), mem(mem)
 {}
 
 void ARMv6MCore::reset()
@@ -31,6 +31,8 @@ void ARMv6MCore::reset()
     cpsr = Flag_T;
     primask = control = 0;
     curSP = Reg::MSP;
+
+    pcPtr = nullptr;
 
     sleeping = false;
     eventFlag = false;
@@ -81,10 +83,19 @@ unsigned int ARMv6MCore::update(uint64_t target)
 
     while(clock.getTime() < target)
     {
+        if(debugHalted)
+            break;
+
         uint32_t exec = 1;
 
         if(!sleeping)
         {
+            if(debuggerAttached && breakpoints.find(loReg(Reg::PC) - 2) != breakpoints.end())
+            {
+                debugHalted = true;
+                break;
+            }
+
             // CPU
             exec = executeTHUMBInstruction();
         }
@@ -1037,7 +1048,10 @@ int ARMv6MCore::doTHUMBMisc(uint16_t opcode, uint32_t pc)
             return doTHUMB14PushPop(opcode, pc);
 
         case 0xE: // BKPT
-            fault("Unhandled BKPT"); // don't implement debugging
+            if(debuggerAttached)
+                debugHalted = true;
+            else
+                fault("Unhandled BKPT");
             return pcSCycles;
 
         case 0xF: // hints

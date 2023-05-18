@@ -46,6 +46,8 @@ namespace Logging
                 return "clocks";
             case Component::DMA:
                 return "dma";
+            case Component::GDB:
+                return "gdb";
             case Component::GPIO:
                 return "gpio";
             case Component::Main:
@@ -93,6 +95,8 @@ namespace Logging
             return Component::Clocks;
         if(str == "dma")
             return Component::DMA;
+        if(str == "gdb")
+            return Component::GDB;
         if(str == "gpio")
             return Component::GPIO;
         if(str == "main")

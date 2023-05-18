@@ -1,5 +1,6 @@
 #pragma once
 #include <cstdint>
+#include <set>
 
 #include "ClockTarget.h"
 #include "MemoryBus.h"
@@ -26,6 +27,8 @@ public:
     ClockTarget &getClock() {return clock;}
 
 private:
+    friend class GDBServer; // needs ALL the CPU internals
+
     enum class Reg
     {
         R0 = 0,
@@ -143,6 +146,11 @@ private:
     // exceptions
     uint64_t exceptionPending, exceptionActive;
     bool needException = false;
+
+    // debugging
+    bool debugHalted;
+    bool debuggerAttached;
+    std::set<uint32_t> breakpoints;
 
     // "real" time for synchronisation/scheduling
     ClockTarget clock;
