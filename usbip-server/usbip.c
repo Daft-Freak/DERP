@@ -544,7 +544,7 @@ enum usbip_result usbip_create_server(struct usbip_server **server, const char *
     
     int yes = 1;
 
-    if(setsockopt(sock_fd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(int)) == -1)
+    if(setsockopt(sock_fd, SOL_SOCKET, SO_REUSEADDR, (char *)&yes, sizeof(int)) == -1)
     {
         close_socket(sock_fd);
         return usbip_error_socket;
@@ -552,7 +552,7 @@ enum usbip_result usbip_create_server(struct usbip_server **server, const char *
 
     // allow IPv4 connections
     yes = 0; // no
-    if(setsockopt(sock_fd, IPPROTO_IPV6, IPV6_V6ONLY, &yes, sizeof(int)) == -1)
+    if(setsockopt(sock_fd, IPPROTO_IPV6, IPV6_V6ONLY, (char *)&yes, sizeof(int)) == -1)
     {
         close_socket(sock_fd);
         return usbip_error_socket;
@@ -642,7 +642,7 @@ enum usbip_result usbip_server_update(struct usbip_server *server, struct timeva
                 }
 
                 int yes = 1;
-                setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &yes, sizeof(int));
+                setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, (char *)&yes, sizeof(int));
 
                 FD_SET(fd, &server->sock_set);
                 
