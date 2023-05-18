@@ -28,6 +28,7 @@ namespace Logging
         ArmCore,
         Clocks,
         DMA,
+        GDB,
         GPIO,
         Main,
         MemoryBus,

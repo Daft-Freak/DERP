@@ -17,6 +17,11 @@
 
 #include "GDBServer.h"
 #include "ARMv6MCore.h"
+#include "Logging.h"
+
+using Logging::logf;
+using LogLevel = Logging::Level;
+constexpr auto logComponent = Logging::Component::GDB;
 
 static void byteToHex(char *out, uint8_t byte)
 {
@@ -145,7 +150,7 @@ bool GDBServer::update(bool block)
                 int rc = getnameinfo(remoteSockaddr, addrLen, hoststr, sizeof(hoststr), portstr, sizeof(portstr), NI_NUMERICHOST | NI_NUMERICSERV);
 
                 if(rc == 0)
-                    printf("new connection from %s port %s\n", hoststr, portstr);
+                    logf(LogLevel::Info, logComponent, "new connection from %s port %s", hoststr, portstr);
 
                 int yes = 1;
                 setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, reinterpret_cast<char *>(&yes), sizeof(int));
@@ -176,7 +181,7 @@ bool GDBServer::update(bool block)
                     case '+': // pos ack
                         break;
                     case '-': // neg ack
-                        printf("gdb: ack %c\n", c);
+                        logf(LogLevel::Debug, logComponent, "ack %c", c);
                         break;
 
                     case '$':
@@ -245,7 +250,7 @@ bool GDBServer::update(bool block)
                                 return sendReply(clientFd, "OK", 2);
                             else
                             {
-                                printf("gdb: %s cs %02X / %02X\n", command.data(), checksum, calcChecksum);
+                                logf(LogLevel::NotImplemented, logComponent, "command %s cs %02X / %02X", command.data(), checksum, calcChecksum);
                                 return sendEmptyReply(clientFd);
                             }
                         }
@@ -254,7 +259,7 @@ bool GDBServer::update(bool block)
                     }
                     
                     default:
-                        printf("gdb: %c\n", c);
+                        logf(LogLevel::NotImplemented, logComponent, "char %c", c);
                 }
                 
             }
@@ -543,7 +548,7 @@ bool GDBServer::handleCommand(int fd, std::string_view command)
         return sendReply(fd, "OK", 2);
     }
 
-    printf("gdb qRcmd: %.*s\n", int(decCommand.length()), decCommand.data());
+    logf(LogLevel::NotImplemented, logComponent, "qRcmd: %.*s", int(decCommand.length()), decCommand.data());
     return sendEmptyReply(fd);
 }
 
@@ -631,7 +636,7 @@ bool GDBServer::handleXfer(int fd, std::string_view command)
         }
     }
 
-    printf("gdb qXfer: %.*s %.*s %.*s off %u len %u\n", int(object.length()), object.data(), int(operation.length()), operation.data(), int(annex.length()), annex.data(), offset, length);
+    logf(LogLevel::NotImplemented, logComponent, "qXfer: %.*s %.*s %.*s off %u len %u", int(object.length()), object.data(), int(operation.length()), operation.data(), int(annex.length()), annex.data(), offset, length);
 
     return sendEmptyReply(fd);
 }
@@ -653,7 +658,7 @@ bool GDBServer::handleFlashErase(int fd, std::string_view command)
     if(res.ec != std::errc{})
         return sendEmptyReply(fd);
 
-    printf("flash erase %08X len %i\n", addr, len);
+    logf(LogLevel::Debug, logComponent, "flash erase %08X len %i", addr, len);
     
     // yep, we definitely erased it...
     return sendReply(fd, "OK", 2);
@@ -693,7 +698,7 @@ bool GDBServer::handleFlashWrite(int fd, std::string_view command)
         len++;
     }
 
-    printf("flash write %08X len %i\n", addr, len);
+    logf(LogLevel::Debug, logComponent, "flash write %08X len %i", addr, len);
     
     return sendReply(fd, "OK", 2);
 }
