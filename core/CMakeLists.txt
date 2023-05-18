@@ -1,3 +1,5 @@
+include(pico-sdk-stub.cmake)
+
 add_library(DERPCore INTERFACE)
 
 target_sources(DERPCore INTERFACE
@@ -15,3 +17,4 @@ target_sources(DERPCore INTERFACE
 )
 
 target_include_directories(DERPCore INTERFACE ${CMAKE_CURRENT_LIST_DIR})
+target_link_libraries(DERPCore INTERFACE hardware_regs)
