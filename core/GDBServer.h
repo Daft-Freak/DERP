@@ -12,7 +12,7 @@ public:
     bool start();
     void stop();
 
-    bool update();
+    bool update(bool block = false);
 
     void setCPUs(ARMv6MCore *cpus, size_t numCPUs);
 

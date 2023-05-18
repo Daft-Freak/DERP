@@ -93,7 +93,7 @@ void GDBServer::stop()
     }
 }
 
-bool GDBServer::update()
+bool GDBServer::update(bool block)
 {
 
     // TODO: threads
@@ -113,9 +113,10 @@ bool GDBServer::update()
 
     FD_SET(fd, &set);
 
+    // probably should take a timeout here, but no wait/wait forever are enough for now
     timeval timeout = {0, 0};
 
-    int ready = select(fd + 1, &set, nullptr, nullptr, &timeout);
+    int ready = select(fd + 1, &set, nullptr, nullptr, block ? nullptr : &timeout);
 
     if(ready > 0)
     {
