@@ -671,8 +671,16 @@ static const char *apbPeriphNames[]{
     "TBMAN"
 };
 
+// promote all reads to 32-bit
 template<class T>
 T MemoryBus::doAPBPeriphRead(ClockTarget &masterClock, uint32_t addr)
+{
+    int shift = (addr & 3) * 8;
+    return doAPBPeriphRead<uint32_t>(masterClock, addr & ~3) >> shift;
+}
+
+template<>
+uint32_t MemoryBus::doAPBPeriphRead(ClockTarget &masterClock, uint32_t addr)
 {
     auto peripheral = (addr >> 14) & 0x1F;
     auto periphAddr = addr & 0x3FFF;
@@ -681,7 +689,7 @@ T MemoryBus::doAPBPeriphRead(ClockTarget &masterClock, uint32_t addr)
     {
         case 0: // SYSINFO
             if(periphAddr == 0x40) // GITREF_RP2040
-                return T(0xDF2040DF); // TODO: put a real value here?
+                return 0xDF2040DF; // TODO: put a real value here?
             break;
 
         case 2: // CLOCKS
@@ -693,7 +701,7 @@ T MemoryBus::doAPBPeriphRead(ClockTarget &masterClock, uint32_t addr)
             if(addr == 0x4000C008)
             {
                 logf(LogLevel::NotImplemented, logComponent, "R RESET_DONE");
-                return static_cast<T>(~0);
+                return ~0;
             }
             break;
         }
@@ -781,7 +789,20 @@ T MemoryBus::doAPBPeriphRead(ClockTarget &masterClock, uint32_t addr)
 
     logf(LogLevel::NotImplemented, logComponent, "APBP R %s %04X", apbPeriphNames[peripheral], addr & 0x3FFF);
 
-    return doOpenRead<T>(addr);
+    return doOpenRead<uint32_t>(addr);
+}
+
+// replicate all writes to 32bit
+template<>
+void MemoryBus::doAPBPeriphWrite(ClockTarget &masterClock, uint32_t addr, uint8_t data)
+{
+    doAPBPeriphWrite<uint32_t>(masterClock, addr & ~3, data | data << 8 | data << 16 | data << 24);
+}
+
+template<>
+void MemoryBus::doAPBPeriphWrite(ClockTarget &masterClock, uint32_t addr, uint16_t data)
+{
+    doAPBPeriphWrite<uint32_t>(masterClock, addr & ~3, data | data << 16);
 }
 
 template<class T>
@@ -925,8 +946,23 @@ void MemoryBus::doAPBPeriphWrite(ClockTarget &masterClock, uint32_t addr, T data
     logf(LogLevel::NotImplemented, logComponent, "APBP W %s %04X = %08X", apbPeriphNames[peripheral], addr & 0x3FFF, data);
 }
 
+// promote all reads to 32-bit
 template<class T>
 T MemoryBus::doAHBPeriphRead(ClockTarget &masterClock, uint32_t addr)
+{
+    if(addr >= 0x50100000 && addr < 0x50101000) // USB DPRAM
+    {
+        // ... except USB DPRAM, which DOES handle narrow access
+        usb.update(masterClock.getTime());
+        return *reinterpret_cast<const T *>(usb.getRAM() + (addr & 0xFFF));
+    }
+
+    int shift = (addr & 3) * 8;
+    return doAHBPeriphRead<uint32_t>(masterClock, addr & ~3) >> shift;
+}
+
+template<>
+uint32_t MemoryBus::doAHBPeriphRead(ClockTarget &masterClock, uint32_t addr)
 {
     if(addr < 0x50100000) // DMA
     {
@@ -936,7 +972,7 @@ T MemoryBus::doAHBPeriphRead(ClockTarget &masterClock, uint32_t addr)
     else if(addr < 0x50101000) // USB DPRAM
     {
         usb.update(masterClock.getTime());
-        return *reinterpret_cast<const T *>(usb.getRAM() + (addr & 0xFFF));
+        return *reinterpret_cast<const uint32_t *>(usb.getRAM() + (addr & 0xFFF));
     }
     else if(addr >= 0x50110000 && addr < 0x50200000) // USB regs
     {
@@ -946,25 +982,52 @@ T MemoryBus::doAHBPeriphRead(ClockTarget &masterClock, uint32_t addr)
     else if(addr < 0x50300000)
     {
         if(addr == 0x50200004) // FSTAT
-            return T(0x0F000F00); // all FIFOs empty
+            return 0x0F000F00; // all FIFOs empty
         if(addr == 0x50200008) // FDEBUG
-            return T(0xF << 24); // all TXSTALL
+            return 0xF << 24; // all TXSTALL
 
         logf(LogLevel::NotImplemented, logComponent, "PIO0 R %08X", addr);
     }
     else if(addr < 0x50400000)
     {
         if(addr == 0x50300004) // FSTAT
-            return T(0x0F000F00); // all FIFOs empty
+            return 0x0F000F00; // all FIFOs empty
         if(addr == 0x50300008) // FDEBUG
-            return T(0xF << 24); // all TXSTALL
+            return 0xF << 24; // all TXSTALL
 
         logf(LogLevel::NotImplemented, logComponent, "PIO1 R %08X", addr);
     }
     else
         logf(LogLevel::NotImplemented, logComponent, "AHBP R %08X", addr);
 
-    return doOpenRead<T>(addr);
+    return doOpenRead<uint32_t>(addr);
+}
+
+// replicate all writes to 32bit
+template<>
+void MemoryBus::doAHBPeriphWrite(ClockTarget &masterClock, uint32_t addr, uint8_t data)
+{
+    if(addr >= 0x50100000 && addr < 0x50101000) // USB DPRAM
+    {
+        usb.update(masterClock.getTime());
+        usb.getRAM()[addr & 0xFFF] = data;
+        return;
+    }
+
+    doAHBPeriphWrite<uint32_t>(masterClock, addr & ~3, data | data << 8 | data << 16 | data << 24);
+}
+
+template<>
+void MemoryBus::doAHBPeriphWrite(ClockTarget &masterClock, uint32_t addr, uint16_t data)
+{
+    if(addr >= 0x50100000 && addr < 0x50101000) // USB DPRAM
+    {
+        usb.update(masterClock.getTime());
+        *reinterpret_cast<uint16_t *>(usb.getRAM() + (addr & 0xFFF)) = data;
+        return;
+    }
+
+    doAHBPeriphWrite<uint32_t>(masterClock, addr & ~3, data | data << 16);
 }
 
 template<class T>
@@ -1008,8 +1071,16 @@ void MemoryBus::doAHBPeriphWrite(ClockTarget &masterClock, uint32_t addr, T data
         logf(LogLevel::NotImplemented, logComponent, "AHBP W %08X = %08X", addr, data);
 }
 
+// promote all reads to 32-bit
 template<class T>
 T MemoryBus::doIOPORTRead(ClockTarget &masterClock, int core, uint32_t addr)
+{
+    int shift = (addr & 3) * 8;
+    return doIOPORTRead<uint32_t>(masterClock, core, addr & ~3) >> shift;
+}
+
+template<>
+uint32_t MemoryBus::doIOPORTRead(ClockTarget &masterClock, int core, uint32_t addr)
 {
     switch(addr & 0xFFF)
     {
@@ -1088,12 +1159,25 @@ T MemoryBus::doIOPORTRead(ClockTarget &masterClock, int core, uint32_t addr)
                 return 0;
 
             spinlocks |= 1 << lock;
-            return T(1 << lock);
+            return 1 << lock;
         }
     }
 
     logf(LogLevel::NotImplemented, logComponent, "IOPORT R %08X", addr);
-    return doOpenRead<T>(addr);
+    return doOpenRead<uint32_t>(addr);
+}
+
+// replicate all writes to 32bit
+template<>
+void MemoryBus::doIOPORTWrite(ClockTarget &masterClock, int core, uint32_t addr, uint8_t data)
+{
+    doIOPORTWrite<uint32_t>(masterClock, core, addr & ~3, data | data << 8 | data << 16 | data << 24);
+}
+
+template<>
+void MemoryBus::doIOPORTWrite(ClockTarget &masterClock, int core, uint32_t addr, uint16_t data)
+{
+    doIOPORTWrite<uint32_t>(masterClock, core, addr & ~3, data | data << 16);
 }
 
 template<class T>
@@ -1216,7 +1300,21 @@ void MemoryBus::doIOPORTWrite(ClockTarget &masterClock, int core, uint32_t addr,
 template<class T>
 T MemoryBus::doCPUInternalRead(ARMv6MCore &cpu, uint32_t addr) const
 {
-    return cpu.readReg(addr);
+    int shift = (addr & 3) * 8;
+    return cpu.readReg(addr & ~3) >> shift;
+}
+
+// replicate all writes to 32bit
+template<>
+void MemoryBus::doCPUInternalWrite(ARMv6MCore &cpu, uint32_t addr, uint8_t data)
+{
+    cpu.writeReg(addr & ~3, data | data << 8 | data << 16 | data << 24);
+}
+
+template<>
+void MemoryBus::doCPUInternalWrite(ARMv6MCore &cpu, uint32_t addr, uint16_t data)
+{
+    cpu.writeReg(addr & ~3, data | data << 16);
 }
 
 template<class T>
