@@ -113,10 +113,13 @@ bool GDBServer::update(bool block)
 
     FD_SET(fd, &set);
 
-    // probably should take a timeout here, but no wait/wait forever are enough for now
     timeval timeout = {0, 0};
 
-    int ready = select(fd + 1, &set, nullptr, nullptr, block ? nullptr : &timeout);
+    // probably should take a timeout here
+    if(block)
+        timeout.tv_usec = 10 * 1000; // 10ms
+
+    int ready = select(fd + 1, &set, nullptr, nullptr, &timeout);
 
     if(ready > 0)
     {
