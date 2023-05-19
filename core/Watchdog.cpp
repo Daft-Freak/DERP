@@ -1,5 +1,8 @@
 #include <cstdio>
 
+#include "hardware/platform_defs.h"
+#include "hardware/regs/watchdog.h"
+
 #include "Watchdog.h"
 
 #include "MemoryBus.h"
@@ -27,21 +30,19 @@ void Watchdog::reset()
 
 void Watchdog::update(uint64_t target)
 {
-    // TODO: actual watchdog
-
     auto passed = clock.getCyclesToTime(target);
 
     if(!passed)
         return;
 
-    if(!(tick & (1 << 9))) // enable tick
+    if(!(tick & WATCHDOG_TICK_ENABLE_BITS)) // enable tick
     {
         clock.addCycles(passed);
         return;
     }
 
     // tick counter
-    unsigned int tickCycles = tick & 0x1FF;
+    unsigned int tickCycles = tick & WATCHDOG_TICK_CYCLES_BITS;
 
     int ticksToAdd = 0;
 
@@ -60,7 +61,7 @@ void Watchdog::update(uint64_t target)
     ticks += ticksToAdd;
 
     // watchdog timer
-    if(ticksToAdd && (ctrl & (1 << 30))) // timer enable
+    if(ticksToAdd && (ctrl & WATCHDOG_CTRL_ENABLE_BITS)) // timer enable
     {
         ticksToAdd *= 2; // RP2040-E1
 
@@ -88,7 +89,7 @@ uint32_t Watchdog::getTicks()
 
 uint64_t Watchdog::getTickTarget(uint32_t numTicks)
 {
-    int tickCycles = tick & 0x1FF;
+    int tickCycles = tick & WATCHDOG_TICK_CYCLES_BITS;
     uint32_t cycles = numTicks * tickCycles - tickCounter;
     return clock.getTimeToCycles(cycles);
 }
@@ -97,23 +98,23 @@ uint32_t Watchdog::regRead(uint32_t addr)
 {
     switch(addr)
     {
-        case 0: // CTRL
+        case WATCHDOG_CTRL_OFFSET:
             return ctrl | timer;
-        case 4: // LOAD
+        case WATCHDOG_LOAD_OFFSET:
             return 0;
-        case 8: // REASON
+        case WATCHDOG_REASON_OFFSET:
             return 0;
-        case 0x0C: // SCRATCH0
-        case 0x10:
-        case 0x14:
-        case 0x18:
-        case 0x1C:
-        case 0x20:
-        case 0x24:
-        case 0x28: // SCRATCH7
+        case WATCHDOG_SCRATCH0_OFFSET:
+        case WATCHDOG_SCRATCH1_OFFSET:
+        case WATCHDOG_SCRATCH2_OFFSET:
+        case WATCHDOG_SCRATCH3_OFFSET:
+        case WATCHDOG_SCRATCH4_OFFSET:
+        case WATCHDOG_SCRATCH5_OFFSET:
+        case WATCHDOG_SCRATCH6_OFFSET:
+        case WATCHDOG_SCRATCH7_OFFSET:
             return scratch[addr / 4 - 3];
-        case 0x2C: // TICK
-            return tick | (1 << 10) | tickCounter << 11;
+        case WATCHDOG_TICK_OFFSET:
+            return tick | WATCHDOG_TICK_RUNNING_BITS | tickCounter << 11;
     }
     return 0;
 }
@@ -125,26 +126,26 @@ void Watchdog::regWrite(uint32_t addr, uint32_t data)
 
     switch(addr)
     {
-        case 0: // CTRL
+        case WATCHDOG_CTRL_OFFSET:
             updateReg(ctrl, data & 0xC7000000, atomic);
             return;
-        case 4: // LOAD
+        case WATCHDOG_LOAD_OFFSET:
             timer = data & 0xFFFFFF;
             return;
-        case 8: // REASON
+        case WATCHDOG_REASON_OFFSET:
             return;
-        case 0x0C: // SCRATCH0
-        case 0x10:
-        case 0x14:
-        case 0x18:
-        case 0x1C:
-        case 0x20:
-        case 0x24:
-        case 0x28: // SCRATCH7
+        case WATCHDOG_SCRATCH0_OFFSET:
+        case WATCHDOG_SCRATCH1_OFFSET:
+        case WATCHDOG_SCRATCH2_OFFSET:
+        case WATCHDOG_SCRATCH3_OFFSET:
+        case WATCHDOG_SCRATCH4_OFFSET:
+        case WATCHDOG_SCRATCH5_OFFSET:
+        case WATCHDOG_SCRATCH6_OFFSET:
+        case WATCHDOG_SCRATCH7_OFFSET:
             scratch[addr / 4 - 3] = data;
             return;
-        case 0x2C: // TICK
-            updateReg(tick, data & 0x3FF, atomic);
+        case WATCHDOG_TICK_OFFSET:
+            updateReg(tick, data & (WATCHDOG_TICK_ENABLE_BITS | WATCHDOG_TICK_CYCLES_BITS), atomic);
             return;
     }
 }
