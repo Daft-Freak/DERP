@@ -18,8 +18,8 @@ Watchdog::Watchdog(MemoryBus &mem) : mem(mem)
 
 void Watchdog::reset()
 {
-    ctrl = 7 << 24;
-    tick = 1 << 9;
+    ctrl = WATCHDOG_CTRL_RESET;
+    tick = WATCHDOG_TICK_RESET;
 
     clock.reset();
 
