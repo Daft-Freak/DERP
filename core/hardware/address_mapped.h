@@ -4,7 +4,7 @@
 
 #include <stdint.h>
 
-#define _u(x) x##u
+#include "hardware/platform_defs.h"
 
 #define _REG_(x)
 
