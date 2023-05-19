@@ -18,10 +18,10 @@ UART::UART(MemoryBus &mem, int index) : mem(mem), index(index)
 
 void UART::reset()
 {
-    baudInt = UART_UARTIBRD_RESET;
-    baudFrac = UART_UARTFBRD_RESET;
-    lcr = UART_UARTLCR_H_RESET;
-    cr = UART_UARTCR_RESET;
+    hw.ibrd = UART_UARTIBRD_RESET;
+    hw.fbrd = UART_UARTFBRD_RESET;
+    hw.lcr_h = UART_UARTLCR_H_RESET;
+    hw.cr = UART_UARTCR_RESET;
 
     txDataOff = 0;
 }
@@ -33,13 +33,13 @@ uint32_t UART::regRead(uint32_t addr)
         case UART_UARTFR_OFFSET:
             return UART_UARTFR_RXFE_BITS | UART_UARTFR_TXFE_BITS; // FIFOs empty
         case UART_UARTIBRD_OFFSET:
-            return baudInt;
+            return hw.ibrd;
         case UART_UARTFBRD_OFFSET:
-            return baudFrac;
+            return hw.fbrd;
         case UART_UARTLCR_H_OFFSET:
-            return lcr;
+            return hw.lcr_h;
         case UART_UARTCR_OFFSET:
-            return cr;
+            return hw.cr;
     }
 
     logf(LogLevel::NotImplemented, logComponent, "%i R %04X", index, addr);
@@ -70,16 +70,16 @@ void UART::regWrite(uint32_t addr, uint32_t data)
             }
             return;
         case UART_UARTIBRD_OFFSET:
-            updateReg(baudInt, data, atomic);
+            updateReg(hw.ibrd, data, atomic);
             return;
         case UART_UARTFBRD_OFFSET:
-            updateReg(baudFrac, data, atomic);
+            updateReg(hw.fbrd, data, atomic);
             return;
         case UART_UARTLCR_H_OFFSET:
-            updateReg(lcr, data, atomic);
+            updateReg(hw.lcr_h, data, atomic);
             return;
         case UART_UARTCR_OFFSET:
-            updateReg(cr, data, atomic);
+            updateReg(hw.cr, data, atomic);
             return;
     }
 

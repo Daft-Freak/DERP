@@ -2,6 +2,8 @@
 
 #include <cstdint>
 
+#include "hardware/structs/uart.h"
+
 class MemoryBus;
 
 class UART final
@@ -18,10 +20,7 @@ private:
     MemoryBus &mem;
     int index;
 
-    uint32_t baudInt;
-    uint32_t baudFrac;
-    uint32_t lcr;
-    uint32_t cr;
+    uart_hw_t hw;
 
     int txDataOff;
     uint8_t txData[1024];
