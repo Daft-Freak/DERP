@@ -1,5 +1,8 @@
 #include <cstdio>
 
+#include "hardware/platform_defs.h"
+#include "hardware/regs/uart.h"
+
 #include "UART.h"
 
 #include "MemoryBus.h"
@@ -15,10 +18,10 @@ UART::UART(MemoryBus &mem, int index) : mem(mem), index(index)
 
 void UART::reset()
 {
-    baudInt = 0;
-    baudFrac = 0;
-    lcr = 0;
-    cr = 0x301; // TXE | RXE
+    baudInt = UART_UARTIBRD_RESET;
+    baudFrac = UART_UARTFBRD_RESET;
+    lcr = UART_UARTLCR_H_RESET;
+    cr = UART_UARTCR_RESET;
 
     txDataOff = 0;
 }
@@ -27,15 +30,15 @@ uint32_t UART::regRead(uint32_t addr)
 {
     switch(addr)
     {
-        case 0x18: //UARTFR
-            return 0b10010000; // FIFOs empty
-        case 0x24: // UARTIBRD
+        case UART_UARTFR_OFFSET:
+            return UART_UARTFR_RXFE_BITS | UART_UARTFR_TXFE_BITS; // FIFOs empty
+        case UART_UARTIBRD_OFFSET:
             return baudInt;
-        case 0x28: // UARTFBRD
+        case UART_UARTFBRD_OFFSET:
             return baudFrac;
-        case 0x2C: // UARTLCR_H
+        case UART_UARTLCR_H_OFFSET:
             return lcr;
-        case 0x30: // UARCR
+        case UART_UARTCR_OFFSET:
             return cr;
     }
 
@@ -53,7 +56,7 @@ void UART::regWrite(uint32_t addr, uint32_t data)
 
     switch(addr)
     {
-        case 0x0: // UARTDR
+        case UART_UARTDR_OFFSET:
             txData[txDataOff++] = data;
             if(data == '\n')
             {
@@ -66,16 +69,16 @@ void UART::regWrite(uint32_t addr, uint32_t data)
                 logf(LogLevel::Warning, logComponent, "Dropping UART%i data", index);
             }
             return;
-        case 0x24: // UARTIBRD
+        case UART_UARTIBRD_OFFSET:
             updateReg(baudInt, data, atomic);
             return;
-        case 0x28: // UARTFBRD
+        case UART_UARTFBRD_OFFSET:
             updateReg(baudFrac, data, atomic);
             return;
-        case 0x2C: // UARTLCR_H
+        case UART_UARTLCR_H_OFFSET:
             updateReg(lcr, data, atomic);
             return;
-        case 0x30: // UARTCR
+        case UART_UARTCR_OFFSET:
             updateReg(cr, data, atomic);
             return;
     }
