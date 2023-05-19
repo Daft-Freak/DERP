@@ -3,6 +3,8 @@
 #include <cstdint>
 #include <functional>
 
+#include "hardware/structs/iobank0.h"
+
 class MemoryBus;
 
 class GPIO final
@@ -48,11 +50,9 @@ public:
 private:
     MemoryBus &mem;
 
-    uint32_t ctrl[30];
-    uint32_t interrupts[4];
-    uint32_t proc0InterruptEnables[4]; // TODO: proc1
+    iobank0_hw_t io;
 
-    uint32_t padControl[32]; // GPIO0-29, SWCLK, SWD
+    uint32_t padControl[NUM_BANK0_GPIOS + 2]; // GPIO0-29, SWCLK, SWD
 
     uint32_t inputs;
     uint32_t outputs;

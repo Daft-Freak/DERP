@@ -20,13 +20,13 @@ GPIO::GPIO(MemoryBus &mem) : mem(mem)
 
 void GPIO::reset()
 {
-    for(auto &reg : ctrl)
-        reg = IO_BANK0_GPIO0_CTRL_RESET;
+    for(auto &io: io.io)
+        io.ctrl = IO_BANK0_GPIO0_CTRL_RESET;
 
-    for(auto &reg : interrupts)
+    for(auto &reg : io.intr)
         reg = IO_BANK0_INTR0_RESET;
 
-    for(auto &reg : proc0InterruptEnables)
+    for(auto &reg : io.proc0_irq_ctrl.inte)
         reg = IO_BANK0_PROC0_INTE0_RESET;
 
     for(auto &reg : padControl)
@@ -47,29 +47,29 @@ void GPIO::setInputs(uint32_t inputs)
 
     if(changed)
     {
-        for(int i = 0; i < 32; i++)
+        for(unsigned i = 0; i < NUM_BANK0_GPIOS; i++)
         {
             if(!(changed & (1 << i)))
                 continue;
 
             // TODO: proc1
             int ioShift = i % 8 * 4;
-            auto p0IntEn = (proc0InterruptEnables[i / 8] >> ioShift) & 0xF;
+            auto p0IntEn = (io.proc0_irq_ctrl.inte[i / 8] >> ioShift) & 0xF;
 
             bool newState = inputs & (1 << i);
             bool oldState = this->inputs & (1 << i);
 
             // TODO: level should stick
             if(!newState && (p0IntEn & IO_BANK0_PROC0_INTE0_GPIO0_LEVEL_LOW_BITS))
-                interrupts[i / 8] |= 1 << (ioShift + 0);
+                io.intr[i / 8] |= 1 << (ioShift + 0);
             else if(newState && (p0IntEn & IO_BANK0_PROC0_INTE0_GPIO0_LEVEL_HIGH_BITS))
-                interrupts[i / 8] |= 1 << (ioShift + 1);
+                io.intr[i / 8] |= 1 << (ioShift + 1);
             else if(!newState && oldState && (p0IntEn & IO_BANK0_PROC0_INTE0_GPIO0_EDGE_LOW_BITS))
-                interrupts[i / 8] |= 1 << (ioShift + 2);
+                io.intr[i / 8] |= 1 << (ioShift + 2);
             else if(newState && !oldState && (p0IntEn & IO_BANK0_PROC0_INTE0_GPIO0_EDGE_HIGH_BITS))
-                interrupts[i / 8] |= 1 << (ioShift + 3);
+                io.intr[i / 8] |= 1 << (ioShift + 3);
 
-            if(interrupts[i / 8] & proc0InterruptEnables[i / 8])
+            if(io.intr[i / 8] & io.proc0_irq_ctrl.inte[i / 8])
             {
                 // TODO: only to one core
                 mem.setPendingIRQ(IO_IRQ_BANK0);
@@ -93,7 +93,7 @@ bool GPIO::interruptsEnabledOnPin(int pin)
 {
     // TODO: proc1
     int ioShift = pin % 8 * 4;
-    auto p0IntEn = (proc0InterruptEnables[pin / 8] >> ioShift) & 0xF;
+    auto p0IntEn = (io.proc0_irq_ctrl.inte[pin / 8] >> ioShift) & 0xF;
 
     return p0IntEn != 0;
 }
@@ -108,18 +108,18 @@ uint32_t GPIO::regRead(uint32_t addr)
     if(addr < IO_BANK0_INTR0_OFFSET)
     {
         if(addr & 4) // GPIOx_CTRL
-            return ctrl[addr / 8];
-        // else status
+            return io.io[addr / 8].ctrl;
+        // else status ()
     }
     else if(addr < IO_BANK0_PROC0_INTE0_OFFSET) // INTR0-3
-        return interrupts[(addr - IO_BANK0_INTR0_OFFSET) / 4];
+        return io.intr[(addr - IO_BANK0_INTR0_OFFSET) / 4];
     else if(addr < IO_BANK0_PROC0_INTF0_OFFSET) // PROC0_INTE0-3
-        return proc0InterruptEnables[(addr - IO_BANK0_PROC0_INTE0_OFFSET) / 4];
+        return io.proc0_irq_ctrl.inte[(addr - IO_BANK0_PROC0_INTE0_OFFSET) / 4];
     else if(addr >= IO_BANK0_PROC0_INTS0_OFFSET && addr < IO_BANK0_PROC1_INTE0_OFFSET) // PROC0_INTS0-3
     {
         int index = (addr - IO_BANK0_PROC0_INTS0_OFFSET) / 4;
         // TODO: force
-        return interrupts[index] & proc0InterruptEnables[index];
+        return io.intr[index] & io.proc0_irq_ctrl.inte[index];
     }
 
     logf(LogLevel::NotImplemented, logComponent, "IO_BANK0 R %04X", addr);
@@ -138,22 +138,22 @@ void GPIO::regWrite(uint32_t addr, uint32_t data)
     {
         if(addr & 4) // GPIOx_CTRL
         {
-            updateReg(ctrl[addr / 8], data, atomic);
+            updateReg(io.io[addr / 8].ctrl, data, atomic);
             return;
         }
-        // else status
+        // else status (read-only)
     }
     else if(addr < IO_BANK0_PROC0_INTE0_OFFSET) // INTR0-3
     {
         if(atomic == 0)
         {
-            interrupts[(addr - IO_BANK0_INTR0_OFFSET) / 4] &= ~(data & 0xCCCCCCCC); // level can't be cleared
+            io.intr[(addr - IO_BANK0_INTR0_OFFSET) / 4] &= ~(data & 0xCCCCCCCC); // level can't be cleared
             return;
         }
     }
     else if(addr < 0x110) // PROC0_INTE0-3
     {
-        updateReg(proc0InterruptEnables[(addr - IO_BANK0_PROC0_INTE0_OFFSET) / 4], data, atomic);
+        updateReg(io.proc0_irq_ctrl.inte[(addr - IO_BANK0_PROC0_INTE0_OFFSET) / 4], data, atomic);
         return;
     }
 
