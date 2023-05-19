@@ -1,6 +1,10 @@
 #include <cassert>
 #include <cstdio>
 
+#include "hardware/platform_defs.h"
+#include "hardware/regs/dma.h"
+#include "hardware/regs/intctrl.h"
+
 #include "DMA.h"
 
 #include "MemoryBus.h"
@@ -21,19 +25,19 @@ void DMA::reset()
     curChannel = 0;
 
     for(auto &reg : readAddr)
-        reg = 0;
+        reg = DMA_CH0_READ_ADDR_RESET;
 
     for(auto &reg : writeAddr)
-        reg = 0;
+        reg = DMA_CH0_WRITE_ADDR_RESET;
 
     for(auto &reg : transferCount)
-        reg = 0;
+        reg = DMA_CH0_TRANS_COUNT_RESET;
 
     for(auto &reg : transferCountReload)
         reg = 0;
 
     for(auto &reg : ctrl)
-        reg = 0;
+        reg = DMA_CH0_CTRL_TRIG_RESET;
 
     interrupts = 0;
     interruptEnables[0] = interruptEnables[1] = 0;
@@ -58,12 +62,12 @@ void DMA::update(uint64_t target)
             if(curChannel == numChannels)
                 curChannel = 0;
 
-            if(!(channelTriggered & (1 << curChannel)) || !(ctrl[curChannel] & 1/*EN*/))
+            if(!(channelTriggered & (1 << curChannel)) || !(ctrl[curChannel] & DMA_CH0_CTRL_TRIG_EN_BITS))
                 continue;
 
-            bool bswap = ctrl[curChannel] & (1 << 22);
+            bool bswap = ctrl[curChannel] & DMA_CH0_CTRL_TRIG_BSWAP_BITS;
 
-            int transferSize = 1 << ((ctrl[curChannel] >> 2) & 3);
+            int transferSize = 1 << ((ctrl[curChannel] & DMA_CH0_CTRL_TRIG_DATA_SIZE_BITS) >> DMA_CH0_CTRL_TRIG_DATA_SIZE_LSB);
 
             int cycles; // TODO
             if(transferSize == 1)
@@ -134,10 +138,10 @@ void DMA::update(uint64_t target)
                 }
             }
 
-            if(ctrl[curChannel] & (1 << 4)/*INCR_READ*/)
+            if(ctrl[curChannel] & DMA_CH0_CTRL_TRIG_INCR_READ_BITS)
                 readAddr[curChannel] += transferSize;
 
-            if(ctrl[curChannel] & (1 << 5)/*INCR_WRITE*/)
+            if(ctrl[curChannel] & DMA_CH0_CTRL_TRIG_INCR_WRITE_BITS)
                 writeAddr[curChannel] += transferSize;
 
             if(--transferCount[curChannel] == 0)
@@ -147,9 +151,9 @@ void DMA::update(uint64_t target)
                 interrupts |= (1 << curChannel);
             
                 if(interruptEnables[0] & (1 << curChannel))
-                    mem.setPendingIRQ(11); // DMA_IRQ_0
+                    mem.setPendingIRQ(DMA_IRQ_0);
                 if(interruptEnables[1] & (1 << curChannel))
-                    mem.setPendingIRQ(12); // DMA_IRQ_1
+                    mem.setPendingIRQ(DMA_IRQ_1);
             }
             break;
         }
@@ -166,7 +170,7 @@ uint64_t DMA::getNextInterruptTime(uint64_t target)
 
     for(int i = 0; i < numChannels; i++)
     {
-        if(!(channelTriggered & (1 << i)) || !(ctrl[i] & 1/*EN*/))
+        if(!(channelTriggered & (1 << i)) || !(ctrl[i] & DMA_CH0_CTRL_TRIG_EN_BITS))
             continue;
 
         if(!(anyInterruptEnable & (1 << i)))
@@ -186,48 +190,48 @@ uint64_t DMA::getNextInterruptTime(uint64_t target)
 
 uint32_t DMA::regRead(uint32_t addr)
 {
-    if(addr < 0x400)
+    if(addr < DMA_INTR_OFFSET)
     {
         int ch = addr / 0x40;
         assert(ch < numChannels);
 
         switch(addr & 0x3F)
         {
-            case 0x00: // READ_ADDR
-            case 0x14: // AL1_READ_ADDR
-            case 0x28: // AL2_READ_ADDR
-            case 0x3C: // AL3_READ_ADDR_TRIG
+            case DMA_CH0_READ_ADDR_OFFSET:
+            case DMA_CH0_AL1_READ_ADDR_OFFSET:
+            case DMA_CH0_AL2_READ_ADDR_OFFSET:
+            case DMA_CH0_AL3_READ_ADDR_TRIG_OFFSET:
                 return readAddr[ch];
-            case 0x04: // WRITE_ADDR
-            case 0x18: // AL1_WRITE_ADDR
-            case 0x2C: // AL2_WRITE_ADDR_TRIG
-            case 0x34: // AL3_WRITE_ADDR
+            case DMA_CH0_WRITE_ADDR_OFFSET:
+            case DMA_CH0_AL1_WRITE_ADDR_OFFSET:
+            case DMA_CH0_AL2_WRITE_ADDR_TRIG_OFFSET:
+            case DMA_CH0_AL3_WRITE_ADDR_OFFSET:
                 return writeAddr[ch];
-            case 0x08: // TRANS_COUNT
-            case 0x1C: // AL1_TRANS_COUNT_TRIG
-            case 0x24: // AL2_TRANS_COUNT
-            case 0x38: // AL3_TRANS_COUNT
+            case DMA_CH0_TRANS_COUNT_OFFSET:
+            case DMA_CH0_AL1_TRANS_COUNT_TRIG_OFFSET:
+            case DMA_CH0_AL2_TRANS_COUNT_OFFSET:
+            case DMA_CH0_AL3_TRANS_COUNT_OFFSET:
                 return transferCount[ch];
-            case 0x0C: // CTRL_TRIG
-            case 0x10: // AL1_CTRL
-            case 0x20: // AL2_CTRL
-            case 0x30: // AL3_CTRL
-                return ctrl[ch] | (channelTriggered & (1 << ch) ? (1 << 24)/*BUSY*/ : 0);
+            case DMA_CH0_CTRL_TRIG_OFFSET:
+            case DMA_CH0_AL1_CTRL_OFFSET:
+            case DMA_CH0_AL2_CTRL_OFFSET:
+            case DMA_CH0_AL3_CTRL_OFFSET:
+                return ctrl[ch] | (channelTriggered & (1 << ch) ? DMA_CH0_CTRL_TRIG_BUSY_BITS : 0);
         }
     }
     else
     {
         switch(addr)
         {
-            case 0x400: // INTR
+            case DMA_INTR_OFFSET:
                 return interrupts;
-            case 0x404: // INTE0
+            case DMA_INTE0_OFFSET:
                 return interruptEnables[0];
-            case 0x40C: // INTS0
+            case DMA_INTS0_OFFSET:
                 return interrupts & interruptEnables[0]; // TODO: force
-            case 0x414: // INTE1
+            case DMA_INTE1_OFFSET:
                 return interruptEnables[1];
-            case 0x41C: // INTS1
+            case DMA_INTS1_OFFSET:
                 return interrupts & interruptEnables[1]; // TODO: force
         }
         logf(LogLevel::NotImplemented, logComponent, "R %08X", addr);
@@ -242,40 +246,40 @@ void DMA::regWrite(uint32_t addr, uint32_t data)
 
     static const char *op[]{" = ", " ^= ", " |= ", " &= ~"};
 
-    if(addr < 0x400)
+    if(addr < DMA_INTR_OFFSET)
     {
         int ch = addr / 0x40;
         assert(ch < numChannels);
 
         switch(addr & 0x3F)
         {
-            case 0x00: // READ_ADDR
-            case 0x14: // AL1_READ_ADDR
-            case 0x28: // AL2_READ_ADDR
-            case 0x3C: // AL3_READ_ADDR_TRIG
+            case DMA_CH0_READ_ADDR_OFFSET:
+            case DMA_CH0_AL1_READ_ADDR_OFFSET:
+            case DMA_CH0_AL2_READ_ADDR_OFFSET:
+            case DMA_CH0_AL3_READ_ADDR_TRIG_OFFSET:
                 updateReg(readAddr[ch], data, atomic);
                 break;
-            case 0x04: // WRITE_ADDR
-            case 0x18: // AL1_WRITE_ADDR
-            case 0x2C: // AL2_WRITE_ADDR_TRIG
-            case 0x34: // AL3_WRITE_ADDR
+            case DMA_CH0_WRITE_ADDR_OFFSET:
+            case DMA_CH0_AL1_WRITE_ADDR_OFFSET:
+            case DMA_CH0_AL2_WRITE_ADDR_TRIG_OFFSET:
+            case DMA_CH0_AL3_WRITE_ADDR_OFFSET:
                 updateReg(writeAddr[ch], data, atomic);
                 break;
-            case 0x08: // TRANS_COUNT
-            case 0x1C: // AL1_TRANS_COUNT_TRIG
-            case 0x24: // AL2_TRANS_COUNT
-            case 0x38: // AL3_TRANS_COUNT
+            case DMA_CH0_TRANS_COUNT_OFFSET:
+            case DMA_CH0_AL1_TRANS_COUNT_TRIG_OFFSET:
+            case DMA_CH0_AL2_TRANS_COUNT_OFFSET:
+            case DMA_CH0_AL3_TRANS_COUNT_OFFSET:
                 updateReg(transferCountReload[ch], data, atomic);
                 break;
-            case 0x0C: // CTRL_TRIG
-            case 0x10: // AL1_CTRL
-            case 0x20: // AL2_CTRL
-            case 0x30: // AL3_CTRL
+            case DMA_CH0_CTRL_TRIG_OFFSET:
+            case DMA_CH0_AL1_CTRL_OFFSET:
+            case DMA_CH0_AL2_CTRL_OFFSET:
+            case DMA_CH0_AL3_CTRL_OFFSET:
                 updateReg(ctrl[ch], data & ~(1 << 24 | 1 << 31), atomic);
                 break;
         }
 
-        if((addr & 0xF) == 0xC && (ctrl[ch] & 1/*EN*/)) // *_TRIG
+        if((addr & 0xF) == 0xC && (ctrl[ch] & DMA_CH0_CTRL_TRIG_EN_BITS)) // *_TRIG
         {
             transferCount[ch] = transferCountReload[ch];
             channelTriggered |= 1 << ch;
@@ -285,11 +289,11 @@ void DMA::regWrite(uint32_t addr, uint32_t data)
     {
         switch(addr)
         {
-            case 0x404: // INTE0
+            case DMA_INTE0_OFFSET:
                 updateReg(interruptEnables[0], data, atomic);
                 return;
-            case 0x40C: // INTS0
-            case 0x41C: // INTS1
+            case DMA_INTS0_OFFSET:
+            case DMA_INTS1_OFFSET:
             {
                 if(atomic == 0)
                 {
@@ -309,7 +313,7 @@ void DMA::regWrite(uint32_t addr, uint32_t data)
                 }
                 break;
             }
-            case 0x414: // INTE1
+            case DMA_INTE1_OFFSET:
                 updateReg(interruptEnables[1], data, atomic);
                 return;
         }
