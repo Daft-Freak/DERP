@@ -17,4 +17,4 @@ target_sources(DERPCore INTERFACE
 )
 
 target_include_directories(DERPCore INTERFACE ${CMAKE_CURRENT_LIST_DIR})
-target_link_libraries(DERPCore INTERFACE hardware_regs)
+target_link_libraries(DERPCore INTERFACE hardware_regs hardware_structs)

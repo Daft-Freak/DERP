@@ -2,7 +2,6 @@
 
 #include "hardware/regs/clocks.h"
 #include "hardware/regs/pll.h"
-#define _u(x) x##u
 
 #include "Clocks.h"
 
@@ -17,24 +16,23 @@ static const char *clockNames[]{"GPOUT0", "GPOUT1", "GPOUT2", "GPOUT3", "REF", "
 
 void Clocks::reset()
 {
-    for(auto &reg : ctrl)
-        reg = CLOCKS_CLK_GPOUT0_CTRL_RESET;
-
-    for(auto &reg : div)
-        reg = CLOCKS_CLK_GPOUT0_DIV_RESET;
+    for(auto &clk : hw.clk)
+    {
+        clk.ctrl = CLOCKS_CLK_GPOUT0_CTRL_RESET;
+        clk.div = CLOCKS_CLK_GPOUT0_DIV_RESET;
+    }
 
     for(auto &clock : clockFreq)
         clock = 0;
 
-    pllSysCS = pllUSBCS = PLL_CS_RESET;
-    pllSysPWR = pllUSBPWR = PLL_PWR_RESET;
-    pllSysFBDIV = pllUSBFBDIV = PLL_FBDIV_INT_RESET;
-
-    pllSysPRIM = pllUSBPRIM = PLL_PRIM_RESET;
+    pllSys.cs = pllUSB.cs = PLL_CS_RESET;
+    pllSys.pwr = pllUSB.pwr = PLL_PWR_RESET;
+    pllSys.fbdiv_int = pllUSB.fbdiv_int = PLL_FBDIV_INT_RESET;
+    pllSys.prim = pllUSB.prim = PLL_PRIM_RESET;
 
     // calcutate always enabled clocks
-    calcFreq(4); // REF
-    calcFreq(5); // SYS
+    calcFreq(clk_ref);
+    calcFreq(clk_sys);
 }
 
 void Clocks::adjustClocks()
@@ -80,15 +78,15 @@ uint32_t Clocks::regRead(uint32_t addr)
         int reg = addr % 12;
 
         if(reg == CLOCKS_CLK_GPOUT0_CTRL_OFFSET)
-            return ctrl[clock];
+            return hw.clk[clock].ctrl;
         else if(reg == CLOCKS_CLK_GPOUT0_DIV_OFFSET)
-            return div[clock];
+            return hw.clk[clock].div;
         else if(reg == CLOCKS_CLK_GPOUT0_SELECTED_OFFSET)
         {
-            if(clock == 4) // REF
-                return 1 << (ctrl[clock] & CLOCKS_CLK_REF_CTRL_SRC_BITS); // TODO: doesn't change instantly
-            else if(clock == 5) // SYS
-                return 1 << (ctrl[clock] & CLOCKS_CLK_SYS_CTRL_SRC_BITS);
+            if(clock == clk_ref)
+                return 1 << (hw.clk[clock].ctrl & CLOCKS_CLK_REF_CTRL_SRC_BITS); // TODO: doesn't change instantly
+            else if(clock == clk_sys)
+                return 1 << (hw.clk[clock].ctrl & CLOCKS_CLK_SYS_CTRL_SRC_BITS);
 
             return 1;
         }
@@ -115,14 +113,14 @@ void Clocks::regWrite(uint32_t addr, uint32_t data)
         bool changed = false;
 
         if(reg == CLOCKS_CLK_GPOUT0_CTRL_OFFSET)
-            changed = updateReg(ctrl[clock], data, atomic);
+            changed = updateReg(hw.clk[clock].ctrl, data, atomic);
         else if(reg == CLOCKS_CLK_GPOUT0_DIV_OFFSET)
-            changed = updateReg(div[clock], data, atomic);
+            changed = updateReg(hw.clk[clock].div, data, atomic);
 
         // update clock freq
         if(changed)
         {
-            bool enabled = clock == 4/*REF*/ || clock == 5/*SYS*/ || (ctrl[clock] & CLOCKS_CLK_GPOUT0_CTRL_ENABLE_BITS);
+            bool enabled = clock == clk_ref || clock == clk_sys || (hw.clk[clock].ctrl & CLOCKS_CLK_GPOUT0_CTRL_ENABLE_BITS);
             if(enabled)
                 calcFreq(clock);
             else
@@ -138,13 +136,13 @@ uint32_t Clocks::pllSysRegRead(uint32_t addr)
     switch(addr)
     {
         case PLL_CS_OFFSET:
-            return pllSysCS | PLL_CS_LOCK_BITS;
+            return pllSys.cs | PLL_CS_LOCK_BITS;
         case PLL_PWR_OFFSET:
-            return pllSysPWR;
+            return pllSys.pwr;
         case PLL_FBDIV_INT_OFFSET:
-            return pllSysFBDIV;
+            return pllSys.fbdiv_int;
         case PLL_PRIM_OFFSET:
-            return pllSysPRIM;
+            return pllSys.prim;
     }
 
     return 0xBADADD55;
@@ -158,23 +156,23 @@ void Clocks::pllSysRegWrite(uint32_t addr, uint32_t data)
     switch(addr)
     {
         case PLL_CS_OFFSET:
-            updateReg(pllSysCS, data & ~PLL_CS_LOCK_BITS, atomic);
+            updateReg(pllSys.cs, data & ~PLL_CS_LOCK_BITS, atomic);
             break;
         case PLL_PWR_OFFSET:
-            updateReg(pllSysPWR, data, atomic);
+            updateReg(pllSys.pwr, data, atomic);
             break;
         case PLL_FBDIV_INT_OFFSET:
-            updateReg(pllSysFBDIV, data, atomic);
+            updateReg(pllSys.fbdiv_int, data, atomic);
             break;
         case PLL_PRIM_OFFSET:
-            updateReg(pllSysPRIM, data, atomic);
+            updateReg(pllSys.prim, data, atomic);
             break;
     }
 
     // (REF / REFDIV) * FBDIV / (POSTDIV1 * POSTDIV2)
     int ref = 12 * 1000 * 1000; // assume 12MHz
-    int freq = (ref / (pllSysCS & 0x3F)) * pllSysFBDIV / (((pllSysPRIM >> 16) & 7) * ((pllSysPRIM >> 12) & 7));
-    logf(LogLevel::Debug, logComponent, "PLL_SYS = (%i / %i) * %i / (%i * %i) = %i", ref, pllSysCS & 0x3F, pllSysFBDIV, (pllSysPRIM >> 16) & 7, (pllSysPRIM >> 12) & 7, freq);
+    int freq = (ref / (pllSys.cs & 0x3F)) * pllSys.fbdiv_int / (((pllSys.prim >> 16) & 7) * ((pllSys.prim >> 12) & 7));
+    logf(LogLevel::Debug, logComponent, "PLL_SYS = (%i / %i) * %i / (%i * %i) = %i", ref, pllSys.cs & 0x3F, pllSys.fbdiv_int, (pllSys.prim >> 16) & 7, (pllSys.prim >> 12) & 7, freq);
 }
 
 uint32_t Clocks::pllUSBRegRead(uint32_t addr)
@@ -182,13 +180,13 @@ uint32_t Clocks::pllUSBRegRead(uint32_t addr)
     switch(addr)
     {
         case PLL_CS_OFFSET:
-            return pllUSBCS | PLL_CS_LOCK_BITS;
+            return pllUSB.cs | PLL_CS_LOCK_BITS;
         case PLL_PWR_OFFSET:
-            return pllUSBPWR;
+            return pllUSB.pwr;
         case PLL_FBDIV_INT_OFFSET:
-            return pllUSBFBDIV;
+            return pllUSB.fbdiv_int;
         case  PLL_PRIM_OFFSET:
-            return pllUSBPRIM;
+            return pllUSB.prim;
     }
 
     return 0xBADADD55;
@@ -202,23 +200,23 @@ void Clocks::pllUSBRegWrite(uint32_t addr, uint32_t data)
     switch(addr)
     {
         case PLL_CS_OFFSET:
-            updateReg(pllUSBCS, data & ~PLL_CS_LOCK_BITS, atomic);
+            updateReg(pllUSB.cs, data & ~PLL_CS_LOCK_BITS, atomic);
             break;
         case PLL_PWR_OFFSET:
-            updateReg(pllUSBPWR, data, atomic);
+            updateReg(pllUSB.pwr, data, atomic);
             break;
         case PLL_FBDIV_INT_OFFSET:
-            updateReg(pllUSBFBDIV, data, atomic);
+            updateReg(pllUSB.fbdiv_int, data, atomic);
             break;
         case PLL_PRIM_OFFSET:
-            updateReg(pllUSBPRIM, data, atomic);
+            updateReg(pllUSB.prim, data, atomic);
             break;
     }
 
     // (REF / REFDIV) * FBDIV / (POSTDIV1 * POSTDIV2)
     int ref = 12 * 1000 * 1000; // assume 12MHz
-    int freq = (ref / (pllSysCS & 0x3F)) * pllUSBFBDIV / (((pllUSBPRIM >> 16) & 7) * ((pllUSBPRIM >> 12) & 7));
-    logf(LogLevel::Debug, logComponent, "PLL_USB = (%i / %i) * %i / (%i * %i) = %i", ref, pllUSBCS & 0x3F, pllUSBFBDIV, (pllUSBPRIM >> 16) & 7, (pllUSBPRIM >> 12) & 7, freq);
+    int freq = (ref / (pllSys.cs & 0x3F)) * pllUSB.fbdiv_int / (((pllUSB.prim >> 16) & 7) * ((pllUSB.prim >> 12) & 7));
+    logf(LogLevel::Debug, logComponent, "PLL_USB = (%i / %i) * %i / (%i * %i) = %i", ref, pllUSB.cs & 0x3F, pllUSB.fbdiv_int, (pllUSB.prim >> 16) & 7, (pllUSB.prim >> 12) & 7, freq);
 }
 
 void Clocks::calcFreq(int clock)
@@ -230,12 +228,12 @@ void Clocks::calcFreq(int clock)
     {
         // TODO: bypass
         // TODO: cache?
-        if(!(pllSysPWR & PLL_PWR_VCOPD_RESET))
+        if(!(pllSys.pwr & PLL_PWR_VCOPD_RESET))
         {
-            auto refDiv = pllSysCS & PLL_CS_REFDIV_BITS;
-            auto postdiv1 = (pllSysPRIM & PLL_PRIM_POSTDIV1_BITS) >> PLL_PRIM_POSTDIV1_LSB;
-            auto postdiv2 = (pllSysPRIM & PLL_PRIM_POSTDIV2_BITS) >> PLL_PRIM_POSTDIV2_LSB;
-            return (xoscFreq / refDiv) * pllSysFBDIV / (postdiv1 * postdiv2);
+            auto refDiv = pllSys.cs & PLL_CS_REFDIV_BITS;
+            auto postdiv1 = (pllSys.prim & PLL_PRIM_POSTDIV1_BITS) >> PLL_PRIM_POSTDIV1_LSB;
+            auto postdiv2 = (pllSys.prim & PLL_PRIM_POSTDIV2_BITS) >> PLL_PRIM_POSTDIV2_LSB;
+            return (xoscFreq / refDiv) * pllSys.fbdiv_int / (postdiv1 * postdiv2);
         }
 
         return 0u;
@@ -245,12 +243,12 @@ void Clocks::calcFreq(int clock)
     {
         // TODO: bypass
         // TODO: cache?
-        if(!(pllUSBPWR & PLL_PWR_VCOPD_RESET))
+        if(!(pllUSB.pwr & PLL_PWR_VCOPD_RESET))
         {
-            auto refDiv = pllUSBCS & PLL_CS_REFDIV_BITS;
-            auto postdiv1 = (pllUSBPRIM & PLL_PRIM_POSTDIV1_BITS) >> PLL_PRIM_POSTDIV1_LSB;
-            auto postdiv2 = (pllUSBPRIM & PLL_PRIM_POSTDIV2_BITS) >> PLL_PRIM_POSTDIV2_LSB;
-            return (xoscFreq / refDiv) * pllUSBFBDIV / (postdiv1 * postdiv2);
+            auto refDiv = pllUSB.cs & PLL_CS_REFDIV_BITS;
+            auto postdiv1 = (pllUSB.prim & PLL_PRIM_POSTDIV1_BITS) >> PLL_PRIM_POSTDIV1_LSB;
+            auto postdiv2 = (pllUSB.prim & PLL_PRIM_POSTDIV2_BITS) >> PLL_PRIM_POSTDIV2_LSB;
+            return (xoscFreq / refDiv) * pllUSB.fbdiv_int / (postdiv1 * postdiv2);
         }
 
         return 0u;
@@ -267,10 +265,10 @@ void Clocks::calcFreq(int clock)
     {
         // TODO: GPOUT0-3
 
-        case 4: // REF
+        case clk_ref:
         {
-            int src = ctrl[clock] & CLOCKS_CLK_REF_CTRL_SRC_BITS;
-            int clkDiv = (div[clock] & CLOCKS_CLK_REF_DIV_INT_BITS) >> CLOCKS_CLK_REF_DIV_INT_LSB; // no frac
+            int src = hw.clk[clock].ctrl & CLOCKS_CLK_REF_CTRL_SRC_BITS;
+            int clkDiv = (hw.clk[clock].div & CLOCKS_CLK_REF_DIV_INT_BITS) >> CLOCKS_CLK_REF_DIV_INT_LSB; // no frac
             if(!clkDiv)
                 clkDiv = 1 << 16;
 
@@ -278,7 +276,7 @@ void Clocks::calcFreq(int clock)
                 clockFreq[clock] = roscFreq / clkDiv;
             else if(src == CLOCKS_CLK_REF_CTRL_SRC_VALUE_CLKSRC_CLK_REF_AUX)
             {
-                int aux = (ctrl[clock] & CLOCKS_CLK_REF_CTRL_AUXSRC_BITS) >> CLOCKS_CLK_REF_CTRL_AUXSRC_LSB;
+                int aux = (hw.clk[clock].ctrl & CLOCKS_CLK_REF_CTRL_AUXSRC_BITS) >> CLOCKS_CLK_REF_CTRL_AUXSRC_LSB;
                 if(aux == CLOCKS_CLK_REF_CTRL_AUXSRC_VALUE_CLKSRC_PLL_USB)
                     clockFreq[clock] = getPLLUSBFreq() / clkDiv;
                 // else gpin0/1
@@ -289,10 +287,10 @@ void Clocks::calcFreq(int clock)
             break;
         }
 
-        case 5: // SYS
+        case clk_sys:
         {
-            int src = ctrl[clock] & CLOCKS_CLK_SYS_CTRL_SRC_BITS;
-            int clkDiv = div[clock];
+            int src = hw.clk[clock].ctrl & CLOCKS_CLK_SYS_CTRL_SRC_BITS;
+            int clkDiv = hw.clk[clock].div;
 
             if(!(clkDiv >> CLOCKS_CLK_SYS_DIV_INT_LSB))
                 clkDiv |= 1 << 24;
@@ -301,7 +299,7 @@ void Clocks::calcFreq(int clock)
                 clockFreq[clock] = divClock(clockFreq[4], clkDiv); // REF
             else // aux
             {
-                int aux = (ctrl[clock] & CLOCKS_CLK_SYS_CTRL_AUXSRC_BITS) >> CLOCKS_CLK_SYS_CTRL_AUXSRC_LSB;
+                int aux = (hw.clk[clock].ctrl & CLOCKS_CLK_SYS_CTRL_AUXSRC_BITS) >> CLOCKS_CLK_SYS_CTRL_AUXSRC_LSB;
 
                 if(aux == CLOCKS_CLK_SYS_CTRL_AUXSRC_VALUE_CLKSRC_PLL_SYS)
                     clockFreq[clock] = divClock(getPLLSysFreq(), clkDiv);
@@ -317,9 +315,9 @@ void Clocks::calcFreq(int clock)
             break;
         }
 
-        case 6: // PERI
+        case clk_peri:
         {
-            int aux = (ctrl[clock] & CLOCKS_CLK_PERI_CTRL_AUXSRC_BITS) >> CLOCKS_CLK_PERI_CTRL_AUXSRC_LSB;
+            int aux = (hw.clk[clock].ctrl & CLOCKS_CLK_PERI_CTRL_AUXSRC_BITS) >> CLOCKS_CLK_PERI_CTRL_AUXSRC_LSB;
             // no div
 
             if(aux == CLOCKS_CLK_PERI_CTRL_AUXSRC_VALUE_CLK_SYS)
@@ -337,14 +335,14 @@ void Clocks::calcFreq(int clock)
             break;
         }
 
-        case 7: // USB
-        case 8: // ADC
-        case 9: // RTC
+        case clk_usb:
+        case clk_adc:
+        case clk_rtc:
         {
-            int aux = (ctrl[clock] & CLOCKS_CLK_USB_CTRL_AUXSRC_BITS) >> CLOCKS_CLK_USB_CTRL_AUXSRC_LSB;
+            int aux = (hw.clk[clock].ctrl & CLOCKS_CLK_USB_CTRL_AUXSRC_BITS) >> CLOCKS_CLK_USB_CTRL_AUXSRC_LSB;
 
             // TODO: RTC has fractional divider
-            int clkDiv = div[clock] >> CLOCKS_CLK_USB_DIV_INT_LSB;
+            int clkDiv = hw.clk[clock].div >> CLOCKS_CLK_USB_DIV_INT_LSB;
 
             if(!clkDiv)
                 clkDiv = 1 << 16;

@@ -3,6 +3,9 @@
 #include <cstdint>
 #include <map>
 
+#include "hardware/structs/clocks.h"
+#include "hardware/structs/pll.h"
+
 #include "ClockTarget.h"
 
 class Clocks final
@@ -29,15 +32,11 @@ public:
 private:
     void calcFreq(int clock);
 
-    uint32_t ctrl[10];
-    uint32_t div[10];
+    clocks_hw_t hw;
 
-    uint32_t clockFreq[10];
+    uint32_t clockFreq[CLK_COUNT];
 
-    uint32_t pllSysCS, pllUSBCS;
-    uint32_t pllSysPWR, pllUSBPWR;
-    uint32_t pllSysFBDIV, pllUSBFBDIV;
-    uint32_t pllSysPRIM, pllUSBPRIM;
+    pll_hw_t pllSys, pllUSB;
 
     std::multimap<int, ClockTarget &> targets;
 };
