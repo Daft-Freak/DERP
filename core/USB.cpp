@@ -307,13 +307,32 @@ void USB::updateInterrupts()
     interrupts &= ~mask;
 
     // copy bits from SIE_STATUS
+    if(sieStatus & USB_SIE_STATUS_VBUS_DETECTED_BITS)
+        interrupts |= USB_INTS_VBUS_DETECT_BITS;
     if(sieStatus & USB_SIE_STATUS_SETUP_REC_BITS)
         interrupts |= USB_INTS_SETUP_REQ_BITS; 
     if(sieStatus & USB_SIE_STATUS_TRANS_COMPLETE_BITS)
         interrupts |= USB_INTS_TRANS_COMPLETE_BITS;
     if(sieStatus & USB_SIE_STATUS_BUS_RESET_BITS)
         interrupts |= USB_INTS_BUS_RESET_BITS;
+    if(sieStatus & USB_SIE_STATUS_CRC_ERROR_BITS)
+        interrupts |= USB_INTS_ERROR_CRC_BITS;
+    if(sieStatus & USB_SIE_STATUS_BIT_STUFF_ERROR_BITS)
+        interrupts |= USB_INTS_ERROR_BIT_STUFF_BITS;
+    if(sieStatus & USB_SIE_STATUS_RX_OVERFLOW_BITS)
+        interrupts |= USB_INTS_ERROR_RX_OVERFLOW_BITS;
+    if(sieStatus & USB_SIE_STATUS_RX_TIMEOUT_BITS)
+        interrupts |= USB_INTS_ERROR_RX_TIMEOUT_BITS;
+    if(sieStatus & USB_SIE_STATUS_DATA_SEQ_ERROR_BITS)
+        interrupts |= USB_INTS_ERROR_DATA_SEQ_BITS;
+    if(sieStatus & USB_SIE_STATUS_STALL_REC_BITS)
+        interrupts |= USB_INTS_STALL_BITS;
 
+    //TODO: STALL_NAK
+
+    if(epAbortDone)
+        interrupts |= USB_INTS_ABORT_DONE_BITS;
+    
     // set buff status
     if(buffStatus[0] | buffStatus[1])
         interrupts |= USB_INTS_BUFF_STATUS_BITS;
