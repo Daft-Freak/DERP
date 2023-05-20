@@ -44,6 +44,19 @@ public:
     bool usbipUnlink(struct usbip_client *client, uint32_t seqnum);
 
 private:
+    enum class EnumerationState
+    {
+        NotStarted = 0,
+        RequestDeviceDesc,
+        ReadDeviceDesc, // and reset
+        SetAddress,
+        RequestConfigDesc,
+        RequestFullConfigDesc,
+        ReadConfigDesc, // and set config OR init usbip
+        InitCDC, // if found
+        Done
+    };
+
     void updateInterrupts();
 
     void updateEnumeration();
@@ -69,7 +82,7 @@ private:
     uint32_t interrupts;
     uint32_t interruptEnables;
 
-    int enumerationState;
+    EnumerationState enumerationState;
     uint8_t deviceDesc[18];
     uint8_t *configDesc;
     int configDescLen, configDescOffset;

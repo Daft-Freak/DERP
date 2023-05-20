@@ -71,7 +71,7 @@ void USB::reset()
     interrupts = 0;
     interruptEnables = 0;
 
-    enumerationState = 0;
+    enumerationState = EnumerationState::NotStarted;
     configDesc = nullptr;
     configDescLen = 0;
     configDescOffset = 0;
@@ -194,7 +194,7 @@ void USB::regWrite(uint32_t addr, uint32_t data)
 
         case USB_SIE_STATUS_OFFSET:
             updateReg(sieStatus, data, atomic);
-            if(enumerationState == 3 && !(sieStatus & USB_SIE_STATUS_BUS_RESET_BITS))
+            if(enumerationState == EnumerationState::SetAddress && !(sieStatus & USB_SIE_STATUS_BUS_RESET_BITS))
                 updateEnumeration();
 
             updateInterrupts();
@@ -217,8 +217,12 @@ void USB::regWrite(uint32_t addr, uint32_t data)
 
             if(atomic == 3 && (data & USB_BUFF_STATUS_EP0_IN_BITS)) // clearing ep0 in
             {
-                if(enumerationState == 2 || enumerationState == 4 || enumerationState == 5 || enumerationState == 6 || enumerationState == 7)
+                if(enumerationState == EnumerationState::ReadDeviceDesc || enumerationState == EnumerationState::RequestConfigDesc || 
+                   enumerationState == EnumerationState::RequestFullConfigDesc || enumerationState == EnumerationState::ReadConfigDesc || 
+                   enumerationState == EnumerationState::InitCDC)
+                {
                     updateEnumeration();
+                }
             }
 
             updateInterrupts();
@@ -287,10 +291,10 @@ bool USB::getConfigured()
 
 void USB::startEnumeration()
 {
-    if(enumerationState)
+    if(enumerationState != EnumerationState::NotStarted)
         return;
 
-    enumerationState = 1;
+    enumerationState = EnumerationState::RequestDeviceDesc;
     cdcInEP = cdcOutEP = 0;
 
     updateEnumeration();
@@ -359,15 +363,19 @@ void USB::updateEnumeration()
 
     switch(enumerationState)
     {
-        case 1: // request device descriptor
+        case EnumerationState::NotStarted:
+        case EnumerationState::Done:
+            break;
+
+        case EnumerationState::RequestDeviceDesc:
         {
             setupPacket(0x80, 6 /*GET_DESCRIPTOR*/, 1 << 8 /*device*/, 0, 18);
 
-            enumerationState = 2;
+            enumerationState = EnumerationState::ReadDeviceDesc;
             break;
         }
         
-        case 2: // read device descriptor
+        case EnumerationState::ReadDeviceDesc:
         {
             logf(LogLevel::Debug, logComponent, "USB device descriptor:");
             auto buf = dpram + 0x100;
@@ -392,28 +400,28 @@ void USB::updateEnumeration()
             // reset
             sieStatus |= USB_SIE_STATUS_BUS_RESET_BITS;
 
-            enumerationState = 3;
+            enumerationState = EnumerationState::SetAddress;
         }
         break;
 
-        case 3: // reset done
+        case EnumerationState::SetAddress: // reset done
         {
             setupPacket(0, 5 /*SET_ADDRESS*/, 1 /*addr*/, 0, 0);
 
-            enumerationState = 4;
+            enumerationState = EnumerationState::RequestConfigDesc;
             break;
         }
 
-        case 4: // set addr done
+        case EnumerationState::RequestConfigDesc: // set addr done
         {
             // get config descriptor
             setupPacket(0x80, 6 /*GET_DESCRIPTOR*/, 2 << 8 /*configuration*/, 0, 9);
 
-            enumerationState = 5;
+            enumerationState = EnumerationState::RequestFullConfigDesc;
             break;
         }
 
-        case 5: // read config descriptor
+        case EnumerationState::RequestFullConfigDesc:
         {
             auto buf = dpram + 0x100;
             configDescLen = buf[2] | buf[3] << 8;
@@ -422,7 +430,7 @@ void USB::updateEnumeration()
             // now get the whole thing
             setupPacket(0x80, 6 /*GET_DESCRIPTOR*/, 2 << 8 /*configuration*/, 0, configDescLen);
 
-            enumerationState = 6;
+            enumerationState = EnumerationState::ReadConfigDesc;
 
             if(configDesc)
                 delete[] configDesc;
@@ -432,7 +440,7 @@ void USB::updateEnumeration()
             break;
         }
 
-        case 6: // REALLY read config descriptor
+        case EnumerationState::ReadConfigDesc:
         {
             auto buf = dpram + 0x100;
             auto bufLen = *reinterpret_cast<uint32_t *>(dpram + USB_DEVICE_DPRAM_EP0_IN_BUFFER_CONTROL_OFFSET) & USB_DEVICE_DPRAM_EP0_IN_BUFFER_CONTROL_LENGTH_0_BITS;
@@ -536,7 +544,7 @@ void USB::updateEnumeration()
 
                     usbip_add_device(&usbipDev);
 
-                    enumerationState = 8;
+                    enumerationState = EnumerationState::Done;
                 }
                 else
                 {
@@ -544,14 +552,14 @@ void USB::updateEnumeration()
                     int configValue = configDesc[5];
                     setupPacket(0, 9 /*SET_CONFIGURATION*/, configValue, 0, 0);
 
-                    enumerationState = 7;
+                    enumerationState = EnumerationState::InitCDC;
                 }
             }
 
             break;
         }
 
-        case 7: // set config done
+        case EnumerationState::InitCDC: // set config done
         {
             if(cdcInEP && cdcOutEP)
             {
@@ -560,7 +568,7 @@ void USB::updateEnumeration()
                 setupPacket(0x21/*class, interface*/, 0x22 /*SET_CONTROL_LINE_STATE*/, 3, 0, 0);
             }
 
-            enumerationState = 8;
+            enumerationState = EnumerationState::Done;
             
             break;
         }
@@ -600,7 +608,7 @@ void USB::checkBuffer(int ep, bool in)
             bool handled = true;
 
             // send usbip reply
-            if(usbipServer && enumerationState >= 8/*why is this not an enum?*/)
+            if(usbipServer && enumerationState == EnumerationState::Done)
             {
                 if(usbipInSeqnum[ep])
                 {
