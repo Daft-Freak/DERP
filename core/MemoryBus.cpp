@@ -53,6 +53,54 @@ enum MemoryRegion
     Region_CPUInternal   = PPB_BASE >> 24,
 };
 
+// peripherals
+#define PERIPH(x) ((x##_BASE >> 14) & 0x1F)
+
+enum class APBPeripheral
+{
+    SysInfo = PERIPH(SYSINFO),
+    SysCfg = PERIPH(SYSCFG),
+    Clocks = PERIPH(CLOCKS),
+    Resets = PERIPH(RESETS),
+    PSM = PERIPH(PSM),
+    IO_Bank0 = PERIPH(IO_BANK0),
+    IO_QSPI = PERIPH(IO_QSPI),
+    Pads_Bank0 = PERIPH(PADS_BANK0),
+    Pads_QSPI = PERIPH(PADS_QSPI),
+    XOsc = PERIPH(XOSC),
+    PLL_Sys = PERIPH(PLL_SYS),
+    PLL_USB = PERIPH(PLL_USB),
+    BusCtrl = PERIPH(BUSCTRL),
+    UART0 = PERIPH(UART0),
+    UART1 = PERIPH(UART1),
+    SPI0 = PERIPH(SPI0),
+    SPI1 = PERIPH(SPI1),
+    I2C0 = PERIPH(I2C0),
+    I2C1 = PERIPH(I2C1),
+    ADC = PERIPH(ADC),
+    PWM = PERIPH(PWM),
+    Timer = PERIPH(TIMER),
+    Watchdog = PERIPH(WATCHDOG),
+    RTC = PERIPH(RTC),
+    ROsc = PERIPH(ROSC),
+    VRegAndChipReset = PERIPH(VREG_AND_CHIP_RESET),
+    TBMan = PERIPH(TBMAN),
+};
+
+#undef PERIPH
+#define PERIPH(x) ((x##_BASE >> 20) & 0xF)
+
+enum class AHBPeripheral
+{
+    DMA = PERIPH(DMA),
+    USB = PERIPH(USBCTRL),
+    PIO0 = PERIPH(PIO0),
+    PIO1 = PERIPH(PIO1),
+    XIPAux = PERIPH(XIP_AUX),
+};
+
+#undef PERIPH
+
 template uint8_t MemoryBus::read(BusMasterPtr master, uint32_t addr, int &cycles, bool sequential);
 template uint16_t MemoryBus::read(BusMasterPtr master, uint32_t addr, int &cycles, bool sequential);
 template uint32_t MemoryBus::read(BusMasterPtr master, uint32_t addr, int &cycles, bool sequential);
