@@ -1,8 +1,13 @@
 #include <cstdio>
 #include <cstring>
 
+#include "hardware/platform_defs.h"
+#include "hardware/regs/intctrl.h"
+#include "hardware/regs/usb.h"
+#include "hardware/regs/usb_device_dpram.h"
+
 // need this for timeval on windows
-// unfortunately, this resunts in windows.h getting pulled in
+// unfortunately, this results in windows.h getting pulled in
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
@@ -54,14 +59,14 @@ USB::USB(MemoryBus &mem) : mem(mem)
 
 void USB::reset()
 {
-    mainCtrl = 0;
-    sieCtrl = 0;
-    sieStatus = 0;
-    buffStatus[0] = 0;
-    buffStatus[1] = 0;
+    mainCtrl = USB_MAIN_CTRL_RESET;
+    sieCtrl = USB_SIE_CTRL_RESET;
+    sieStatus = USB_SIE_STATUS_RESET;
+    buffStatus[0] = USB_BUFF_STATUS_RESET;
+    buffStatus[1] = USB_BUFF_STATUS_RESET;
     bufferSelect = 0;
-    epAbort = 0;
-    epAbortDone = 0;
+    epAbort = USB_EP_ABORT_RESET;
+    epAbortDone = USB_EP_ABORT_DONE_RESET;
 
     interrupts = 0;
     interruptEnables = 0;
@@ -140,28 +145,28 @@ uint32_t USB::regRead(uint32_t addr)
 {
     switch(addr)
     {
-        case 0x40: // MAIN_CTRL
+        case USB_MAIN_CTRL_OFFSET:
             return mainCtrl;
 
-        case 0x4C: // SIE_CTRL
+        case USB_SIE_CTRL_OFFSET:
             return sieCtrl;
 
-        case 0x58: // BUFF_STATUS
+        case USB_BUFF_STATUS_OFFSET:
             return buffStatus[0] | buffStatus[1];
 
-        case 0x5C: // BUFF_CPU_SHOULD_HANDLE
+        case USB_BUFF_CPU_SHOULD_HANDLE_OFFSET:
         {
             // if both are ready set based on the buffer selector, otherwise set if second buf
             auto bothMask = buffStatus[0] & buffStatus[1];
             return (bothMask & bufferSelect) | (~bothMask & buffStatus[1]);
         }
 
-        case 0x60: // EP_ABORT
+        case USB_EP_ABORT_OFFSET:
             return epAbort;
-        case 0x64: // EP_ABORT_DONE
+        case USB_EP_ABORT_DONE_OFFSET:
             return epAbortDone;
 
-        case 0x98: // INTS
+        case USB_INTS_OFFSET:
             return interrupts & interruptEnables; // TODO: force
     }
 
@@ -179,23 +184,24 @@ void USB::regWrite(uint32_t addr, uint32_t data)
 
     switch(addr)
     {
-        case 0x40: // MAIN_CTRL
+        case USB_MAIN_CTRL_OFFSET:
             updateReg(mainCtrl, data, atomic);
             return;
 
-        case 0x4C: // SIE_CTRL
+        case USB_SIE_CTRL_OFFSET:
             updateReg(sieCtrl, data, atomic);
             return;
 
-        case 0x50: // SIE_STATUS
+        case USB_SIE_STATUS_OFFSET:
             updateReg(sieStatus, data, atomic);
-            if(enumerationState == 3 && !(sieStatus & (1 << 19)/*BUS_RESET*/))
+            if(enumerationState == 3 && !(sieStatus & USB_SIE_STATUS_BUS_RESET_BITS))
                 updateEnumeration();
 
             updateInterrupts();
             return;
 
-        case 0x58: // BUFF_STATUS
+        case USB_BUFF_STATUS_OFFSET:
+            // these are marked as WC, but the code uses the clear alias...
             if(atomic == 3) // clear
             {
                 auto bothMask = buffStatus[0] & buffStatus[1];
@@ -209,7 +215,7 @@ void USB::regWrite(uint32_t addr, uint32_t data)
             else
                 logf(LogLevel::NotImplemented, logComponent, "BUFF_STATUS%s%08X", op[atomic], data);
 
-            if(atomic == 3 && (data & 1)) // clearing ep0 in
+            if(atomic == 3 && (data & USB_BUFF_STATUS_EP0_IN_BITS)) // clearing ep0 in
             {
                 if(enumerationState == 2 || enumerationState == 4 || enumerationState == 5 || enumerationState == 6 || enumerationState == 7)
                     updateEnumeration();
@@ -218,7 +224,7 @@ void USB::regWrite(uint32_t addr, uint32_t data)
             updateInterrupts();
             return;
 
-        case 0x60: // EP_ABORT
+        case USB_EP_ABORT_OFFSET:
         {
             auto old = epAbort;
             if(updateReg(epAbort, data, atomic))
@@ -245,11 +251,11 @@ void USB::regWrite(uint32_t addr, uint32_t data)
             }
             return;
         }
-        case 0x64: // EP_ABORT_DONE
+        case USB_EP_ABORT_DONE_OFFSET:
             updateReg(epAbortDone, data, atomic);
             return;
 
-        case 0x90: // INTE
+        case USB_INTE_OFFSET:
             updateReg(interruptEnables, data, atomic);
             return;
     }
@@ -259,7 +265,7 @@ void USB::regWrite(uint32_t addr, uint32_t data)
 
 void USB::ramWrite(uint32_t addr)
 {
-    if(addr >= 0x80 && addr < 0x100) // buffer control
+    if(addr >= USB_DEVICE_DPRAM_EP0_IN_BUFFER_CONTROL_OFFSET && addr <= USB_DEVICE_DPRAM_EP15_OUT_BUFFER_CONTROL_OFFSET) // buffer control
     {
         bool in = !(addr & 4);
         int ep = (addr - 0x80) / 8;
@@ -271,7 +277,7 @@ void USB::ramWrite(uint32_t addr)
 
 bool USB::getEnabled()
 {
-    return (sieCtrl & (1 << 16)/*PULLUP_EN*/); // TODO: check more things
+    return (sieCtrl & USB_SIE_CTRL_PULLUP_EN_BITS); // TODO: check more things
 }
 
 bool USB::getConfigured()
@@ -292,24 +298,29 @@ void USB::startEnumeration()
 
 void USB::updateInterrupts()
 {
-    interrupts &= ~0xD1FF8;
+    const auto mask = USB_INTS_EP_STALL_NAK_BITS | USB_INTS_ABORT_DONE_BITS | USB_INTS_SETUP_REQ_BITS
+                    | USB_INTS_BUS_RESET_BITS
+                    | USB_INTS_VBUS_DETECT_BITS | USB_INTS_STALL_BITS | USB_INTS_ERROR_CRC_BITS | USB_INTS_ERROR_BIT_STUFF_BITS
+                    | USB_INTS_ERROR_RX_OVERFLOW_BITS | USB_INTS_ERROR_RX_TIMEOUT_BITS | USB_INTS_ERROR_DATA_SEQ_BITS | USB_INTS_BUFF_STATUS_BITS
+                    | USB_INTS_TRANS_COMPLETE_BITS;
+
+    interrupts &= ~mask;
 
     // copy bits from SIE_STATUS
-    if(sieStatus & (1 << 17)) // SETUP_REQ
-        interrupts |= (1 << 16);
-    if(sieStatus & (1 << 18)) // TRANS_COMPLETE
-        interrupts |= (1 << 3);
-    if(sieStatus & (1 << 19)) // BUS_RESET
-        interrupts |= (1 << 12);
+    if(sieStatus & USB_SIE_STATUS_SETUP_REC_BITS)
+        interrupts |= USB_INTS_SETUP_REQ_BITS; 
+    if(sieStatus & USB_SIE_STATUS_TRANS_COMPLETE_BITS)
+        interrupts |= USB_INTS_TRANS_COMPLETE_BITS;
+    if(sieStatus & USB_SIE_STATUS_BUS_RESET_BITS)
+        interrupts |= USB_INTS_BUS_RESET_BITS;
 
     // set buff status
     if(buffStatus[0] | buffStatus[1])
-        interrupts |= (1 << 4);
+        interrupts |= USB_INTS_BUFF_STATUS_BITS;
 
     if(interrupts & interruptEnables)
-        mem.setPendingIRQ(5/*USBCTRL_IRQ*/);
+        mem.setPendingIRQ(USBCTRL_IRQ);
 }
-
 
 void USB::updateEnumeration()
 {
@@ -324,7 +335,7 @@ void USB::updateEnumeration()
         dpram[6] = length;
         dpram[7] = length >> 8;
 
-        sieStatus |= (1 << 17)/*SETUP_REQ*/;
+        sieStatus |= USB_SIE_STATUS_SETUP_REC_BITS;
     };
 
     switch(enumerationState)
@@ -360,7 +371,7 @@ void USB::updateEnumeration()
             memcpy(deviceDesc, buf, 18);
 
             // reset
-            sieStatus |= (1 << 19); // BUS_RESET
+            sieStatus |= USB_SIE_STATUS_BUS_RESET_BITS;
 
             enumerationState = 3;
         }
@@ -405,7 +416,7 @@ void USB::updateEnumeration()
         case 6: // REALLY read config descriptor
         {
             auto buf = dpram + 0x100;
-            auto bufLen = *reinterpret_cast<uint32_t *>(dpram + 0x80) & 0x3FF;
+            auto bufLen = *reinterpret_cast<uint32_t *>(dpram + USB_DEVICE_DPRAM_EP0_IN_BUFFER_CONTROL_OFFSET) & USB_DEVICE_DPRAM_EP0_IN_BUFFER_CONTROL_LENGTH_0_BITS;
     
             memcpy(configDesc + configDescOffset, buf, bufLen);
             configDescOffset += bufLen;
@@ -546,11 +557,11 @@ void USB::checkBuffer(int ep, bool in)
 
     uint32_t epMask = 1 << (ep * 2 + !in);
 
-    bool doubleBuffer = *ctrl & (1 << 30);
+    bool doubleBuffer = *ctrl & USB_SIE_CTRL_EP0_DOUBLE_BUF_BITS; 
 
     if(doubleBuffer)
     {
-        if(*bufCtrl & (1 << 12)) // reset to buffer 0
+        if(*bufCtrl & USB_DEVICE_DPRAM_EP0_IN_BUFFER_CONTROL_RESET_BITS) // reset to buffer 0
             bufferSelect &= ~epMask;
     }
 
@@ -560,11 +571,12 @@ void USB::checkBuffer(int ep, bool in)
 
     if(in)
     {
-        while(curBufferCtrl & (1 << 10) && curBufferCtrl & (1 << 15)) // buffer available and full
+        // buffer available and full
+        while(curBufferCtrl & USB_DEVICE_DPRAM_EP0_IN_BUFFER_CONTROL_AVAILABLE_0_BITS && curBufferCtrl & USB_DEVICE_DPRAM_EP0_IN_BUFFER_CONTROL_FULL_0_BITS)
         {
             // "transfer" it
-            uint32_t len = curBufferCtrl & 0x3FF;
-            bool last = curBufferCtrl & (1 << 14);
+            uint32_t len = curBufferCtrl & USB_DEVICE_DPRAM_EP0_IN_BUFFER_CONTROL_LENGTH_0_BITS;
+            bool last = curBufferCtrl & USB_DEVICE_DPRAM_EP0_IN_BUFFER_CONTROL_LAST_0_BITS;
 
             bool handled = true;
 
@@ -573,7 +585,7 @@ void USB::checkBuffer(int ep, bool in)
             {
                 if(usbipInSeqnum[ep])
                 {
-                    auto buf = ep ? dpram + (*ctrl & 0xFFF) : dpram + 0x100; // ep0 fixed buffer
+                    auto buf = ep ? dpram + (*ctrl & USB_DEVICE_DPRAM_EP1_IN_CONTROL_BUFFER_ADDRESS_BITS) : dpram + 0x100; // ep0 fixed buffer
 
                     if(curBuffer)
                         buf += 64;
@@ -606,7 +618,7 @@ void USB::checkBuffer(int ep, bool in)
             }
             else if(cdcInEP && ep == cdcInEP)
             {
-                auto buf = dpram + (*ctrl & 0xFFF);
+                auto buf = dpram + (*ctrl & USB_DEVICE_DPRAM_EP1_IN_CONTROL_BUFFER_ADDRESS_BITS);
 
                 while(len)
                 {
@@ -640,16 +652,19 @@ void USB::checkBuffer(int ep, bool in)
 
             if(handled)
             {
+                const auto mask = USB_DEVICE_DPRAM_EP0_IN_BUFFER_CONTROL_LAST_0_BITS | USB_DEVICE_DPRAM_EP0_IN_BUFFER_CONTROL_PID_0_BITS | USB_DEVICE_DPRAM_EP0_IN_BUFFER_CONTROL_LENGTH_0_BITS;
+
+                // clear everything else, but only for this buffer
                 if(curBuffer == 0)
-                    *bufCtrl &= 0xFFFF63FF;
+                    *bufCtrl &= (0xFFFF0000 | mask);
                 else
-                    *bufCtrl &= 0x63FFFFFF;
+                    *bufCtrl &= (0xFFFF | mask << 16);
 
                 if(last)
-                    sieStatus |= (1 << 18); /*TRANS_COMPLETE*/
+                    sieStatus |= USB_SIE_STATUS_TRANS_COMPLETE_BITS;
 
                 // int for every buf or int on every two bufs and this is the second
-                if(*ctrl & (1 << 29) || (curBuffer == 1 && *ctrl & (1 << 30)))
+                if(*ctrl & USB_SIE_CTRL_EP0_INT_1BUF_BITS || (curBuffer == 1 && *ctrl & USB_SIE_CTRL_EP0_INT_2BUF_BITS))
                     buffStatus[curBuffer] |= epMask; // EPx_IN
                 
                 updateInterrupts();
@@ -670,9 +685,10 @@ void USB::checkBuffer(int ep, bool in)
     }
     else
     {
-        while(curBufferCtrl & (1 << 10) && !(curBufferCtrl & (1 << 15))) // buffer available and not full
+        // buffer available and not full
+        while(curBufferCtrl & USB_DEVICE_DPRAM_EP0_IN_BUFFER_CONTROL_AVAILABLE_0_BITS && !(curBufferCtrl & USB_DEVICE_DPRAM_EP0_IN_BUFFER_CONTROL_FULL_0_BITS))
         {
-            uint32_t len = curBufferCtrl & 0x3FF;
+            uint32_t len = curBufferCtrl & USB_DEVICE_DPRAM_EP0_IN_BUFFER_CONTROL_LENGTH_0_BITS;
 
             bool haveData = false;
             
@@ -684,7 +700,7 @@ void USB::checkBuffer(int ep, bool in)
                     if(usbipOutDataLen[ep] - usbipOutDataOffset[ep] < len)
                         len = usbipOutDataLen[ep] - usbipOutDataOffset[ep];
 
-                    auto buf = ep ? dpram + (*ctrl & 0xFFF) : dpram + 0x100; // ep0 fixed buffer
+                    auto buf = ep ? dpram + (*ctrl & USB_DEVICE_DPRAM_EP1_IN_CONTROL_BUFFER_ADDRESS_BITS) : dpram + 0x100; // ep0 fixed buffer
                     if(curBuffer)
                         buf += 64;
 
@@ -710,20 +726,24 @@ void USB::checkBuffer(int ep, bool in)
 
             if(len == 0 || haveData)
             {
-                bool last = *bufCtrl & (1 << 14);
+                bool last = *bufCtrl & USB_DEVICE_DPRAM_EP0_IN_BUFFER_CONTROL_LAST_0_BITS;
+
+                const auto mask = USB_DEVICE_DPRAM_EP0_IN_BUFFER_CONTROL_LAST_0_BITS | USB_DEVICE_DPRAM_EP0_IN_BUFFER_CONTROL_PID_0_BITS;
+
+                // clear everything else, but only for this buffer
                 if(curBuffer == 0)
                 {
-                    *bufCtrl &= 0xFFFF6000;
-                    *bufCtrl |= (1 << 15)/*full*/ | len;
+                    *bufCtrl &= (0xFFFF0000 | mask);
+                    *bufCtrl |= USB_DEVICE_DPRAM_EP0_IN_BUFFER_CONTROL_FULL_0_BITS | len;
                 }
                 else
                 {
-                    *bufCtrl &= 0x6000FFFF;
-                    *bufCtrl |= (1 << 31)/*full*/ | len << 16;
+                    *bufCtrl &= (0xFFFF | mask << 16);
+                    *bufCtrl |= USB_DEVICE_DPRAM_EP0_IN_BUFFER_CONTROL_FULL_1_BITS | len << 16;
                 }
 
                 if(last)
-                    sieStatus |= (1 << 18); /*TRANS_COMPLETE*/
+                    sieStatus |= USB_SIE_STATUS_TRANS_COMPLETE_BITS;
                     
                 // int for every buf or int on every two bufs and this is the second
                 if(*ctrl & (1 << 29) || (curBuffer == 1 && *ctrl & (1 << 30)))
@@ -746,7 +766,7 @@ void USB::checkBuffer(int ep, bool in)
         }
     }
 
-    if(*bufCtrl & (1 << 11)) // stall
+    if(*bufCtrl & USB_DEVICE_DPRAM_EP0_IN_BUFFER_CONTROL_STALL_BITS)
     {
         // send usbip stall
         // TODO EP_STALL_ARM for EP0
@@ -791,7 +811,7 @@ bool USB::usbipGetDescriptor(struct usbip_client *client, uint32_t seqnum, uint8
     dpram[6] = setupLength;
     dpram[7] = setupLength >> 8;
 
-    sieStatus |= (1 << 17)/*SETUP_REQ*/;
+    sieStatus |= USB_SIE_STATUS_SETUP_REC_BITS;
 
     usbipLastClient = client;
     usbipInSeqnum[0] = seqnum;
@@ -824,7 +844,7 @@ bool USB::usbipControlRequest(struct usbip_client *client, uint32_t seqnum, uint
     dpram[6] = length;
     dpram[7] = length >> 8;
 
-    sieStatus |= (1 << 17)/*SETUP_REQ*/;
+    sieStatus |= USB_SIE_STATUS_SETUP_REC_BITS;
 
     bool in = (requestType & 0x80) || !length; // 0-length always in?
 
