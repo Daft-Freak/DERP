@@ -1,6 +1,14 @@
 #include <cassert>
+#include <cstddef>
 #include <cstdio>
 #include <cstring>
+
+#include "hardware/regs/addressmap.h"
+#include "hardware/regs/intctrl.h"
+#include "hardware/regs/ssi.h" // TODO: move
+#include "hardware/regs/sio.h" // TODO
+#include "hardware/structs/clocks.h" // clock_index
+#include "hardware/structs/usb.h" // USB_DPRAM_SIZE
 
 #include "MemoryBus.h"
 
@@ -27,21 +35,22 @@ bool updateReg(uint32_t &curVal, uint32_t newVal, int atomic)
     return curVal != oldVal;
 }
 
+// this is the high 8 bits of the address
 enum MemoryRegion
 {
-    Region_ROM           = 0x00,
-    Region_XIP           = 0x10,
-    Region_XIP_NoAlloc   = 0x11,
-    Region_XIP_NoCache   = 0x12,
-    Region_XIP_NoCNoA    = 0x13,
-    Region_XIP_Ctrl      = 0x14,
-    Region_XIP_CacheSRAM = 0x15,
-    Region_XIP_SSI       = 0x18,
-    Region_SRAM          = 0x20,
-    Region_APBPeriph     = 0x40,
-    Region_AHBPeriph     = 0x50,
-    Region_IOPORT        = 0xD0,
-    Region_CPUInternal   = 0xE0,
+    Region_ROM           = ROM_BASE >> 24,
+    Region_XIP           = XIP_BASE >> 24,
+    Region_XIP_NoAlloc   = XIP_NOALLOC_BASE >> 24,
+    Region_XIP_NoCache   = XIP_NOCACHE_BASE >> 24,
+    Region_XIP_NoCNoA    = XIP_NOCACHE_NOALLOC_BASE >> 24,
+    Region_XIP_Ctrl      = XIP_CTRL_BASE >> 24,
+    Region_XIP_CacheSRAM = XIP_SRAM_BASE >> 24,
+    Region_XIP_SSI       = XIP_SSI_BASE >> 24,
+    Region_SRAM          = SRAM_BASE >> 24,
+    Region_APBPeriph     = SYSINFO_BASE >> 24, // first periph
+    Region_AHBPeriph     = DMA_BASE >> 24, // first periph
+    Region_IOPORT        = SIO_BASE >> 24,
+    Region_CPUInternal   = PPB_BASE >> 24,
 };
 
 template uint8_t MemoryBus::read(BusMasterPtr master, uint32_t addr, int &cycles, bool sequential);
@@ -61,9 +70,9 @@ static inline uint32_t getStripedSRAMAddr(uint32_t addr)
 
 MemoryBus::MemoryBus() : gpio(*this), uart{{*this, 0}, {*this, 1}}, watchdog(*this), timer(*this), dma(*this), usb(*this)
 {
-    clocks.addClockTarget(4/*REF*/, watchdog.getClock());
+    clocks.addClockTarget(clk_ref, watchdog.getClock());
 
-    clocks.addClockTarget(5/*SYS*/, dma.getClock());
+    clocks.addClockTarget(clk_sys, dma.getClock());
 }
 
 void MemoryBus::setBootROM(const uint8_t *rom)
@@ -254,7 +263,7 @@ const uint8_t *MemoryBus::mapAddress(uint32_t addr) const
         {
             // SRAM0-3 is stored striped so that we can do this
             // + SRAM4-5
-            if(addr < 0x20042000)
+            if(addr < SRAM_END)
                 return sram + (addr & 0xFFFFF);
 
             break;
@@ -275,7 +284,7 @@ uint8_t *MemoryBus::mapAddress(uint32_t addr)
         case Region_SRAM:
         {
             // SRAM0-3 (striped) + SRAM4-5
-            if(addr < 0x20042000)
+            if(addr < SRAM_END)
                 return sram + (addr & 0xFFFFF);
 
             break;
@@ -283,8 +292,8 @@ uint8_t *MemoryBus::mapAddress(uint32_t addr)
 
         case Region_AHBPeriph:
         {
-            if(addr >= 0x50100000 && addr < 0x50101000)
-                return usb.getRAM() + (addr & 0xFFF);
+            if(addr >= USBCTRL_DPRAM_BASE && addr < USBCTRL_DPRAM_BASE + USB_DPRAM_SIZE)
+                return usb.getRAM() + (addr & (USB_DPRAM_SIZE - 1));
         }
     }
 
@@ -318,13 +327,14 @@ void MemoryBus::peripheralUpdate(uint64_t target, uint32_t irqMask)
 
     // only update things that might cause interrupts
     
-    if(irqMask & (0xF)/*TIMER_IRQ0-3*/)
+    const auto timerIRQs = 1 << TIMER_IRQ_0 | 1 << TIMER_IRQ_1 | 1 << TIMER_IRQ_2 | 1 << TIMER_IRQ_3;
+    if(irqMask & timerIRQs)
         timer.updateForInterrupts(target);
 
-    if(irqMask & (1 << 11/*DMA_IRQ_0*/ | 1 << 12/*DMA_IRQ_1*/))
+    if(irqMask & (1 << DMA_IRQ_0 | 1 << DMA_IRQ_1))
         dma.updateForInterrupts(target);
 
-    if(irqMask & (1 << 5/*USBCTRL_IRQ*/))
+    if(irqMask & (1 << USBCTRL_IRQ))
         usb.updateForInterrupts(target);
 }
 
@@ -491,17 +501,17 @@ static const char *ssiRegNames[]
 template<class T>
 T MemoryBus::doXIPSSIRead(uint32_t addr)
 {
-    switch((addr & 0xFF) / 4)
+    switch(addr & 0xFF)
     {
-        case 8: // TXFLR
+        case SSI_TXFLR_OFFSET:
             return 0;
-        case 9: // RXFLR
+        case SSI_RXFLR_OFFSET:
             return static_cast<T>(ssiRx.size());
 
-        case 10: // SR
-            return 1 << 1/*TFNF*/ | 1 << 2/*TFE*/ | (ssiRx.empty() ? 0 : 1 << 3/*RFNE*/);
+        case SSI_SR_OFFSET: // SR
+            return SSI_SR_TFNF_BITS | SSI_SR_TFE_BITS | (ssiRx.empty() ? 0 : SSI_SR_RFNE_BITS);
 
-        case 24: // DR0
+        case SSI_DR0_OFFSET:
         {
             uint32_t v = 0;
             if(!ssiRx.empty())
@@ -519,9 +529,9 @@ T MemoryBus::doXIPSSIRead(uint32_t addr)
 template<class T>
 void MemoryBus::doXIPSSIWrite(uint32_t addr, T data)
 {
-    switch((addr & 0xFF) / 4)
+    switch(addr & 0xFF)
     {
-        case 2: // SSIENA
+        case SSI_SSIENR_OFFSET:
         {
             if(data == 0) // disabled
             {
@@ -530,7 +540,7 @@ void MemoryBus::doXIPSSIWrite(uint32_t addr, T data)
             }
             break;
         }
-        case 24: // DR0
+        case SSI_DR0_OFFSET: // DR0
         {
             if(flashCmdOff)
             {
@@ -621,7 +631,7 @@ T MemoryBus::doSRAMRead(uint32_t addr) const
 {
     // striped SRAM0-3, SRAM4-5
     // (SRAM0-3 is stored striped)
-    if (addr < 0x20042000)
+    if (addr < SRAM_END)
         return *reinterpret_cast<const T *>(sram + (addr & 0xFFFFF));
 
     logf(LogLevel::NotImplemented, logComponent, "SRAM R %08X", addr);
@@ -631,7 +641,7 @@ T MemoryBus::doSRAMRead(uint32_t addr) const
 template<class T>
 void MemoryBus::doSRAMWrite(uint32_t addr, T data)
 {
-    if(addr < 0x20042000)
+    if(addr < SRAM_END)
     {
         *reinterpret_cast<T *>(sram + (addr & 0xFFFFF)) = data;
         return;
@@ -950,7 +960,7 @@ void MemoryBus::doAPBPeriphWrite(ClockTarget &masterClock, uint32_t addr, T data
 template<class T>
 T MemoryBus::doAHBPeriphRead(ClockTarget &masterClock, uint32_t addr)
 {
-    if(addr >= 0x50100000 && addr < 0x50101000) // USB DPRAM
+    if(addr >= USBCTRL_DPRAM_BASE && addr < USBCTRL_DPRAM_BASE + USB_DPRAM_SIZE)
     {
         // ... except USB DPRAM, which DOES handle narrow access
         usb.update(masterClock.getTime());
@@ -1007,7 +1017,7 @@ uint32_t MemoryBus::doAHBPeriphRead(ClockTarget &masterClock, uint32_t addr)
 template<>
 void MemoryBus::doAHBPeriphWrite(ClockTarget &masterClock, uint32_t addr, uint8_t data)
 {
-    if(addr >= 0x50100000 && addr < 0x50101000) // USB DPRAM
+    if(addr >= USBCTRL_DPRAM_BASE && addr < USBCTRL_DPRAM_BASE + USB_DPRAM_SIZE)
     {
         usb.update(masterClock.getTime());
         usb.getRAM()[addr & 0xFFF] = data;
@@ -1021,7 +1031,7 @@ void MemoryBus::doAHBPeriphWrite(ClockTarget &masterClock, uint32_t addr, uint8_
 template<>
 void MemoryBus::doAHBPeriphWrite(ClockTarget &masterClock, uint32_t addr, uint16_t data)
 {
-    if(addr >= 0x50100000 && addr < 0x50101000) // USB DPRAM
+    if(addr >= USBCTRL_DPRAM_BASE && addr < USBCTRL_DPRAM_BASE + USB_DPRAM_SIZE)
     {
         usb.update(masterClock.getTime());
         *reinterpret_cast<uint16_t *>(usb.getRAM() + (addr & 0xFFF)) = data;
@@ -1086,74 +1096,74 @@ uint32_t MemoryBus::doIOPORTRead(ClockTarget &masterClock, int core, uint32_t ad
 {
     switch(addr & 0xFFF)
     {
-        case 0: // CPUID
+        case SIO_CPUID_OFFSET:
             return core;
 
-        case 4: // GPIO_IN
+        case SIO_GPIO_IN_OFFSET:
             return gpio.getInputs(masterClock.getTime());
 
-        case 8:  // GPIO_HI_IN
+        case SIO_GPIO_HI_IN_OFFSET:
         {
             // boot hack
             logf(LogLevel::NotImplemented, logComponent, "R GPIO_HI_IN");
             return 2;
         }
 
-        case 0x50: // FIFO_ST
+        case SIO_FIFO_ST_OFFSET:
         {
             bool vld = !coreFIFO[1 - core].empty();
             bool rdy = !coreFIFO[core].full();
-            return (vld ? 1 : 0) | (rdy ? 2 : 0); // TODO: error flags
+            return (vld ? SIO_FIFO_ST_VLD_BITS : 0) | (rdy ? SIO_FIFO_ST_RDY_BITS : 0); // TODO: error flags
         }
-        case 0x58: // FIFO_RD
+        case SIO_FIFO_RD_OFFSET:
             return coreFIFO[1 - core].pop();
 
-        case 0x60: // DIV_UDIVIDEND
-        case 0x68: // DIV_SDIVIDEND
+        case SIO_DIV_UDIVIDEND_OFFSET:
+        case SIO_DIV_SDIVIDEND_OFFSET:
             return dividend[core];
-        case 0x64: // DIV_UDIVISOR
-        case 0x6C: // DIV_SDIVISOR
+        case SIO_DIV_UDIVISOR_OFFSET:
+        case SIO_DIV_SDIVISOR_OFFSET:
             return divisor[core];
-        case 0x70: // DIV_QUOTIENT
+        case SIO_DIV_QUOTIENT_OFFSET:
             dividerDirty[core] = false;
             return divQuot[core];
-        case 0x74: // DIV_REMAINDER
+        case SIO_DIV_REMAINDER_OFFSET:
             return divRem[core];
-        case 0x78: // DIV_CSR
-            return (dividerDirty[core] ? 2 : 0) | 1;
+        case SIO_DIV_CSR_OFFSET:
+            return (dividerDirty[core] ? SIO_DIV_CSR_DIRTY_BITS : 0) | SIO_DIV_CSR_READY_BITS;
 
-        case 0x100: // SPINLOCK0
-        case 0x104:
-        case 0x108:
-        case 0x10C:
-        case 0x110:
-        case 0x114:
-        case 0x118:
-        case 0x11C:
-        case 0x120:
-        case 0x124:
-        case 0x128:
-        case 0x12C:
-        case 0x130:
-        case 0x134:
-        case 0x138:
-        case 0x13C:
-        case 0x140:
-        case 0x144:
-        case 0x148:
-        case 0x14C:
-        case 0x150:
-        case 0x154:
-        case 0x158:
-        case 0x15C:
-        case 0x160:
-        case 0x164:
-        case 0x168:
-        case 0x16C:
-        case 0x170:
-        case 0x174:
-        case 0x178:
-        case 0x17C: // SPINLOCK31
+        case SIO_SPINLOCK0_OFFSET:
+        case SIO_SPINLOCK1_OFFSET:
+        case SIO_SPINLOCK2_OFFSET:
+        case SIO_SPINLOCK3_OFFSET:
+        case SIO_SPINLOCK4_OFFSET:
+        case SIO_SPINLOCK5_OFFSET:
+        case SIO_SPINLOCK6_OFFSET:
+        case SIO_SPINLOCK7_OFFSET:
+        case SIO_SPINLOCK8_OFFSET:
+        case SIO_SPINLOCK9_OFFSET:
+        case SIO_SPINLOCK10_OFFSET:
+        case SIO_SPINLOCK11_OFFSET:
+        case SIO_SPINLOCK12_OFFSET:
+        case SIO_SPINLOCK13_OFFSET:
+        case SIO_SPINLOCK14_OFFSET:
+        case SIO_SPINLOCK15_OFFSET:
+        case SIO_SPINLOCK16_OFFSET:
+        case SIO_SPINLOCK17_OFFSET:
+        case SIO_SPINLOCK18_OFFSET:
+        case SIO_SPINLOCK19_OFFSET:
+        case SIO_SPINLOCK20_OFFSET:
+        case SIO_SPINLOCK21_OFFSET:
+        case SIO_SPINLOCK22_OFFSET:
+        case SIO_SPINLOCK23_OFFSET:
+        case SIO_SPINLOCK24_OFFSET:
+        case SIO_SPINLOCK25_OFFSET:
+        case SIO_SPINLOCK26_OFFSET:
+        case SIO_SPINLOCK27_OFFSET:
+        case SIO_SPINLOCK28_OFFSET:
+        case SIO_SPINLOCK29_OFFSET:
+        case SIO_SPINLOCK30_OFFSET:
+        case SIO_SPINLOCK31_OFFSET:
         {
             int lock = (addr & 0xFF) / 4;
 
@@ -1205,90 +1215,90 @@ void MemoryBus::doIOPORTWrite(ClockTarget &masterClock, int core, uint32_t addr,
 
     switch(addr & 0xFFF)
     {
-        case 0x10: // GPIO_OUT
+        case SIO_GPIO_OUT_OFFSET:
             gpio.setOutputs(data);
             return;
-        case 0x14: // GPIO_OUT_SET
+        case SIO_GPIO_OUT_SET_OFFSET:
             gpio.setOutputMask(data);
             return;
-        case 0x18: // GPIO_OUT_CLR
+        case SIO_GPIO_OUT_CLR_OFFSET:
             gpio.clearOutputMask(data);
             return;
-        case 0x1C: // GPIO_OUT_XOR
+        case SIO_GPIO_OUT_XOR_OFFSET:
             gpio.xorOutputMask(data);
             return;
 
-        case 0x54: // FIFO_WR
+        case SIO_FIFO_WR_OFFSET:
             coreFIFO[core].push(data);
             // at least one status flag got set here...
-            setPendingIRQ(15/*SIO_IRQ_PROC0*/ + core);
+            setPendingIRQ(SIO_IRQ_PROC0 + core);
             return;
 
-        case 0x60: // DIV_UDIVIDEND
+        case SIO_DIV_UDIVIDEND_OFFSET:
             dividend[core] = data;
             dividerDirty[core] = true;
             dividerSigned[core] = false;
             doDiv();
             return;
-        case 0x64: // DIV_UDIVISOR
+        case SIO_DIV_UDIVISOR_OFFSET:
             divisor[core] = data;
             dividerDirty[core] = true;
             dividerSigned[core] = false;
             doDiv();
             return;
-        case 0x68: // DIV_SDIVIDEND
+        case SIO_DIV_SDIVIDEND_OFFSET:
             dividend[core] = data;
             dividerDirty[core] = true;
             dividerSigned[core] = true;
             doDiv();
             return;
-        case 0x6C: // DIV_SDIVISOR
+        case SIO_DIV_SDIVISOR_OFFSET:
             divisor[core] = data;
             dividerDirty[core] = true;
             dividerSigned[core] = true;
             doDiv();
             return;
-        case 0x70: // DIV_QUOTIENT
+        case SIO_DIV_QUOTIENT_OFFSET:
             divQuot[core] = data;
             dividerDirty[core] = true;
             return;
-        case 0x74: // DIV_REMAINDER
+        case SIO_DIV_REMAINDER_OFFSET:
             divRem[core] = data;
             dividerDirty[core] = true;
             return;
 
-        case 0x100: // SPINLOCK0
-        case 0x104:
-        case 0x108:
-        case 0x10C:
-        case 0x110:
-        case 0x114:
-        case 0x118:
-        case 0x11C:
-        case 0x120:
-        case 0x124:
-        case 0x128:
-        case 0x12C:
-        case 0x130:
-        case 0x134:
-        case 0x138:
-        case 0x13C:
-        case 0x140:
-        case 0x144:
-        case 0x148:
-        case 0x14C:
-        case 0x150:
-        case 0x154:
-        case 0x158:
-        case 0x15C:
-        case 0x160:
-        case 0x164:
-        case 0x168:
-        case 0x16C:
-        case 0x170:
-        case 0x174:
-        case 0x178:
-        case 0x17C: // SPINLOCK31
+        case SIO_SPINLOCK0_OFFSET:
+        case SIO_SPINLOCK1_OFFSET:
+        case SIO_SPINLOCK2_OFFSET:
+        case SIO_SPINLOCK3_OFFSET:
+        case SIO_SPINLOCK4_OFFSET:
+        case SIO_SPINLOCK5_OFFSET:
+        case SIO_SPINLOCK6_OFFSET:
+        case SIO_SPINLOCK7_OFFSET:
+        case SIO_SPINLOCK8_OFFSET:
+        case SIO_SPINLOCK9_OFFSET:
+        case SIO_SPINLOCK10_OFFSET:
+        case SIO_SPINLOCK11_OFFSET:
+        case SIO_SPINLOCK12_OFFSET:
+        case SIO_SPINLOCK13_OFFSET:
+        case SIO_SPINLOCK14_OFFSET:
+        case SIO_SPINLOCK15_OFFSET:
+        case SIO_SPINLOCK16_OFFSET:
+        case SIO_SPINLOCK17_OFFSET:
+        case SIO_SPINLOCK18_OFFSET:
+        case SIO_SPINLOCK19_OFFSET:
+        case SIO_SPINLOCK20_OFFSET:
+        case SIO_SPINLOCK21_OFFSET:
+        case SIO_SPINLOCK22_OFFSET:
+        case SIO_SPINLOCK23_OFFSET:
+        case SIO_SPINLOCK24_OFFSET:
+        case SIO_SPINLOCK25_OFFSET:
+        case SIO_SPINLOCK26_OFFSET:
+        case SIO_SPINLOCK27_OFFSET:
+        case SIO_SPINLOCK28_OFFSET:
+        case SIO_SPINLOCK29_OFFSET:
+        case SIO_SPINLOCK30_OFFSET:
+        case SIO_SPINLOCK31_OFFSET:
         {
             int lock = (addr & 0xFF) / 4;
 
