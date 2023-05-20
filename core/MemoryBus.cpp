@@ -1011,6 +1011,7 @@ void MemoryBus::doAHBPeriphWrite(ClockTarget &masterClock, uint32_t addr, uint8_
     {
         usb.update(masterClock.getTime());
         usb.getRAM()[addr & 0xFFF] = data;
+        usb.ramWrite(addr & 0xFFF);
         return;
     }
 
@@ -1024,6 +1025,7 @@ void MemoryBus::doAHBPeriphWrite(ClockTarget &masterClock, uint32_t addr, uint16
     {
         usb.update(masterClock.getTime());
         *reinterpret_cast<uint16_t *>(usb.getRAM() + (addr & 0xFFF)) = data;
+        usb.ramWrite(addr & 0xFFF);
         return;
     }
 
