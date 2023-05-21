@@ -5,6 +5,8 @@
 
 #include "hardware/structs/iobank0.h"
 
+#include "ClockTarget.h"
+
 class MemoryBus;
 
 class GPIO final
@@ -15,6 +17,8 @@ public:
     GPIO(MemoryBus &mem);
 
     void reset();
+
+    void update(uint64_t target);
 
     uint32_t getInputs(uint64_t time) const
     {
@@ -47,8 +51,12 @@ public:
     uint32_t padsRegRead(uint32_t addr);
     void padsRegWrite(uint32_t addr, uint32_t data);
 
+    ClockTarget &getClock() {return clock;}
+
 private:
     MemoryBus &mem;
+
+    ClockTarget clock;
 
     iobank0_hw_t io;
 

@@ -129,6 +129,7 @@ MemoryBus::MemoryBus() : gpio(*this), uart{{*this, 0}, {*this, 1}}, watchdog(*th
     clocks.addClockTarget(clk_ref, watchdog.getClock());
 
     clocks.addClockTarget(clk_sys, dma.getClock());
+    clocks.addClockTarget(clk_sys, gpio.getClock());
 }
 
 void MemoryBus::setBootROM(const uint8_t *rom)
@@ -369,6 +370,7 @@ void MemoryBus::updatePC(uint32_t pc)
 
 void MemoryBus::peripheralUpdate(uint64_t target)
 {
+    gpio.update(target);
     watchdog.update(target);
     timer.update(target);
 
@@ -780,6 +782,7 @@ uint32_t MemoryBus::doAPBPeriphRead(ClockTarget &masterClock, uint32_t addr)
         }
 
         case APBPeripheral::IO_Bank0:
+            gpio.update(masterClock.getTime());
             return gpio.regRead(periphAddr);
 
         case APBPeripheral::IO_QSPI:
@@ -796,6 +799,7 @@ uint32_t MemoryBus::doAPBPeriphRead(ClockTarget &masterClock, uint32_t addr)
         }
 
         case APBPeripheral::Pads_Bank0:
+            gpio.update(masterClock.getTime());
             return gpio.padsRegRead(periphAddr);
 
         case APBPeripheral::PLL_Sys:
@@ -899,6 +903,7 @@ void MemoryBus::doAPBPeriphWrite(ClockTarget &masterClock, uint32_t addr, T data
         }
 
         case APBPeripheral::IO_Bank0:
+            gpio.update(masterClock.getTime());
             gpio.regWrite(periphAddr, data);
             return;
 
@@ -934,6 +939,7 @@ void MemoryBus::doAPBPeriphWrite(ClockTarget &masterClock, uint32_t addr, T data
         }
 
         case APBPeripheral::Pads_Bank0:
+            gpio.update(masterClock.getTime());
             gpio.padsRegWrite(periphAddr, data);
             return;
 
@@ -1173,6 +1179,7 @@ uint32_t MemoryBus::doIOPORTRead(ClockTarget &masterClock, int core, uint32_t ad
             return core;
 
         case SIO_GPIO_IN_OFFSET:
+            gpio.update(masterClock.getTime());
             return gpio.getInputs(masterClock.getTime());
 
         case SIO_GPIO_HI_IN_OFFSET:
@@ -1289,15 +1296,19 @@ void MemoryBus::doIOPORTWrite(ClockTarget &masterClock, int core, uint32_t addr,
     switch(addr & 0xFFF)
     {
         case SIO_GPIO_OUT_OFFSET:
+            gpio.update(masterClock.getTime());
             gpio.setOutputs(data);
             return;
         case SIO_GPIO_OUT_SET_OFFSET:
+            gpio.update(masterClock.getTime());
             gpio.setOutputMask(data);
             return;
         case SIO_GPIO_OUT_CLR_OFFSET:
+            gpio.update(masterClock.getTime());
             gpio.clearOutputMask(data);
             return;
         case SIO_GPIO_OUT_XOR_OFFSET:
+            gpio.update(masterClock.getTime());
             gpio.xorOutputMask(data);
             return;
 

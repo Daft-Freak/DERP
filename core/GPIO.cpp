@@ -39,6 +39,13 @@ void GPIO::reset()
     outputs = 0;
 }
 
+void GPIO::update(uint64_t target)
+{
+    auto passed = clock.getCyclesToTime(target);
+
+    clock.addCycles(passed);
+}
+
 void GPIO::setInputs(uint32_t inputs)
 {
     // TODO: handle floating inputs?
