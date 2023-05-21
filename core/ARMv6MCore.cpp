@@ -7,6 +7,8 @@
 #include <limits>
 #include <utility>
 
+#include "hardware/regs/m0plus.h"
+
 #include "ARMv6MCore.h"
 #include "Logging.h"
 
@@ -57,12 +59,12 @@ void ARMv6MCore::reset()
 
     // CPUID
     // TODO: maybe not harcoded M0+ if I ever reuse this...
-    scbRegs[0] = 0x41 << 24 | 0xC << 16/*ARMv6-M*/ | 0xC60 << 4/*Cortex-M0+*/ | 1;
+    scbRegs[0] = M0PLUS_CPUID_RESET;
     // CCR
     scbRegs[5] = 0x3F8;
 
     // MPU_TYPE
-    mpuRegs[0] = 8 << 8;
+    mpuRegs[0] = M0PLUS_MPU_TYPE_RESET;
 
     int cycles;
     reg(Reg::SP) = mem.read<uint32_t>(this, 0, cycles, false); // MSP
@@ -170,45 +172,45 @@ uint32_t ARMv6MCore::readReg(uint32_t addr)
 {
     switch(addr & 0xFFFFFFF)
     {
-        case 0xE010: // SYST_CSR
-        case 0xE014: // SYST_RVR
-        case 0xE018: // SYST_CVR
-        case 0xE01C: // SYST_CALIB
+        case M0PLUS_SYST_CSR_OFFSET:
+        case M0PLUS_SYST_RVR_OFFSET:
+        case M0PLUS_SYST_CVR_OFFSET:
+        case M0PLUS_SYST_CALIB_OFFSET:
             updateSysTick();
             return sysTickRegs[(addr & 0xF) / 4];
         
-        case 0xE100: // NVIC_ISER
-        case 0xE180: // NVIC_ICER
+        case M0PLUS_NVIC_ISER_OFFSET:
+        case M0PLUS_NVIC_ICER_OFFSET:
             return nvicEnabled;
-        case 0xE200: // NVIC_ISPR
-        case 0xE280: // NVIC_IPCR
+        case M0PLUS_NVIC_ISPR_OFFSET:
+        case M0PLUS_NVIC_ICPR_OFFSET:
             return exceptionPending >> 16;
-        case 0xE400: // NVIC_IPR0
-        case 0xE404: // NVIC_IPR1
-        case 0xE408: // NVIC_IPR2
-        case 0xE40C: // NVIC_IPR3
-        case 0xE410: // NVIC_IPR4
-        case 0xE414: // NVIC_IPR5
-        case 0xE418: // NVIC_IPR6
-        case 0xE41C: // NVIC_IPR7
+        case M0PLUS_NVIC_IPR0_OFFSET:
+        case M0PLUS_NVIC_IPR1_OFFSET:
+        case M0PLUS_NVIC_IPR2_OFFSET:
+        case M0PLUS_NVIC_IPR3_OFFSET:
+        case M0PLUS_NVIC_IPR4_OFFSET:
+        case M0PLUS_NVIC_IPR5_OFFSET:
+        case M0PLUS_NVIC_IPR6_OFFSET:
+        case M0PLUS_NVIC_IPR7_OFFSET:
             return nvicPriority[(addr & 0xFF) / 4];
 
-        case 0xED00: // CPUID
-        case 0xED04: // ICSR
-        case 0xED08: // VTOR
-        case 0xED0C: // AIRCR
-        case 0xED10: // SCR
-        case 0xED14: // CCR
-        case 0xED1C: // SHPR2
-        case 0xED20: // CHPR3
-        case 0xED24: // SHCSR
+        case M0PLUS_CPUID_OFFSET:
+        case M0PLUS_ICSR_OFFSET:
+        case M0PLUS_VTOR_OFFSET:
+        case M0PLUS_AIRCR_OFFSET:
+        case M0PLUS_SCR_OFFSET:
+        case M0PLUS_CCR_OFFSET:
+        case M0PLUS_SHPR2_OFFSET:
+        case M0PLUS_SHPR3_OFFSET:
+        case M0PLUS_SHCSR_OFFSET:
             return scbRegs[(addr & 0xFF) / 4];
 
-        case 0xED90: // MPU_TYPE
-        case 0xED94: // MPU_CTRL
-        case 0xED98: // MPU_RNR
-        case 0xED9C: // MPU_RBAR
-        case 0xEDA0: // MPU_RASR
+        case M0PLUS_MPU_TYPE_OFFSET:
+        case M0PLUS_MPU_CTRL_OFFSET:
+        case M0PLUS_MPU_RNR_OFFSET:
+        case M0PLUS_MPU_RBAR_OFFSET:
+        case M0PLUS_MPU_RASR_OFFSET:
             return mpuRegs[((addr & 0xFF) - 0x90) / 4];
     }
 
@@ -220,57 +222,58 @@ void ARMv6MCore::writeReg(uint32_t addr, uint32_t data)
 {
     switch(addr & 0xFFFFFFF)
     {
-        case 0xE010: // SYST_CSR
-        case 0xE014: // SYST_RVR
+        case M0PLUS_SYST_CSR_OFFSET:
+        case M0PLUS_SYST_RVR_OFFSET:
             updateSysTick();
             sysTickRegs[(addr & 0xF) / 4] = data;
             return;
-        case 0xE018: // SYST_CVR
+        case M0PLUS_SYST_CVR_OFFSET:
             updateSysTick();
             sysTickRegs[2] = sysTickRegs[1];
             return;
         
-        case 0xE100: // NVIC_ISER
+        case M0PLUS_NVIC_ISER_OFFSET:
             nvicEnabled |= data;
             checkPendingExceptions();
             return;
-        case 0xE180: // NVIC_ICER
+        case M0PLUS_NVIC_ICER_OFFSET: // NVIC_ICER
             nvicEnabled &= ~data; //
             checkPendingExceptions();
             return;
-        case 0xE200: // NVIC_ISPR
+        case M0PLUS_NVIC_ISPR_OFFSET:
             exceptionPending |= static_cast<uint64_t>(data) << 16;
             checkPendingExceptions();
             return;
-        case 0xE280: // NVIC_IPCR
+        case M0PLUS_NVIC_ICPR_OFFSET:
             exceptionPending &= ~(static_cast<uint64_t>(data) << 16);
             checkPendingExceptions();
             return;
-        case 0xE400: // NVIC_IPR0
-        case 0xE404: // NVIC_IPR1
-        case 0xE408: // NVIC_IPR2
-        case 0xE40C: // NVIC_IPR3
-        case 0xE410: // NVIC_IPR4
-        case 0xE414: // NVIC_IPR5
-        case 0xE418: // NVIC_IPR6
-        case 0xE41C: // NVIC_IPR7
+        case M0PLUS_NVIC_IPR0_OFFSET:
+        case M0PLUS_NVIC_IPR1_OFFSET:
+        case M0PLUS_NVIC_IPR2_OFFSET:
+        case M0PLUS_NVIC_IPR3_OFFSET:
+        case M0PLUS_NVIC_IPR4_OFFSET:
+        case M0PLUS_NVIC_IPR5_OFFSET:
+        case M0PLUS_NVIC_IPR6_OFFSET:
+        case M0PLUS_NVIC_IPR7_OFFSET:
             nvicPriority[(addr & 0xFF) / 4] = data;
             return;
 
-        //case 0xED04: // ICSR
-        case 0xED08: // VTOR
-        //case 0xED0C: // AIRCR
-        case 0xED10: // SCR
-        case 0xED1C: // SHPR2
-        case 0xED20: // CHPR3
-        case 0xED24: // SHCSR
+        //case M0PLUS_ICSR_OFFSET:
+        case M0PLUS_VTOR_OFFSET:
+        //case M0PLUS_AIRCR_OFFSET:
+        case M0PLUS_SCR_OFFSET:
+        case M0PLUS_SHPR2_OFFSET:
+        case M0PLUS_SHPR3_OFFSET:
+        case M0PLUS_SHCSR_OFFSET:
             scbRegs[(addr & 0xFF) / 4] = data;
             return;
 
-        case 0xED94: // MPU_CTRL
-        case 0xED98: // MPU_RNR
-        case 0xED9C: // MPU_RBAR
-        case 0xEDA0: // MPU_RASR
+        case M0PLUS_MPU_TYPE_OFFSET:
+        case M0PLUS_MPU_CTRL_OFFSET:
+        case M0PLUS_MPU_RNR_OFFSET:
+        case M0PLUS_MPU_RBAR_OFFSET:
+        case M0PLUS_MPU_RASR_OFFSET:
             mpuRegs[((addr & 0xFF) - 0x90) / 4] = data;
             return;
     }
@@ -1681,11 +1684,11 @@ int ARMv6MCore::getExceptionPriority(int exception) const
             return -1;
 
         case 11: // SVCall
-            return scbRegs[7]/*SHPR2*/ >> 30;
+            return scbRegs[7]/*SHPR2*/ >> M0PLUS_SHPR2_PRI_11_LSB;
         case 14: // PendSV
-            return  (scbRegs[8]/*SHPR3*/ >> 22) & 3;
+            return  (scbRegs[8]/*SHPR3*/ & M0PLUS_SHPR3_PRI_14_BITS) >> M0PLUS_SHPR3_PRI_14_LSB;
         case 15: // SysTick
-            return scbRegs[8]/*SHPR3*/ >> 30;
+            return scbRegs[8]/*SHPR3*/ >> M0PLUS_SHPR3_PRI_15_LSB;
         
         default:
             assert(exception >= 16);
@@ -1736,7 +1739,7 @@ void ARMv6MCore::checkPendingExceptions()
 
 void ARMv6MCore::updateSysTick(int sysCycles)
 {
-    if(!(sysTickRegs[0]/*SYST_CSR*/ & (1 << 2)/*CLKSOURCE*/))
+    if(!(sysTickRegs[0]/*SYST_CSR*/ & M0PLUS_SYST_CSR_CLKSOURCE_BITS))
         return; // TODO: watchdog tick
 
     sysTickRegs[2]/*CVR*/ = (sysTickRegs[2] - sysCycles) & 0xFFFFFF;

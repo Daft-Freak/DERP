@@ -1,5 +1,8 @@
 #include <cstdio>
 
+#include "hardware/regs/clocks.h"
+#include "hardware/regs/pll.h"
+
 #include "Clocks.h"
 
 #include "MemoryBus.h"
@@ -13,24 +16,23 @@ static const char *clockNames[]{"GPOUT0", "GPOUT1", "GPOUT2", "GPOUT3", "REF", "
 
 void Clocks::reset()
 {
-    for(auto &reg : ctrl)
-        reg = 0;
-
-    for(auto &reg : div)
-        reg = 1 << 8;
+    for(auto &clk : hw.clk)
+    {
+        clk.ctrl = CLOCKS_CLK_GPOUT0_CTRL_RESET;
+        clk.div = CLOCKS_CLK_GPOUT0_DIV_RESET;
+    }
 
     for(auto &clock : clockFreq)
         clock = 0;
 
-    pllSysCS = pllUSBCS = 1;
-    pllSysPWR = pllUSBPWR = 0b101101;
-    pllSysFBDIV = pllUSBFBDIV = 0;
-
-    pllSysPRIM = pllUSBPRIM = 7 << 16 | 7 << 12;
+    pllSys.cs = pllUSB.cs = PLL_CS_RESET;
+    pllSys.pwr = pllUSB.pwr = PLL_PWR_RESET;
+    pllSys.fbdiv_int = pllUSB.fbdiv_int = PLL_FBDIV_INT_RESET;
+    pllSys.prim = pllUSB.prim = PLL_PRIM_RESET;
 
     // calcutate always enabled clocks
-    calcFreq(4); // REF
-    calcFreq(5); // SYS
+    calcFreq(clk_ref);
+    calcFreq(clk_sys);
 }
 
 void Clocks::adjustClocks()
@@ -69,22 +71,22 @@ void Clocks::addClockTarget(int clock, ClockTarget &target)
 
 uint32_t Clocks::regRead(uint32_t addr)
 {
-    if(addr < 0x78)
+    if(addr < CLOCKS_CLK_SYS_RESUS_CTRL_OFFSET)
     {
         // ctrl, div, selected x10
         int clock = addr / 12;
-        int reg = addr / 4 % 3;
+        int reg = addr % 12;
 
-        if(reg == 0) // ctrl
-            return ctrl[clock];
-        else if(reg == 1) // div
-            return div[clock];
-        else if(reg == 2) // selected
+        if(reg == CLOCKS_CLK_GPOUT0_CTRL_OFFSET)
+            return hw.clk[clock].ctrl;
+        else if(reg == CLOCKS_CLK_GPOUT0_DIV_OFFSET)
+            return hw.clk[clock].div;
+        else if(reg == CLOCKS_CLK_GPOUT0_SELECTED_OFFSET)
         {
-            if(clock == 4) // REF
-                return 1 << (ctrl[clock] & 0x3); // TODO: doesn't change instantly
-            else if(clock == 5) // SYS
-                return 1 << (ctrl[clock] & 1);
+            if(clock == clk_ref)
+                return 1 << (hw.clk[clock].ctrl & CLOCKS_CLK_REF_CTRL_SRC_BITS); // TODO: doesn't change instantly
+            else if(clock == clk_sys)
+                return 1 << (hw.clk[clock].ctrl & CLOCKS_CLK_SYS_CTRL_SRC_BITS);
 
             return 1;
         }
@@ -102,23 +104,23 @@ void Clocks::regWrite(uint32_t addr, uint32_t data)
 
     static const char *op[]{" = ", " ^= ", " |= ", " &= ~"};
 
-    if(addr < 0x78)
+    if(addr < CLOCKS_CLK_SYS_RESUS_CTRL_OFFSET)
     {
         //ctrl,div,selected x10
         int clock = addr / 12;
-        int reg = addr / 4 % 3;
+        int reg = addr % 12;
 
         bool changed = false;
 
-        if(reg == 0) // ctrl
-            changed = updateReg(ctrl[clock], data, atomic);
-        else if(reg == 1) // div
-            changed = updateReg(div[clock], data, atomic);
+        if(reg == CLOCKS_CLK_GPOUT0_CTRL_OFFSET)
+            changed = updateReg(hw.clk[clock].ctrl, data, atomic);
+        else if(reg == CLOCKS_CLK_GPOUT0_DIV_OFFSET)
+            changed = updateReg(hw.clk[clock].div, data, atomic);
 
         // update clock freq
         if(changed)
         {
-            bool enabled = clock == 4 || clock == 5 || (ctrl[clock] & (1 << 11)/*ENABLE*/);
+            bool enabled = clock == clk_ref || clock == clk_sys || (hw.clk[clock].ctrl & CLOCKS_CLK_GPOUT0_CTRL_ENABLE_BITS);
             if(enabled)
                 calcFreq(clock);
             else
@@ -133,14 +135,14 @@ uint32_t Clocks::pllSysRegRead(uint32_t addr)
 {
     switch(addr)
     {
-        case 0x0: // CS
-            return pllSysCS | (1 << 31)/*LOCK*/;
-        case 0x4: // PWR
-            return pllSysPWR;
-        case 0x8: // FBDIV_INT
-            return pllSysFBDIV;
-        case 0xC: // PRIM
-            return pllSysPRIM;
+        case PLL_CS_OFFSET:
+            return pllSys.cs | PLL_CS_LOCK_BITS;
+        case PLL_PWR_OFFSET:
+            return pllSys.pwr;
+        case PLL_FBDIV_INT_OFFSET:
+            return pllSys.fbdiv_int;
+        case PLL_PRIM_OFFSET:
+            return pllSys.prim;
     }
 
     return 0xBADADD55;
@@ -153,38 +155,38 @@ void Clocks::pllSysRegWrite(uint32_t addr, uint32_t data)
 
     switch(addr)
     {
-        case 0x0: // CS
-            updateReg(pllSysCS, data & ~(1 << 31), atomic);
+        case PLL_CS_OFFSET:
+            updateReg(pllSys.cs, data & ~PLL_CS_LOCK_BITS, atomic);
             break;
-        case 0x4: // PWR
-            updateReg(pllSysPWR, data, atomic);
+        case PLL_PWR_OFFSET:
+            updateReg(pllSys.pwr, data, atomic);
             break;
-        case 0x8: // FBDIV_INT
-            updateReg(pllSysFBDIV, data, atomic);
+        case PLL_FBDIV_INT_OFFSET:
+            updateReg(pllSys.fbdiv_int, data, atomic);
             break;
-        case 0xC: // PRIM
-            updateReg(pllSysPRIM, data, atomic);
+        case PLL_PRIM_OFFSET:
+            updateReg(pllSys.prim, data, atomic);
             break;
     }
 
     // (REF / REFDIV) * FBDIV / (POSTDIV1 * POSTDIV2)
     int ref = 12 * 1000 * 1000; // assume 12MHz
-    int freq = (ref / (pllSysCS & 0x3F)) * pllSysFBDIV / (((pllSysPRIM >> 16) & 7) * ((pllSysPRIM >> 12) & 7));
-    logf(LogLevel::Debug, logComponent, "PLL_SYS = (%i / %i) * %i / (%i * %i) = %i", ref, pllSysCS & 0x3F, pllSysFBDIV, (pllSysPRIM >> 16) & 7, (pllSysPRIM >> 12) & 7, freq);
+    int freq = (ref / (pllSys.cs & 0x3F)) * pllSys.fbdiv_int / (((pllSys.prim >> 16) & 7) * ((pllSys.prim >> 12) & 7));
+    logf(LogLevel::Debug, logComponent, "PLL_SYS = (%i / %i) * %i / (%i * %i) = %i", ref, pllSys.cs & 0x3F, pllSys.fbdiv_int, (pllSys.prim >> 16) & 7, (pllSys.prim >> 12) & 7, freq);
 }
 
 uint32_t Clocks::pllUSBRegRead(uint32_t addr)
 {
     switch(addr)
     {
-        case 0x0: // CS
-            return pllUSBCS | (1 << 31)/*LOCK*/;
-        case 0x4: // PWR
-            return pllUSBPWR;
-        case 0x8: // FBDIV_INT
-            return pllUSBFBDIV;
-        case 0xC: // PRIM
-            return pllUSBPRIM;
+        case PLL_CS_OFFSET:
+            return pllUSB.cs | PLL_CS_LOCK_BITS;
+        case PLL_PWR_OFFSET:
+            return pllUSB.pwr;
+        case PLL_FBDIV_INT_OFFSET:
+            return pllUSB.fbdiv_int;
+        case  PLL_PRIM_OFFSET:
+            return pllUSB.prim;
     }
 
     return 0xBADADD55;
@@ -197,24 +199,24 @@ void Clocks::pllUSBRegWrite(uint32_t addr, uint32_t data)
 
     switch(addr)
     {
-        case 0x0: // CS
-            updateReg(pllUSBCS, data & ~(1 << 31), atomic);
+        case PLL_CS_OFFSET:
+            updateReg(pllUSB.cs, data & ~PLL_CS_LOCK_BITS, atomic);
             break;
-        case 0x4: // PWR
-            updateReg(pllUSBPWR, data, atomic);
+        case PLL_PWR_OFFSET:
+            updateReg(pllUSB.pwr, data, atomic);
             break;
-        case 0x8: // FBDIV_INT
-            updateReg(pllUSBFBDIV, data, atomic);
+        case PLL_FBDIV_INT_OFFSET:
+            updateReg(pllUSB.fbdiv_int, data, atomic);
             break;
-        case 0xC: // PRIM
-            updateReg(pllUSBPRIM, data, atomic);
+        case PLL_PRIM_OFFSET:
+            updateReg(pllUSB.prim, data, atomic);
             break;
     }
 
     // (REF / REFDIV) * FBDIV / (POSTDIV1 * POSTDIV2)
     int ref = 12 * 1000 * 1000; // assume 12MHz
-    int freq = (ref / (pllSysCS & 0x3F)) * pllUSBFBDIV / (((pllUSBPRIM >> 16) & 7) * ((pllUSBPRIM >> 12) & 7));
-    logf(LogLevel::Debug, logComponent, "PLL_USB = (%i / %i) * %i / (%i * %i) = %i", ref, pllUSBCS & 0x3F, pllUSBFBDIV, (pllUSBPRIM >> 16) & 7, (pllUSBPRIM >> 12) & 7, freq);
+    int freq = (ref / (pllSys.cs & 0x3F)) * pllUSB.fbdiv_int / (((pllUSB.prim >> 16) & 7) * ((pllUSB.prim >> 12) & 7));
+    logf(LogLevel::Debug, logComponent, "PLL_USB = (%i / %i) * %i / (%i * %i) = %i", ref, pllUSB.cs & 0x3F, pllUSB.fbdiv_int, (pllUSB.prim >> 16) & 7, (pllUSB.prim >> 12) & 7, freq);
 }
 
 void Clocks::calcFreq(int clock)
@@ -226,8 +228,13 @@ void Clocks::calcFreq(int clock)
     {
         // TODO: bypass
         // TODO: cache?
-        if(!(pllSysPWR & 1))
-            return (xoscFreq / (pllSysCS & 0x3F)) * pllSysFBDIV / (((pllSysPRIM >> 16) & 7) * ((pllSysPRIM >> 12) & 7));
+        if(!(pllSys.pwr & PLL_PWR_VCOPD_RESET))
+        {
+            auto refDiv = pllSys.cs & PLL_CS_REFDIV_BITS;
+            auto postdiv1 = (pllSys.prim & PLL_PRIM_POSTDIV1_BITS) >> PLL_PRIM_POSTDIV1_LSB;
+            auto postdiv2 = (pllSys.prim & PLL_PRIM_POSTDIV2_BITS) >> PLL_PRIM_POSTDIV2_LSB;
+            return (xoscFreq / refDiv) * pllSys.fbdiv_int / (postdiv1 * postdiv2);
+        }
 
         return 0u;
     };
@@ -236,8 +243,13 @@ void Clocks::calcFreq(int clock)
     {
         // TODO: bypass
         // TODO: cache?
-        if(!(pllUSBPWR & 1))
-            return (xoscFreq / (pllSysCS & 0x3F)) * pllUSBFBDIV / (((pllUSBPRIM >> 16) & 7) * ((pllUSBPRIM >> 12) & 7));
+        if(!(pllUSB.pwr & PLL_PWR_VCOPD_RESET))
+        {
+            auto refDiv = pllUSB.cs & PLL_CS_REFDIV_BITS;
+            auto postdiv1 = (pllUSB.prim & PLL_PRIM_POSTDIV1_BITS) >> PLL_PRIM_POSTDIV1_LSB;
+            auto postdiv2 = (pllUSB.prim & PLL_PRIM_POSTDIV2_BITS) >> PLL_PRIM_POSTDIV2_LSB;
+            return (xoscFreq / refDiv) * pllUSB.fbdiv_int / (postdiv1 * postdiv2);
+        }
 
         return 0u;
     };
@@ -253,49 +265,49 @@ void Clocks::calcFreq(int clock)
     {
         // TODO: GPOUT0-3
 
-        case 4: // REF
+        case clk_ref:
         {
-            int src = ctrl[clock] & 3;
-            int clkDiv = div[clock] >> 8; // no frac
+            int src = hw.clk[clock].ctrl & CLOCKS_CLK_REF_CTRL_SRC_BITS;
+            int clkDiv = (hw.clk[clock].div & CLOCKS_CLK_REF_DIV_INT_BITS) >> CLOCKS_CLK_REF_DIV_INT_LSB; // no frac
             if(!clkDiv)
                 clkDiv = 1 << 16;
 
-            if(src == 0)
+            if(src == CLOCKS_CLK_REF_CTRL_SRC_VALUE_ROSC_CLKSRC_PH)
                 clockFreq[clock] = roscFreq / clkDiv;
-            else if(src == 1) // aux
+            else if(src == CLOCKS_CLK_REF_CTRL_SRC_VALUE_CLKSRC_CLK_REF_AUX)
             {
-                int aux = (ctrl[4] >> 5) & 0x3;
-                if(aux == 0)
+                int aux = (hw.clk[clock].ctrl & CLOCKS_CLK_REF_CTRL_AUXSRC_BITS) >> CLOCKS_CLK_REF_CTRL_AUXSRC_LSB;
+                if(aux == CLOCKS_CLK_REF_CTRL_AUXSRC_VALUE_CLKSRC_PLL_USB)
                     clockFreq[clock] = getPLLUSBFreq() / clkDiv;
                 // else gpin0/1
             }
-            else if(src == 2)
+            else if(src == CLOCKS_CLK_REF_CTRL_SRC_VALUE_XOSC_CLKSRC)
                 clockFreq[clock] = xoscFreq / clkDiv;
 
             break;
         }
 
-        case 5: // SYS
+        case clk_sys:
         {
-            int src = ctrl[clock] & 3;
-            int clkDiv = div[clock];
+            int src = hw.clk[clock].ctrl & CLOCKS_CLK_SYS_CTRL_SRC_BITS;
+            int clkDiv = hw.clk[clock].div;
 
-            if(!(clkDiv >> 8))
+            if(!(clkDiv >> CLOCKS_CLK_SYS_DIV_INT_LSB))
                 clkDiv |= 1 << 24;
 
-            if(src == 0)
+            if(src == CLOCKS_CLK_SYS_CTRL_SRC_VALUE_CLK_REF)
                 clockFreq[clock] = divClock(clockFreq[4], clkDiv); // REF
             else // aux
             {
-                int aux = (ctrl[clock] >> 5) & 0x7;
+                int aux = (hw.clk[clock].ctrl & CLOCKS_CLK_SYS_CTRL_AUXSRC_BITS) >> CLOCKS_CLK_SYS_CTRL_AUXSRC_LSB;
 
-                if(aux == 0)
+                if(aux == CLOCKS_CLK_SYS_CTRL_AUXSRC_VALUE_CLKSRC_PLL_SYS)
                     clockFreq[clock] = divClock(getPLLSysFreq(), clkDiv);
-                else if(aux == 1)
+                else if(aux == CLOCKS_CLK_SYS_CTRL_AUXSRC_VALUE_CLKSRC_PLL_USB)
                     clockFreq[clock] = divClock(getPLLUSBFreq(), clkDiv);
-                else if(aux == 2)
+                else if(aux == CLOCKS_CLK_SYS_CTRL_AUXSRC_VALUE_ROSC_CLKSRC)
                     clockFreq[clock] = divClock(roscFreq, clkDiv);
-                else if(aux == 3)
+                else if(aux == CLOCKS_CLK_SYS_CTRL_AUXSRC_VALUE_XOSC_CLKSRC)
                     clockFreq[clock] = divClock(xoscFreq, clkDiv);
                 // else gpin0/1
             }
@@ -303,45 +315,45 @@ void Clocks::calcFreq(int clock)
             break;
         }
 
-        case 6: // PERI
+        case clk_peri:
         {
-            int aux = (ctrl[clock] >> 5) & 0x7;
+            int aux = (hw.clk[clock].ctrl & CLOCKS_CLK_PERI_CTRL_AUXSRC_BITS) >> CLOCKS_CLK_PERI_CTRL_AUXSRC_LSB;
             // no div
 
-            if(aux == 0)
+            if(aux == CLOCKS_CLK_PERI_CTRL_AUXSRC_VALUE_CLK_SYS)
                 clockFreq[clock] = clockFreq[5]; // SYS
-            else if(aux == 1)
+            else if(aux == CLOCKS_CLK_PERI_CTRL_AUXSRC_VALUE_CLKSRC_PLL_SYS)
                 clockFreq[clock] = getPLLSysFreq();
-            else if(aux == 2)
+            else if(aux == CLOCKS_CLK_PERI_CTRL_AUXSRC_VALUE_CLKSRC_PLL_USB)
                 clockFreq[clock] = getPLLUSBFreq();
-            else if(aux == 3)
+            else if(aux == CLOCKS_CLK_PERI_CTRL_AUXSRC_VALUE_ROSC_CLKSRC_PH)
                 clockFreq[clock] = roscFreq;
-            else if(aux == 4)
+            else if(aux == CLOCKS_CLK_PERI_CTRL_AUXSRC_VALUE_XOSC_CLKSRC)
                 clockFreq[clock] = xoscFreq;
             // else gpin0/1
 
             break;
         }
 
-        case 7: // USB
-        case 8: // ADC
-        case 9: // RTC
+        case clk_usb:
+        case clk_adc:
+        case clk_rtc:
         {
-            int aux = (ctrl[clock] >> 5) & 0x7;
+            int aux = (hw.clk[clock].ctrl & CLOCKS_CLK_USB_CTRL_AUXSRC_BITS) >> CLOCKS_CLK_USB_CTRL_AUXSRC_LSB;
 
             // TODO: RTC has fractional divider
-            int clkDiv = div[clock] >> 8;
+            int clkDiv = hw.clk[clock].div >> CLOCKS_CLK_USB_DIV_INT_LSB;
 
             if(!clkDiv)
                 clkDiv = 1 << 16;
 
-            if(aux == 0)
+            if(aux == CLOCKS_CLK_USB_CTRL_AUXSRC_VALUE_CLKSRC_PLL_USB)
                 clockFreq[clock] = getPLLUSBFreq() / clkDiv;
-            else if(aux == 1)
+            else if(aux == CLOCKS_CLK_USB_CTRL_AUXSRC_VALUE_CLKSRC_PLL_SYS)
                 clockFreq[clock] = getPLLSysFreq() / clkDiv;
-            else if(aux == 2)
+            else if(aux == CLOCKS_CLK_USB_CTRL_AUXSRC_VALUE_ROSC_CLKSRC_PH)
                 clockFreq[clock] = roscFreq / clkDiv;
-            else if(aux == 3)
+            else if(aux == CLOCKS_CLK_USB_CTRL_AUXSRC_VALUE_XOSC_CLKSRC)
                 clockFreq[clock] = xoscFreq / clkDiv;
             // else gpin0/1
             break;

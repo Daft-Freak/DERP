@@ -1,6 +1,22 @@
 #include <cassert>
+#include <cstddef>
 #include <cstdio>
 #include <cstring>
+
+#include "hardware/regs/addressmap.h"
+#include "hardware/regs/intctrl.h"
+#include "hardware/regs/io_qspi.h" // TODO: move
+#include "hardware/regs/pio.h" // TODO
+#include "hardware/regs/psm.h" // TODO
+#include "hardware/regs/pwm.h" // TODO
+#include "hardware/regs/resets.h" // TODO
+#include "hardware/regs/rtc.h" // TODO
+#include "hardware/regs/spi.h" // TODO
+#include "hardware/regs/ssi.h" // TODO: move
+#include "hardware/regs/sio.h" // TODO
+#include "hardware/regs/sysinfo.h" // TODO
+#include "hardware/structs/clocks.h" // clock_index
+#include "hardware/structs/usb.h" // USB_DPRAM_SIZE
 
 #include "MemoryBus.h"
 
@@ -27,22 +43,71 @@ bool updateReg(uint32_t &curVal, uint32_t newVal, int atomic)
     return curVal != oldVal;
 }
 
+// this is the high 8 bits of the address
 enum MemoryRegion
 {
-    Region_ROM           = 0x00,
-    Region_XIP           = 0x10,
-    Region_XIP_NoAlloc   = 0x11,
-    Region_XIP_NoCache   = 0x12,
-    Region_XIP_NoCNoA    = 0x13,
-    Region_XIP_Ctrl      = 0x14,
-    Region_XIP_CacheSRAM = 0x15,
-    Region_XIP_SSI       = 0x18,
-    Region_SRAM          = 0x20,
-    Region_APBPeriph     = 0x40,
-    Region_AHBPeriph     = 0x50,
-    Region_IOPORT        = 0xD0,
-    Region_CPUInternal   = 0xE0,
+    Region_ROM           = ROM_BASE >> 24,
+    Region_XIP           = XIP_BASE >> 24,
+    Region_XIP_NoAlloc   = XIP_NOALLOC_BASE >> 24,
+    Region_XIP_NoCache   = XIP_NOCACHE_BASE >> 24,
+    Region_XIP_NoCNoA    = XIP_NOCACHE_NOALLOC_BASE >> 24,
+    Region_XIP_Ctrl      = XIP_CTRL_BASE >> 24,
+    Region_XIP_CacheSRAM = XIP_SRAM_BASE >> 24,
+    Region_XIP_SSI       = XIP_SSI_BASE >> 24,
+    Region_SRAM          = SRAM_BASE >> 24,
+    Region_APBPeriph     = SYSINFO_BASE >> 24, // first periph
+    Region_AHBPeriph     = DMA_BASE >> 24, // first periph
+    Region_IOPORT        = SIO_BASE >> 24,
+    Region_CPUInternal   = PPB_BASE >> 24,
 };
+
+// peripherals
+#define PERIPH(x) ((x##_BASE >> 14) & 0x1F)
+
+enum class APBPeripheral
+{
+    SysInfo = PERIPH(SYSINFO),
+    SysCfg = PERIPH(SYSCFG),
+    Clocks = PERIPH(CLOCKS),
+    Resets = PERIPH(RESETS),
+    PSM = PERIPH(PSM),
+    IO_Bank0 = PERIPH(IO_BANK0),
+    IO_QSPI = PERIPH(IO_QSPI),
+    Pads_Bank0 = PERIPH(PADS_BANK0),
+    Pads_QSPI = PERIPH(PADS_QSPI),
+    XOsc = PERIPH(XOSC),
+    PLL_Sys = PERIPH(PLL_SYS),
+    PLL_USB = PERIPH(PLL_USB),
+    BusCtrl = PERIPH(BUSCTRL),
+    UART0 = PERIPH(UART0),
+    UART1 = PERIPH(UART1),
+    SPI0 = PERIPH(SPI0),
+    SPI1 = PERIPH(SPI1),
+    I2C0 = PERIPH(I2C0),
+    I2C1 = PERIPH(I2C1),
+    ADC = PERIPH(ADC),
+    PWM = PERIPH(PWM),
+    Timer = PERIPH(TIMER),
+    Watchdog = PERIPH(WATCHDOG),
+    RTC = PERIPH(RTC),
+    ROsc = PERIPH(ROSC),
+    VRegAndChipReset = PERIPH(VREG_AND_CHIP_RESET),
+    TBMan = PERIPH(TBMAN),
+};
+
+#undef PERIPH
+#define PERIPH(x) ((x##_BASE >> 20) & 0xF)
+
+enum class AHBPeripheral
+{
+    DMA = PERIPH(DMA),
+    USB = PERIPH(USBCTRL),
+    PIO0 = PERIPH(PIO0),
+    PIO1 = PERIPH(PIO1),
+    XIPAux = PERIPH(XIP_AUX),
+};
+
+#undef PERIPH
 
 template uint8_t MemoryBus::read(BusMasterPtr master, uint32_t addr, int &cycles, bool sequential);
 template uint16_t MemoryBus::read(BusMasterPtr master, uint32_t addr, int &cycles, bool sequential);
@@ -61,9 +126,9 @@ static inline uint32_t getStripedSRAMAddr(uint32_t addr)
 
 MemoryBus::MemoryBus() : gpio(*this), uart{{*this, 0}, {*this, 1}}, watchdog(*this), timer(*this), dma(*this), usb(*this)
 {
-    clocks.addClockTarget(4/*REF*/, watchdog.getClock());
+    clocks.addClockTarget(clk_ref, watchdog.getClock());
 
-    clocks.addClockTarget(5/*SYS*/, dma.getClock());
+    clocks.addClockTarget(clk_sys, dma.getClock());
 }
 
 void MemoryBus::setBootROM(const uint8_t *rom)
@@ -254,7 +319,7 @@ const uint8_t *MemoryBus::mapAddress(uint32_t addr) const
         {
             // SRAM0-3 is stored striped so that we can do this
             // + SRAM4-5
-            if(addr < 0x20042000)
+            if(addr < SRAM_END)
                 return sram + (addr & 0xFFFFF);
 
             break;
@@ -275,7 +340,7 @@ uint8_t *MemoryBus::mapAddress(uint32_t addr)
         case Region_SRAM:
         {
             // SRAM0-3 (striped) + SRAM4-5
-            if(addr < 0x20042000)
+            if(addr < SRAM_END)
                 return sram + (addr & 0xFFFFF);
 
             break;
@@ -283,8 +348,8 @@ uint8_t *MemoryBus::mapAddress(uint32_t addr)
 
         case Region_AHBPeriph:
         {
-            if(addr >= 0x50100000 && addr < 0x50101000)
-                return usb.getRAM() + (addr & 0xFFF);
+            if(addr >= USBCTRL_DPRAM_BASE && addr < USBCTRL_DPRAM_BASE + USB_DPRAM_SIZE)
+                return usb.getRAM() + (addr & (USB_DPRAM_SIZE - 1));
         }
     }
 
@@ -318,13 +383,14 @@ void MemoryBus::peripheralUpdate(uint64_t target, uint32_t irqMask)
 
     // only update things that might cause interrupts
     
-    if(irqMask & (0xF)/*TIMER_IRQ0-3*/)
+    const auto timerIRQs = 1 << TIMER_IRQ_0 | 1 << TIMER_IRQ_1 | 1 << TIMER_IRQ_2 | 1 << TIMER_IRQ_3;
+    if(irqMask & timerIRQs)
         timer.updateForInterrupts(target);
 
-    if(irqMask & (1 << 11/*DMA_IRQ_0*/ | 1 << 12/*DMA_IRQ_1*/))
+    if(irqMask & (1 << DMA_IRQ_0 | 1 << DMA_IRQ_1))
         dma.updateForInterrupts(target);
 
-    if(irqMask & (1 << 5/*USBCTRL_IRQ*/))
+    if(irqMask & (1 << USBCTRL_IRQ))
         usb.updateForInterrupts(target);
 }
 
@@ -491,17 +557,17 @@ static const char *ssiRegNames[]
 template<class T>
 T MemoryBus::doXIPSSIRead(uint32_t addr)
 {
-    switch((addr & 0xFF) / 4)
+    switch(addr & 0xFF)
     {
-        case 8: // TXFLR
+        case SSI_TXFLR_OFFSET:
             return 0;
-        case 9: // RXFLR
+        case SSI_RXFLR_OFFSET:
             return static_cast<T>(ssiRx.size());
 
-        case 10: // SR
-            return 1 << 1/*TFNF*/ | 1 << 2/*TFE*/ | (ssiRx.empty() ? 0 : 1 << 3/*RFNE*/);
+        case SSI_SR_OFFSET: // SR
+            return SSI_SR_TFNF_BITS | SSI_SR_TFE_BITS | (ssiRx.empty() ? 0 : SSI_SR_RFNE_BITS);
 
-        case 24: // DR0
+        case SSI_DR0_OFFSET:
         {
             uint32_t v = 0;
             if(!ssiRx.empty())
@@ -519,9 +585,9 @@ T MemoryBus::doXIPSSIRead(uint32_t addr)
 template<class T>
 void MemoryBus::doXIPSSIWrite(uint32_t addr, T data)
 {
-    switch((addr & 0xFF) / 4)
+    switch(addr & 0xFF)
     {
-        case 2: // SSIENA
+        case SSI_SSIENR_OFFSET:
         {
             if(data == 0) // disabled
             {
@@ -530,7 +596,7 @@ void MemoryBus::doXIPSSIWrite(uint32_t addr, T data)
             }
             break;
         }
-        case 24: // DR0
+        case SSI_DR0_OFFSET: // DR0
         {
             if(flashCmdOff)
             {
@@ -621,7 +687,7 @@ T MemoryBus::doSRAMRead(uint32_t addr) const
 {
     // striped SRAM0-3, SRAM4-5
     // (SRAM0-3 is stored striped)
-    if (addr < 0x20042000)
+    if (addr < SRAM_END)
         return *reinterpret_cast<const T *>(sram + (addr & 0xFFFFF));
 
     logf(LogLevel::NotImplemented, logComponent, "SRAM R %08X", addr);
@@ -631,7 +697,7 @@ T MemoryBus::doSRAMRead(uint32_t addr) const
 template<class T>
 void MemoryBus::doSRAMWrite(uint32_t addr, T data)
 {
-    if(addr < 0x20042000)
+    if(addr < SRAM_END)
     {
         *reinterpret_cast<T *>(sram + (addr & 0xFFFFF)) = data;
         return;
@@ -682,23 +748,23 @@ T MemoryBus::doAPBPeriphRead(ClockTarget &masterClock, uint32_t addr)
 template<>
 uint32_t MemoryBus::doAPBPeriphRead(ClockTarget &masterClock, uint32_t addr)
 {
-    auto peripheral = (addr >> 14) & 0x1F;
+    auto peripheral = static_cast<APBPeripheral>((addr >> 14) & 0x1F);
     auto periphAddr = addr & 0x3FFF;
 
     switch(peripheral)
     {
-        case 0: // SYSINFO
-            if(periphAddr == 0x40) // GITREF_RP2040
+        case APBPeripheral::SysInfo:
+            if(periphAddr == SYSINFO_GITREF_RP2040_OFFSET)
                 return 0xDF2040DF; // TODO: put a real value here?
             break;
 
-        case 2: // CLOCKS
+        case APBPeripheral::Clocks:
             return clocks.regRead(periphAddr);
 
-        case 3: // RESETS
+        case APBPeripheral::Resets: // RESETS
         {
             // boot hack
-            if(addr == 0x4000C008)
+            if(periphAddr == RESETS_RESET_DONE_OFFSET)
             {
                 logf(LogLevel::NotImplemented, logComponent, "R RESET_DONE");
                 return ~0u;
@@ -706,19 +772,19 @@ uint32_t MemoryBus::doAPBPeriphRead(ClockTarget &masterClock, uint32_t addr)
             break;
         }
 
-        case 4: // PSM
+        case APBPeripheral::PSM:
         {
-            if(periphAddr == 4) // FRCE_OFF
+            if(periphAddr == PSM_FRCE_OFF_OFFSET)
                 return psmOff;
             break;
         }
 
-        case 5: // IO_BANK0
+        case APBPeripheral::IO_Bank0:
             return gpio.regRead(periphAddr);
 
-        case 6: // IO_QSPI
+        case APBPeripheral::IO_QSPI:
         {
-            if(periphAddr < 0x30)
+            if(periphAddr < IO_QSPI_INTR_OFFSET)
             {
                 int io = periphAddr / 8;
                 if(periphAddr & 4)
@@ -729,65 +795,67 @@ uint32_t MemoryBus::doAPBPeriphRead(ClockTarget &masterClock, uint32_t addr)
             break;
         }
 
-        case 7: // PADS_BANK0
+        case APBPeripheral::Pads_Bank0:
             return gpio.padsRegRead(periphAddr);
 
-        case 10: // PLL_SYS
+        case APBPeripheral::PLL_Sys:
             return clocks.pllSysRegRead(periphAddr);
-
-        case 11: // PLL_USB
+        case APBPeripheral::PLL_USB:
             return clocks.pllUSBRegRead(periphAddr);
 
-        case 13: // UART0
+        case APBPeripheral::UART0:
             return uart[0].regRead(periphAddr);
-        case 14: // UART1
+        case APBPeripheral::UART1:
             return uart[1].regRead(periphAddr);
 
-        case 15: // SPI0
+        case APBPeripheral::SPI0:
         {
-            if(periphAddr == 0xC) // SSPSR
-                return 1 << 1/*TNF*/;
+            if(periphAddr == SPI_SSPSR_OFFSET)
+                return SPI_SSPSR_TNF_BITS;
             break;
         }
 
-        case 20: // PWM
+        case APBPeripheral::PWM:
         {
-            if((periphAddr & 0xFFF) < 0xA0)
+            if((periphAddr & 0xFFF) < PWM_EN_OFFSET)
             {
                 int chan = (periphAddr & 0xFFF) / 20;
-                int reg = (periphAddr / 4) % 5;
+                int reg = (periphAddr ) % 20;
 
-                if(reg == 0)
+                if(reg == PWM_CH0_CSR_OFFSET)
                     return pwmCSR[chan];
-                else if(reg == 1)
+                else if(reg == PWM_CH0_DIV_OFFSET)
                     return pwmDIV[chan];
-                else if(reg == 2)
+                else if(reg == PWM_CH0_CTR_OFFSET)
                     return pwmCTR[chan];
-                else if(reg == 3)
+                else if(reg == PWM_CH0_CC_OFFSET)
                     return pwmCC[chan];
-                else
+                else // PWM_CH0_TOP_OFFSET
                     return pwmTOP[chan];
             }
 
             break;
         }
 
-        case 21: // TIMER
+        case APBPeripheral::Timer:
             timer.update(masterClock.getTime());
             return timer.regRead(periphAddr);
 
-        case 22: // WATCHDOG
+        case APBPeripheral::Watchdog:
             watchdog.update(masterClock.getTime());
             return watchdog.regRead(periphAddr);
 
-        case 23: // RTC
-            if(periphAddr == 0xC) // CTRL
+        case APBPeripheral::RTC:
+            if(periphAddr == RTC_CTRL_OFFSET)
                 return rtcCtrl | (rtcCtrl & 1) << 1; // RTC_ACTIVE = RTC_ENABLE
 
             break;
+
+        default:
+            break;
     }
 
-    logf(LogLevel::NotImplemented, logComponent, "APBP R %s %04X", apbPeriphNames[peripheral], addr & 0x3FFF);
+    logf(LogLevel::NotImplemented, logComponent, "APBP R %s %04X", apbPeriphNames[static_cast<int>(peripheral)], addr & 0x3FFF);
 
     return doOpenRead<uint32_t>(addr);
 }
@@ -808,20 +876,20 @@ void MemoryBus::doAPBPeriphWrite(ClockTarget &masterClock, uint32_t addr, uint16
 template<class T>
 void MemoryBus::doAPBPeriphWrite(ClockTarget &masterClock, uint32_t addr, T data)
 {
-    auto peripheral = (addr >> 14) & 0x1F;
+    auto peripheral = static_cast<APBPeripheral>((addr >> 14) & 0x1F);
     auto periphAddr = addr & 0x3FFF;
 
     switch(peripheral)
     {
-        case 2: // CLOCKS
+        case APBPeripheral::Clocks:
             clocks.regWrite(periphAddr, data);
             return;
 
-        case 4: // PSM
+        case APBPeripheral::PSM:
         {
             int atomic = periphAddr >> 12;
             int addr = periphAddr & 0xFFF;
-            if(addr == 4) // FRCE_OFF
+            if(addr == PSM_FRCE_OFF_OFFSET)
             {
                 logf(LogLevel::NotImplemented, logComponent, "PSM FRCE_OFF %i %08X", atomic, data);
                 updateReg(psmOff, data, atomic);
@@ -830,13 +898,13 @@ void MemoryBus::doAPBPeriphWrite(ClockTarget &masterClock, uint32_t addr, T data
             break;
         }
 
-        case 5: // IO_BANK0
+        case APBPeripheral::IO_Bank0:
             gpio.regWrite(periphAddr, data);
             return;
 
-        case 6: // IO_QSPI
+        case APBPeripheral::IO_QSPI:
         {
-            if((periphAddr & 0xFFF) < 0x30)
+            if((periphAddr & 0xFFF) < IO_QSPI_INTR_OFFSET)
             {
                 int atomic = periphAddr >> 12;
                 int io = (periphAddr & 0xFFF) / 8;
@@ -865,92 +933,79 @@ void MemoryBus::doAPBPeriphWrite(ClockTarget &masterClock, uint32_t addr, T data
             break;
         }
 
-        case 7: // PADS_BANK0
+        case APBPeripheral::Pads_Bank0:
             gpio.padsRegWrite(periphAddr, data);
             return;
 
-        case 10: // PLL_SYS
+        case APBPeripheral::PLL_Sys:
             clocks.pllSysRegWrite(periphAddr, data);
             return;
-
-        case 11: // PLL_USB
+        case APBPeripheral::PLL_USB:
             clocks.pllUSBRegWrite(periphAddr, data);
             return;
 
-        case 13: // UART0
+        case APBPeripheral::UART0:
+            uart[0].regWrite(periphAddr, data);
+            return;
+        case APBPeripheral::UART1:
             uart[0].regWrite(periphAddr, data);
             return;
 
-        case 14: // UART1
-            uart[0].regWrite(periphAddr, data);
-            return;
-
-        case 20: // PWM
+        case APBPeripheral::PWM:
         {
-            if((periphAddr & 0xFFF) < 0xA0)
+            if((periphAddr & 0xFFF) < PWM_EN_OFFSET)
             {
                 int atomic = periphAddr >> 12;
                 int chan = (periphAddr & 0xFFF) / 20;
-                int reg = (periphAddr / 4) % 5;
+                int reg = periphAddr % 20;
 
-                if(reg == 0)
-                {
+                if(reg == PWM_CH0_CSR_OFFSET)
                     updateReg(pwmCSR[chan], data, atomic);
-                    return;
-                }
-                else if(reg == 1)
-                {
+                else if(reg == PWM_CH0_DIV_OFFSET)
                     updateReg(pwmDIV[chan], data, atomic);
-                    return;
-                }
-                else if(reg == 2)
-                {
+                else if(reg == PWM_CH0_CTR_OFFSET)
                     updateReg(pwmCTR[chan], data, atomic);
-                    return;
-                }
-                else if(reg == 3)
-                {
+                else if(reg == PWM_CH0_CC_OFFSET)
                     updateReg(pwmCC[chan], data, atomic);
-                    return;
-                }
-                else
-                {
+                else // PWM_CH0_TOP_OFFSET
                     updateReg(pwmTOP[chan], data, atomic);
-                    return;
-                }
+                return;
             }
 
             break;
         }
 
-        case 21: // TIMER
+        case APBPeripheral::Timer:
             timer.update(masterClock.getTime());
             timer.regWrite(periphAddr, data);
             calcNextInterruptTime();
             return;
 
-        case 22: // WATCHDOG
+        case APBPeripheral::Watchdog:
             watchdog.update(masterClock.getTime());
             watchdog.regWrite(periphAddr, data);
             return;
 
-        case 23: // RTC
-            if(periphAddr == 0xC) // CTRL
+        case APBPeripheral::RTC:
+            if(periphAddr == RTC_CTRL_OFFSET)
             {
                 rtcCtrl = data;
                 return;
             }
             break;
+
+        default:
+            break;
     }
 
-    logf(LogLevel::NotImplemented, logComponent, "APBP W %s %04X = %08X", apbPeriphNames[peripheral], addr & 0x3FFF, data);
+    logf(LogLevel::NotImplemented, logComponent, "APBP W %s %04X = %08X", apbPeriphNames[static_cast<int>(peripheral)], addr & 0x3FFF, data);
 }
 
 // promote all reads to 32-bit
 template<class T>
 T MemoryBus::doAHBPeriphRead(ClockTarget &masterClock, uint32_t addr)
 {
-    if(addr >= 0x50100000 && addr < 0x50101000) // USB DPRAM
+    if(addr >= USBCTRL_DPRAM_BASE && addr < USBCTRL_DPRAM_BASE + USB_DPRAM_SIZE)
     {
         // ... except USB DPRAM, which DOES handle narrow access
         usb.update(masterClock.getTime());
@@ -964,41 +1019,55 @@ T MemoryBus::doAHBPeriphRead(ClockTarget &masterClock, uint32_t addr)
 template<>
 uint32_t MemoryBus::doAHBPeriphRead(ClockTarget &masterClock, uint32_t addr)
 {
-    if(addr < 0x50100000) // DMA
-    {
-        dma.update(masterClock.getTime());
-        return dma.regRead(addr & 0xFFFF);
-    }
-    else if(addr < 0x50101000) // USB DPRAM
-    {
-        usb.update(masterClock.getTime());
-        return *reinterpret_cast<const uint32_t *>(usb.getRAM() + (addr & 0xFFF));
-    }
-    else if(addr >= 0x50110000 && addr < 0x50200000) // USB regs
-    {
-        usb.update(masterClock.getTime());
-        return usb.regRead(addr & 0xFFFF);
-    }
-    else if(addr < 0x50300000)
-    {
-        if(addr == 0x50200004) // FSTAT
-            return 0x0F000F00; // all FIFOs empty
-        if(addr == 0x50200008) // FDEBUG
-            return 0xF << 24; // all TXSTALL
+    auto peripheral = static_cast<AHBPeripheral>((addr >> 20) & 0xF);
+    auto periphAddr = addr & 0xFFFFF;
 
-        logf(LogLevel::NotImplemented, logComponent, "PIO0 R %08X", addr);
-    }
-    else if(addr < 0x50400000)
+    switch(peripheral)
     {
-        if(addr == 0x50300004) // FSTAT
-            return 0x0F000F00; // all FIFOs empty
-        if(addr == 0x50300008) // FDEBUG
-            return 0xF << 24; // all TXSTALL
+        case AHBPeripheral::DMA:
+            dma.update(masterClock.getTime());
+            return dma.regRead(periphAddr);
 
-        logf(LogLevel::NotImplemented, logComponent, "PIO1 R %08X", addr);
+        case AHBPeripheral::USB:
+        {
+            if(addr < USBCTRL_DPRAM_BASE + USB_DPRAM_SIZE)
+            {
+                usb.update(masterClock.getTime());
+                return *reinterpret_cast<const uint32_t *>(usb.getRAM() + (addr & 0xFFF));
+            }
+            else if(addr >= USBCTRL_REGS_BASE)
+            {
+                usb.update(masterClock.getTime());
+                return usb.regRead(periphAddr);
+            }
+            break;
+        }
+        
+        case AHBPeripheral::PIO0:
+        {
+            if(periphAddr == PIO_FSTAT_OFFSET)
+                return PIO_FSTAT_TXEMPTY_BITS | PIO_FSTAT_RXEMPTY_BITS; // all FIFOs empty
+            if(periphAddr == PIO_FDEBUG_OFFSET)
+                return PIO_FDEBUG_TXSTALL_BITS; // all TXSTALL
+
+            logf(LogLevel::NotImplemented, logComponent, "PIO0 R %08X", addr);
+            break;
+        }
+        case AHBPeripheral::PIO1:
+        {
+            if(periphAddr == PIO_FSTAT_OFFSET)
+                return PIO_FSTAT_TXEMPTY_BITS | PIO_FSTAT_RXEMPTY_BITS; // all FIFOs empty
+            if(periphAddr == PIO_FDEBUG_OFFSET)
+                return PIO_FDEBUG_TXSTALL_BITS; // all TXSTALL
+
+            logf(LogLevel::NotImplemented, logComponent, "PIO1 R %08X", addr);
+            break;
+        }
+
+        case AHBPeripheral::XIPAux:
+            logf(LogLevel::NotImplemented, logComponent, "AHBP XIP_AUX R %08X", addr);
+            break;
     }
-    else
-        logf(LogLevel::NotImplemented, logComponent, "AHBP R %08X", addr);
 
     return doOpenRead<uint32_t>(addr);
 }
@@ -1007,10 +1076,11 @@ uint32_t MemoryBus::doAHBPeriphRead(ClockTarget &masterClock, uint32_t addr)
 template<>
 void MemoryBus::doAHBPeriphWrite(ClockTarget &masterClock, uint32_t addr, uint8_t data)
 {
-    if(addr >= 0x50100000 && addr < 0x50101000) // USB DPRAM
+    if(addr >= USBCTRL_DPRAM_BASE && addr < USBCTRL_DPRAM_BASE + USB_DPRAM_SIZE)
     {
         usb.update(masterClock.getTime());
         usb.getRAM()[addr & 0xFFF] = data;
+        usb.ramWrite(addr & 0xFFF);
         return;
     }
 
@@ -1020,10 +1090,11 @@ void MemoryBus::doAHBPeriphWrite(ClockTarget &masterClock, uint32_t addr, uint8_
 template<>
 void MemoryBus::doAHBPeriphWrite(ClockTarget &masterClock, uint32_t addr, uint16_t data)
 {
-    if(addr >= 0x50100000 && addr < 0x50101000) // USB DPRAM
+    if(addr >= USBCTRL_DPRAM_BASE && addr < USBCTRL_DPRAM_BASE + USB_DPRAM_SIZE)
     {
         usb.update(masterClock.getTime());
         *reinterpret_cast<uint16_t *>(usb.getRAM() + (addr & 0xFFF)) = data;
+        usb.ramWrite(addr & 0xFFF);
         return;
     }
 
@@ -1033,42 +1104,56 @@ void MemoryBus::doAHBPeriphWrite(ClockTarget &masterClock, uint32_t addr, uint16
 template<class T>
 void MemoryBus::doAHBPeriphWrite(ClockTarget &masterClock, uint32_t addr, T data)
 {
-    if(addr < 0x50100000) // DMA
+    auto peripheral = static_cast<AHBPeripheral>((addr >> 20) & 0xF);
+    auto periphAddr = addr & 0xFFFFF;
+
+    switch(peripheral)
     {
-        dma.update(masterClock.getTime());
-        dma.regWrite(addr & 0xFFFF, data);
-        calcNextInterruptTime();
-        return;
+        case AHBPeripheral::DMA:
+            dma.update(masterClock.getTime());
+            dma.regWrite(periphAddr, data);
+            calcNextInterruptTime();
+            return;
+
+        case AHBPeripheral::USB:
+        {
+            if(addr < USBCTRL_DPRAM_BASE + USB_DPRAM_SIZE)
+            {
+                usb.update(masterClock.getTime());
+                *reinterpret_cast<T *>(usb.getRAM() + (addr & 0xFFF)) = data;
+                usb.ramWrite(addr & 0xFFF);
+                return;
+            }
+            else if(addr >= USBCTRL_REGS_BASE)
+            {
+                usb.update(masterClock.getTime());
+                usb.regWrite(periphAddr, data);
+                return;
+            }
+            break;
+        }
+        
+        case AHBPeripheral::PIO0:
+        {
+            if(periphAddr == PIO_TXF0_OFFSET)
+            {}
+            else
+                logf(LogLevel::NotImplemented, logComponent, "PIO0 W %08X = %08X", addr, data);
+            return;
+        }
+        case AHBPeripheral::PIO1:
+        {
+            if(periphAddr == PIO_TXF0_OFFSET)
+            {}
+            else
+                logf(LogLevel::NotImplemented, logComponent, "PIO1 W %08X = %08X", addr, data);
+            return;
+        }
+
+        case AHBPeripheral::XIPAux:
+            logf(LogLevel::NotImplemented, logComponent, "AHBP XIP_AUX W %08X = %08X", addr, data);
+            return;
     }
-    else if(addr < 0x50101000) // USB DPRAM
-    {
-        usb.update(masterClock.getTime());
-        *reinterpret_cast<T *>(usb.getRAM() + (addr & 0xFFF)) = data;
-        usb.ramWrite(addr & 0xFFF);
-        return;
-    }
-    else if(addr >= 0x50110000 && addr < 0x50200000) // USB regs
-    {
-        usb.update(masterClock.getTime());
-        usb.regWrite(addr & 0xFFFF, data);
-        return;
-    }
-    else if(addr < 0x50300000)
-    {
-        if(addr == 0x50200010) // TXF0
-        {}
-        else
-            logf(LogLevel::NotImplemented, logComponent, "PIO0 W %08X = %08X", addr, data);
-    }
-    else if(addr < 0x50400000)
-    {
-        if(addr == 0x50300010) // TXF0
-        {}
-        else
-            logf(LogLevel::NotImplemented, logComponent, "PIO1 W %08X = %08X", addr, data);
-    }
-    else
-        logf(LogLevel::NotImplemented, logComponent, "AHBP W %08X = %08X", addr, data);
 }
 
 // promote all reads to 32-bit
@@ -1084,74 +1169,74 @@ uint32_t MemoryBus::doIOPORTRead(ClockTarget &masterClock, int core, uint32_t ad
 {
     switch(addr & 0xFFF)
     {
-        case 0: // CPUID
+        case SIO_CPUID_OFFSET:
             return core;
 
-        case 4: // GPIO_IN
+        case SIO_GPIO_IN_OFFSET:
             return gpio.getInputs(masterClock.getTime());
 
-        case 8:  // GPIO_HI_IN
+        case SIO_GPIO_HI_IN_OFFSET:
         {
             // boot hack
             logf(LogLevel::NotImplemented, logComponent, "R GPIO_HI_IN");
             return 2;
         }
 
-        case 0x50: // FIFO_ST
+        case SIO_FIFO_ST_OFFSET:
         {
             bool vld = !coreFIFO[1 - core].empty();
             bool rdy = !coreFIFO[core].full();
-            return (vld ? 1 : 0) | (rdy ? 2 : 0); // TODO: error flags
+            return (vld ? SIO_FIFO_ST_VLD_BITS : 0) | (rdy ? SIO_FIFO_ST_RDY_BITS : 0); // TODO: error flags
         }
-        case 0x58: // FIFO_RD
+        case SIO_FIFO_RD_OFFSET:
             return coreFIFO[1 - core].pop();
 
-        case 0x60: // DIV_UDIVIDEND
-        case 0x68: // DIV_SDIVIDEND
+        case SIO_DIV_UDIVIDEND_OFFSET:
+        case SIO_DIV_SDIVIDEND_OFFSET:
             return dividend[core];
-        case 0x64: // DIV_UDIVISOR
-        case 0x6C: // DIV_SDIVISOR
+        case SIO_DIV_UDIVISOR_OFFSET:
+        case SIO_DIV_SDIVISOR_OFFSET:
             return divisor[core];
-        case 0x70: // DIV_QUOTIENT
+        case SIO_DIV_QUOTIENT_OFFSET:
             dividerDirty[core] = false;
             return divQuot[core];
-        case 0x74: // DIV_REMAINDER
+        case SIO_DIV_REMAINDER_OFFSET:
             return divRem[core];
-        case 0x78: // DIV_CSR
-            return (dividerDirty[core] ? 2 : 0) | 1;
+        case SIO_DIV_CSR_OFFSET:
+            return (dividerDirty[core] ? SIO_DIV_CSR_DIRTY_BITS : 0) | SIO_DIV_CSR_READY_BITS;
 
-        case 0x100: // SPINLOCK0
-        case 0x104:
-        case 0x108:
-        case 0x10C:
-        case 0x110:
-        case 0x114:
-        case 0x118:
-        case 0x11C:
-        case 0x120:
-        case 0x124:
-        case 0x128:
-        case 0x12C:
-        case 0x130:
-        case 0x134:
-        case 0x138:
-        case 0x13C:
-        case 0x140:
-        case 0x144:
-        case 0x148:
-        case 0x14C:
-        case 0x150:
-        case 0x154:
-        case 0x158:
-        case 0x15C:
-        case 0x160:
-        case 0x164:
-        case 0x168:
-        case 0x16C:
-        case 0x170:
-        case 0x174:
-        case 0x178:
-        case 0x17C: // SPINLOCK31
+        case SIO_SPINLOCK0_OFFSET:
+        case SIO_SPINLOCK1_OFFSET:
+        case SIO_SPINLOCK2_OFFSET:
+        case SIO_SPINLOCK3_OFFSET:
+        case SIO_SPINLOCK4_OFFSET:
+        case SIO_SPINLOCK5_OFFSET:
+        case SIO_SPINLOCK6_OFFSET:
+        case SIO_SPINLOCK7_OFFSET:
+        case SIO_SPINLOCK8_OFFSET:
+        case SIO_SPINLOCK9_OFFSET:
+        case SIO_SPINLOCK10_OFFSET:
+        case SIO_SPINLOCK11_OFFSET:
+        case SIO_SPINLOCK12_OFFSET:
+        case SIO_SPINLOCK13_OFFSET:
+        case SIO_SPINLOCK14_OFFSET:
+        case SIO_SPINLOCK15_OFFSET:
+        case SIO_SPINLOCK16_OFFSET:
+        case SIO_SPINLOCK17_OFFSET:
+        case SIO_SPINLOCK18_OFFSET:
+        case SIO_SPINLOCK19_OFFSET:
+        case SIO_SPINLOCK20_OFFSET:
+        case SIO_SPINLOCK21_OFFSET:
+        case SIO_SPINLOCK22_OFFSET:
+        case SIO_SPINLOCK23_OFFSET:
+        case SIO_SPINLOCK24_OFFSET:
+        case SIO_SPINLOCK25_OFFSET:
+        case SIO_SPINLOCK26_OFFSET:
+        case SIO_SPINLOCK27_OFFSET:
+        case SIO_SPINLOCK28_OFFSET:
+        case SIO_SPINLOCK29_OFFSET:
+        case SIO_SPINLOCK30_OFFSET:
+        case SIO_SPINLOCK31_OFFSET:
         {
             int lock = (addr & 0xFF) / 4;
 
@@ -1203,90 +1288,90 @@ void MemoryBus::doIOPORTWrite(ClockTarget &masterClock, int core, uint32_t addr,
 
     switch(addr & 0xFFF)
     {
-        case 0x10: // GPIO_OUT
+        case SIO_GPIO_OUT_OFFSET:
             gpio.setOutputs(data);
             return;
-        case 0x14: // GPIO_OUT_SET
+        case SIO_GPIO_OUT_SET_OFFSET:
             gpio.setOutputMask(data);
             return;
-        case 0x18: // GPIO_OUT_CLR
+        case SIO_GPIO_OUT_CLR_OFFSET:
             gpio.clearOutputMask(data);
             return;
-        case 0x1C: // GPIO_OUT_XOR
+        case SIO_GPIO_OUT_XOR_OFFSET:
             gpio.xorOutputMask(data);
             return;
 
-        case 0x54: // FIFO_WR
+        case SIO_FIFO_WR_OFFSET:
             coreFIFO[core].push(data);
             // at least one status flag got set here...
-            setPendingIRQ(15/*SIO_IRQ_PROC0*/ + core);
+            setPendingIRQ(SIO_IRQ_PROC0 + core);
             return;
 
-        case 0x60: // DIV_UDIVIDEND
+        case SIO_DIV_UDIVIDEND_OFFSET:
             dividend[core] = data;
             dividerDirty[core] = true;
             dividerSigned[core] = false;
             doDiv();
             return;
-        case 0x64: // DIV_UDIVISOR
+        case SIO_DIV_UDIVISOR_OFFSET:
             divisor[core] = data;
             dividerDirty[core] = true;
             dividerSigned[core] = false;
             doDiv();
             return;
-        case 0x68: // DIV_SDIVIDEND
+        case SIO_DIV_SDIVIDEND_OFFSET:
             dividend[core] = data;
             dividerDirty[core] = true;
             dividerSigned[core] = true;
             doDiv();
             return;
-        case 0x6C: // DIV_SDIVISOR
+        case SIO_DIV_SDIVISOR_OFFSET:
             divisor[core] = data;
             dividerDirty[core] = true;
             dividerSigned[core] = true;
             doDiv();
             return;
-        case 0x70: // DIV_QUOTIENT
+        case SIO_DIV_QUOTIENT_OFFSET:
             divQuot[core] = data;
             dividerDirty[core] = true;
             return;
-        case 0x74: // DIV_REMAINDER
+        case SIO_DIV_REMAINDER_OFFSET:
             divRem[core] = data;
             dividerDirty[core] = true;
             return;
 
-        case 0x100: // SPINLOCK0
-        case 0x104:
-        case 0x108:
-        case 0x10C:
-        case 0x110:
-        case 0x114:
-        case 0x118:
-        case 0x11C:
-        case 0x120:
-        case 0x124:
-        case 0x128:
-        case 0x12C:
-        case 0x130:
-        case 0x134:
-        case 0x138:
-        case 0x13C:
-        case 0x140:
-        case 0x144:
-        case 0x148:
-        case 0x14C:
-        case 0x150:
-        case 0x154:
-        case 0x158:
-        case 0x15C:
-        case 0x160:
-        case 0x164:
-        case 0x168:
-        case 0x16C:
-        case 0x170:
-        case 0x174:
-        case 0x178:
-        case 0x17C: // SPINLOCK31
+        case SIO_SPINLOCK0_OFFSET:
+        case SIO_SPINLOCK1_OFFSET:
+        case SIO_SPINLOCK2_OFFSET:
+        case SIO_SPINLOCK3_OFFSET:
+        case SIO_SPINLOCK4_OFFSET:
+        case SIO_SPINLOCK5_OFFSET:
+        case SIO_SPINLOCK6_OFFSET:
+        case SIO_SPINLOCK7_OFFSET:
+        case SIO_SPINLOCK8_OFFSET:
+        case SIO_SPINLOCK9_OFFSET:
+        case SIO_SPINLOCK10_OFFSET:
+        case SIO_SPINLOCK11_OFFSET:
+        case SIO_SPINLOCK12_OFFSET:
+        case SIO_SPINLOCK13_OFFSET:
+        case SIO_SPINLOCK14_OFFSET:
+        case SIO_SPINLOCK15_OFFSET:
+        case SIO_SPINLOCK16_OFFSET:
+        case SIO_SPINLOCK17_OFFSET:
+        case SIO_SPINLOCK18_OFFSET:
+        case SIO_SPINLOCK19_OFFSET:
+        case SIO_SPINLOCK20_OFFSET:
+        case SIO_SPINLOCK21_OFFSET:
+        case SIO_SPINLOCK22_OFFSET:
+        case SIO_SPINLOCK23_OFFSET:
+        case SIO_SPINLOCK24_OFFSET:
+        case SIO_SPINLOCK25_OFFSET:
+        case SIO_SPINLOCK26_OFFSET:
+        case SIO_SPINLOCK27_OFFSET:
+        case SIO_SPINLOCK28_OFFSET:
+        case SIO_SPINLOCK29_OFFSET:
+        case SIO_SPINLOCK30_OFFSET:
+        case SIO_SPINLOCK31_OFFSET:
         {
             int lock = (addr & 0xFF) / 4;
 

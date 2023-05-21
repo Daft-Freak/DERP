@@ -2,6 +2,8 @@
 
 #include <cstdint>
 
+#include "hardware/platform_defs.h"
+
 #include "ClockTarget.h"
 
 class MemoryBus;
@@ -34,7 +36,8 @@ private:
 
     int curChannel;
 
-    static const int numChannels = 12;
+    // not using the structs here, too much repetition+padding
+    static const int numChannels = NUM_DMA_CHANNELS;
     uint32_t readAddr[numChannels];
     uint32_t writeAddr[numChannels];
     uint32_t transferCount[numChannels], transferCountReload[numChannels];

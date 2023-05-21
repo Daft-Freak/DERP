@@ -1,5 +1,9 @@
 #include <cstdio>
 
+#include "hardware/platform_defs.h"
+#include "hardware/regs/timer.h"
+#include "hardware/regs/intctrl.h"
+
 #include "Timer.h"
 
 #include "MemoryBus.h"
@@ -67,7 +71,7 @@ void Timer::update(uint64_t target)
                 armed &= ~(1 << i);
 
                 if(interruptEnables & (1 << i))
-                    mem.setPendingIRQ(i); // TODO: should stay pending if not cleared?
+                    mem.setPendingIRQ(TIMER_IRQ_0 + i); // TODO: should stay pending if not cleared?
             }
         }
     }
@@ -100,23 +104,23 @@ uint32_t Timer::regRead(uint32_t addr)
 {
     switch(addr)
     {
-        case 8: // TIMEHR
+        case TIMER_TIMEHR_OFFSET:
             return latchedHighTime;
-        case 0xC: // TIMELR
+        case TIMER_TIMELR_OFFSET:
             latchedHighTime = time >> 32;
             return time & 0xFFFFFFFF;
-        case 0x10: // ALARM0
-        case 0x14:
-        case 0x18:
-        case 0x1C: // ALARM3
-            return alarms[(addr - 0x10) / 4];
-        case 0x20: // ARMED
+        case TIMER_ALARM0_OFFSET:
+        case TIMER_ALARM1_OFFSET:
+        case TIMER_ALARM2_OFFSET:
+        case TIMER_ALARM3_OFFSET:
+            return alarms[(addr - TIMER_ALARM0_OFFSET) / 4];
+        case TIMER_ARMED_OFFSET:
             return armed;
-        case 0x24: // TIMERAWH
+        case TIMER_TIMERAWH_OFFSET:
             return time >> 32;
-        case 0x28: // TIMERAWL
+        case TIMER_TIMERAWL_OFFSET:
             return time & 0xFFFFFFFF;
-        case 0x38: // INTE
+        case TIMER_INTE_OFFSET:
             return interruptEnables;
     }
 
@@ -131,27 +135,27 @@ void Timer::regWrite(uint32_t addr, uint32_t data)
 
     switch(addr)
     {
-        case 0: // TIMEHW
+        case TIMER_TIMEHW_OFFSET:
         {
             uint32_t h = time;
             updateReg(h, data, atomic);
             time = static_cast<uint64_t>(h) << 32 | writeLowTime;
             return;
         }
-        case 4: // TIMELW
+        case TIMER_TIMELW_OFFSET:
             updateReg(writeLowTime, data, atomic);
             return;
-        case 0x10: // ALARM0
-        case 0x14:
-        case 0x18:
-        case 0x1C: // ALARM3
+        case TIMER_ALARM0_OFFSET:
+        case TIMER_ALARM1_OFFSET:
+        case TIMER_ALARM2_OFFSET:
+        case TIMER_ALARM3_OFFSET:
         {
             int alarm = (addr - 0x10) / 4;
             updateReg(alarms[alarm], data, atomic);
             armed |= 1 << alarm;
             return;
         }
-        case 0x20: // ARMED
+        case TIMER_ARMED_OFFSET:
             // what does atomic + WC do?
             if(!atomic)
             {
@@ -159,17 +163,17 @@ void Timer::regWrite(uint32_t addr, uint32_t data)
                 return;
             }
             break;
-        case 0x34: // INTR
+        case TIMER_INTR_OFFSET:
             if(!atomic)
             {
                 interrupts &= ~data;
                 return;
             }
             break;
-        case 0x38: // INTE
+        case TIMER_INTE_OFFSET:
             updateReg(interruptEnables, data, atomic);
             return;
-        case 0x3C: // INTF
+        case TIMER_INTF_OFFSET:
             updateReg(interruptForce, data, atomic);
             if(interruptForce)
                 logf(LogLevel::NotImplemented, logComponent, "Forced timer intr %x", interruptForce); // TODO
