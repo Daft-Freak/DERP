@@ -44,8 +44,10 @@ void ARMv6MCore::reset()
     exceptionActive = exceptionPending = 0;
     needException = false;
 
-    for(auto &reg : sysTickRegs)
-        reg = 0;
+    sysTickCSR = M0PLUS_SYST_CSR_RESET;
+    sysTickReload = M0PLUS_SYST_RVR_RESET;
+    sysTickCurrent = M0PLUS_SYST_CVR_RESET;
+    sysTickCalib = M0PLUS_SYST_CALIB_RESET;
 
     nvicEnabled = 0;
     for(auto &reg : nvicPriority)
@@ -115,8 +117,8 @@ unsigned int ARMv6MCore::update(uint64_t target)
             cycles += exec;
 
             // update systick if using cpu clock
-            uint32_t mask = (1 << 0)/*ENABLE*/ | (1 << 2)/*CLKSOURCE*/;
-            if((sysTickRegs[0]/*SYST_CSR*/ & mask) == mask)
+            uint32_t mask = M0PLUS_SYST_CSR_ENABLE_BITS | M0PLUS_SYST_CSR_CLKSOURCE_BITS;
+            if((sysTickCSR & mask) == mask)
                 updateSysTick(exec);
 
             curTime = clock.getTime();
@@ -173,11 +175,17 @@ uint32_t ARMv6MCore::readReg(uint32_t addr)
     switch(addr & 0xFFFFFFF)
     {
         case M0PLUS_SYST_CSR_OFFSET:
+            updateSysTick();
+            return sysTickCSR;
         case M0PLUS_SYST_RVR_OFFSET:
+            updateSysTick();
+            return sysTickReload;
         case M0PLUS_SYST_CVR_OFFSET:
+            updateSysTick();
+            return sysTickCurrent;
         case M0PLUS_SYST_CALIB_OFFSET:
             updateSysTick();
-            return sysTickRegs[(addr & 0xF) / 4];
+            return sysTickCalib;
         
         case M0PLUS_NVIC_ISER_OFFSET:
         case M0PLUS_NVIC_ICER_OFFSET:
@@ -223,13 +231,16 @@ void ARMv6MCore::writeReg(uint32_t addr, uint32_t data)
     switch(addr & 0xFFFFFFF)
     {
         case M0PLUS_SYST_CSR_OFFSET:
+            updateSysTick();
+            sysTickCSR = data;
+            return;
         case M0PLUS_SYST_RVR_OFFSET:
             updateSysTick();
-            sysTickRegs[(addr & 0xF) / 4] = data;
+            sysTickReload = data;
             return;
         case M0PLUS_SYST_CVR_OFFSET:
             updateSysTick();
-            sysTickRegs[2] = sysTickRegs[1];
+            sysTickCurrent = sysTickReload;
             return;
         
         case M0PLUS_NVIC_ISER_OFFSET:
@@ -1739,11 +1750,11 @@ void ARMv6MCore::checkPendingExceptions()
 
 void ARMv6MCore::updateSysTick(int sysCycles)
 {
-    if(!(sysTickRegs[0]/*SYST_CSR*/ & M0PLUS_SYST_CSR_CLKSOURCE_BITS))
+    if(!(sysTickCSR & M0PLUS_SYST_CSR_CLKSOURCE_BITS))
         return; // TODO: watchdog tick
 
-    sysTickRegs[2]/*CVR*/ = (sysTickRegs[2] - sysCycles) & 0xFFFFFF;
+    sysTickCurrent = (sysTickCurrent - sysCycles) & M0PLUS_SYST_CVR_CURRENT_BITS;
 
-    if(!sysTickRegs[2])
-        sysTickRegs[2] = sysTickRegs[1] /*RVR*/;
+    if(!sysTickCurrent)
+        sysTickCurrent = sysTickReload;
 }
