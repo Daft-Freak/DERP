@@ -43,6 +43,12 @@ void GPIO::update(uint64_t target)
 {
     auto passed = clock.getCyclesToTime(target);
 
+    if(logFile.is_open())
+    {
+        uint32_t data[]{outputs, passed};
+        logFile.write(reinterpret_cast<char *>(data), sizeof(data));
+    }
+
     clock.addCycles(passed);
 }
 
@@ -108,6 +114,16 @@ bool GPIO::interruptsEnabledOnPin(int pin)
 void GPIO::setReadCallback(ReadCallback cb)
 {
     readCallback = cb;
+}
+
+void GPIO::openLogFile(const char *filename)
+{
+    logFile.open(filename, std::fstream::out | std::fstream::binary);
+}
+
+void GPIO::closeLogFile()
+{
+    logFile.close();
 }
 
 uint32_t GPIO::regRead(uint32_t addr)

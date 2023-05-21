@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <fstream>
 #include <functional>
 
 #include "hardware/structs/iobank0.h"
@@ -43,6 +44,9 @@ public:
 
     void setReadCallback(ReadCallback cb);
 
+    void openLogFile(const char *filename);
+    void closeLogFile();
+
     // IO_BANK0
     uint32_t regRead(uint32_t addr);
     void regWrite(uint32_t addr, uint32_t data);
@@ -66,4 +70,6 @@ private:
     uint32_t outputs;
 
     ReadCallback readCallback;
+
+    std::ofstream logFile;
 };

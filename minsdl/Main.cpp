@@ -357,6 +357,8 @@ int main(int argc, char *argv[])
             handleLogArg(argv[++i]);
         else if(arg == "--gdb")
             gdbEnabled = true;
+        else if(arg == "--iolog" && i + 1 < argc)
+            mem.getGPIO().openLogFile(argv[++i]);
         else
             break;
     }
