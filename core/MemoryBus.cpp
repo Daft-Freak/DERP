@@ -1020,7 +1020,7 @@ template<>
 uint32_t MemoryBus::doAHBPeriphRead(ClockTarget &masterClock, uint32_t addr)
 {
     auto peripheral = static_cast<AHBPeripheral>((addr >> 20) & 0xF);
-    auto periphAddr = addr & 0xFFFFF;
+    auto periphAddr = addr & 0xFFFF;
 
     switch(peripheral)
     {
@@ -1105,7 +1105,7 @@ template<class T>
 void MemoryBus::doAHBPeriphWrite(ClockTarget &masterClock, uint32_t addr, T data)
 {
     auto peripheral = static_cast<AHBPeripheral>((addr >> 20) & 0xF);
-    auto periphAddr = addr & 0xFFFFF;
+    auto periphAddr = addr & 0xFFFF;
 
     switch(peripheral)
     {
