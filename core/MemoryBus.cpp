@@ -1312,6 +1312,23 @@ void MemoryBus::doIOPORTWrite(ClockTarget &masterClock, int core, uint32_t addr,
             gpio.xorOutputMask(data);
             return;
 
+        case SIO_GPIO_OE_OFFSET:
+            gpio.update(masterClock.getTime());
+            gpio.setOutputEnables(data);
+            return;
+        case SIO_GPIO_OE_SET_OFFSET:
+            gpio.update(masterClock.getTime());
+            gpio.setOutputEnableMask(data);
+            return;
+        case SIO_GPIO_OE_CLR_OFFSET:
+            gpio.update(masterClock.getTime());
+            gpio.clearOutputEnableMask(data);
+            return;
+        case SIO_GPIO_OE_XOR_OFFSET:
+            gpio.update(masterClock.getTime());
+            gpio.xorOutputEnableMask(data);
+            return;
+
         case SIO_FIFO_WR_OFFSET:
             coreFIFO[core].push(data);
             // at least one status flag got set here...

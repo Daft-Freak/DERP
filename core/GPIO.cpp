@@ -88,6 +88,8 @@ void GPIO::setInputs(uint32_t inputs)
                 mem.setPendingIRQ(IO_IRQ_BANK0);
             }
         }
+
+        updatePads();
     }
 
     this->inputs = inputs;
@@ -102,6 +104,16 @@ void GPIO::setOutputs(uint32_t outputs)
     this->outputs = outputs;
 
     updateOutputs();
+}
+
+void GPIO::setOutputEnables(uint32_t outputEnables)
+{
+    if(this->outputEnables == outputEnables)
+        return;
+
+    this->outputEnables = outputEnables;
+
+    updateOutputEnables();
 }
 
 bool GPIO::interruptsEnabledOnPin(int pin)
@@ -238,8 +250,23 @@ void GPIO::updateOutputs()
     updatePads();
 }
 
+void GPIO::updateOutputEnables()
+{
+    // TODO: func sel
+    oeFromPeriph = outputEnables;
+
+    // TODO: overrides
+    oeToPad = oeFromPeriph;
+
+    updatePads();
+}
+
 void GPIO::updatePads()
 {
-    // TODO: output disable, input enable, pull up/down
-    padState = outputsToPad;
+    // TODO: output disable
+    padState = outputsToPad & oeToPad;
+
+    // make the inputs visible if no output
+    // TODO: input enable?, pull up/down
+    padState |= inputs & ~oeToPad;
 }

@@ -40,6 +40,12 @@ public:
     void clearOutputMask(uint32_t mask) {setOutputs(outputs & ~mask);}
     void xorOutputMask(uint32_t mask) {setOutputs(outputs ^ mask);}
 
+    void setOutputEnables(uint32_t outputs);
+
+    void setOutputEnableMask(uint32_t mask) {setOutputEnables(outputEnables | mask);}
+    void clearOutputEnableMask(uint32_t mask) {setOutputEnables(outputEnables & ~mask);}
+    void xorOutputEnableMask(uint32_t mask) {setOutputEnables(outputEnables ^ mask);}
+
     bool interruptsEnabledOnPin(int pin);
 
     void setReadCallback(ReadCallback cb);
@@ -59,6 +65,7 @@ public:
 
 private:
     void updateOutputs();
+    void updateOutputEnables();
     void updatePads();
 
     MemoryBus &mem;
@@ -71,8 +78,10 @@ private:
 
     uint32_t inputs;
     uint32_t outputs; // SIO outputs
+    uint32_t outputEnables; // SIO
 
     uint32_t outputsFromPeriph, outputsToPad, padState;
+    uint32_t oeFromPeriph, oeToPad;
 
     ReadCallback readCallback;
 
