@@ -378,10 +378,14 @@ void MemoryBus::peripheralUpdate(uint64_t target)
     usb.update(target);
 }
 
-void MemoryBus::peripheralUpdate(uint64_t target, uint32_t irqMask)
+void MemoryBus::peripheralUpdate(uint64_t target, uint32_t irqMask, ARMv6MCore *core)
 {
     if(interruptUpdateCallback)
         interruptUpdateCallback(target, irqMask);
+
+    // sync core 1
+    if(core == cpuCores) // core 0
+        cpuCores[1].update(target);
 
     // only update things that might cause interrupts
     
