@@ -45,7 +45,7 @@ void GPIO::update(uint64_t target)
 
     if(logFile.is_open())
     {
-        uint32_t data[]{outputs, passed};
+        uint32_t data[]{padState, passed};
         logFile.write(reinterpret_cast<char *>(data), sizeof(data));
     }
 
@@ -100,6 +100,8 @@ void GPIO::setOutputs(uint32_t outputs)
 
     logf(LogLevel::Debug, logComponent, "out %08X", outputs);
     this->outputs = outputs;
+
+    updateOutputs();
 }
 
 bool GPIO::interruptsEnabledOnPin(int pin)
@@ -161,7 +163,8 @@ void GPIO::regWrite(uint32_t addr, uint32_t data)
     {
         if(addr & 4) // GPIOx_CTRL
         {
-            updateReg(io.io[addr / 8].ctrl, data, atomic);
+            if(updateReg(io.io[addr / 8].ctrl, data, atomic))
+                updateOutputs();
             return;
         }
         // else status (read-only)
@@ -215,8 +218,28 @@ void GPIO::padsRegWrite(uint32_t addr, uint32_t data)
     {
         int gpio = addr / 4 - 1;
         if(updateReg(padControl[gpio], data, atomic))
+        {
             logf(LogLevel::NotImplemented, logComponent, "PADS_BANK0 GPIO%i%s%02X", gpio, op[atomic], data);
+            updatePads();
+        }
     }
     else
         logf(LogLevel::Error, logComponent, "PADS_BANK0 W %04X%s%08X", addr, op[atomic], data);
+}
+
+void GPIO::updateOutputs()
+{
+    // TODO: func sel
+    outputsFromPeriph = outputs;
+
+    // TODO: overrides
+    outputsToPad = outputsFromPeriph;
+
+    updatePads();
+}
+
+void GPIO::updatePads()
+{
+    // TODO: output disable, input enable, pull up/down
+    padState = outputsToPad;
 }

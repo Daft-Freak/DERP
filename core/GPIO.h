@@ -58,6 +58,9 @@ public:
     ClockTarget &getClock() {return clock;}
 
 private:
+    void updateOutputs();
+    void updatePads();
+
     MemoryBus &mem;
 
     ClockTarget clock;
@@ -67,7 +70,9 @@ private:
     uint32_t padControl[NUM_BANK0_GPIOS + 2]; // GPIO0-29, SWCLK, SWD
 
     uint32_t inputs;
-    uint32_t outputs;
+    uint32_t outputs; // SIO outputs
+
+    uint32_t outputsFromPeriph, outputsToPad, padState;
 
     ReadCallback readCallback;
 
