@@ -32,6 +32,8 @@ public:
 
     uint32_t getCyclesToTime(uint64_t targetTime, bool round = false) const
     {
+        if(targetTime < emuTime)
+            return 0;
         return (targetTime - emuTime + (round ? clockScale - 1 : 0)) / clockScale;
     }
 
