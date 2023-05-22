@@ -194,7 +194,7 @@ static bool parseUF2(std::ifstream &file)
 }
 
 // picosystem external hardware/IO
-static void displayUpdate(uint64_t time)
+static void displayUpdate(uint64_t time, bool forIO = true)
 {
     auto lines = displayClock.getCyclesToTime(time);
 
@@ -206,17 +206,30 @@ static void displayUpdate(uint64_t time)
         int step = std::max(1u, std::min(lines, 239 - displayScanline));
         lines -= step;
 
+        displayClock.addCycles(step);
+
         // set TE when we're on the last scanline
         // TODO: use STE reg
         auto newLine = (displayScanline + step) % 240;
 
+        if(!forIO)
+        {
+            displayScanline = newLine;
+            continue;
+        }
+
         if(newLine == 239) // now last line
+        {
+            mem.getGPIO().update(displayClock.getTime());
             mem.getGPIO().setInputMask(1 << 8);
+        }
         else if(displayScanline == 239) // was last line
+        {
+            mem.getGPIO().update(displayClock.getTime());
             mem.getGPIO().clearInputMask(1 << 8);
+        }
 
         displayScanline = newLine;
-        displayClock.addCycles(step);
     }
 }
 
@@ -526,7 +539,7 @@ int main(int argc, char *argv[])
             gdbServer.getCPUMutex().unlock();
 
         if(board == Board::PimoroniPicoSystem)
-            displayUpdate(time);
+            displayUpdate(time, false); // dpn't update the IO here, GPIO has already updated
 
         // attempt to connect USB
         if(usbEnabled)
