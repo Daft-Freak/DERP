@@ -13,7 +13,7 @@ class MemoryBus;
 class GPIO final
 {
 public:
-    using ReadCallback = std::function<uint32_t(uint64_t, uint32_t)>;
+    using ReadCallback = std::function<void(uint64_t, GPIO &)>;
 
     GPIO(MemoryBus &mem);
 
@@ -21,10 +21,10 @@ public:
 
     void update(uint64_t target);
 
-    uint32_t getInputs(uint64_t time) const
+    uint32_t getInputs(uint64_t time)
     {
         if(readCallback)
-            return readCallback(time, inputs);
+            readCallback(time, *this);
 
         return inputs;
     }

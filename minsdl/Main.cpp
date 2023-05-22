@@ -229,15 +229,15 @@ static void displayUpdate(uint64_t time, bool forIntr = false)
     }
 }
 
-static uint32_t onGPIORead(uint64_t time, uint32_t inputs)
+static void onGPIORead(uint64_t time, GPIO &gpio)
 {
     // apply buttons
     int buttonMask = 0xFF0000;
-    inputs = (inputs & ~buttonMask) | (buttonState ^ buttonMask);
+
+    gpio.setInputMask(~buttonState & buttonMask); // not pressed -> 1
+    gpio.clearInputMask(buttonState); // pressed -> 0
 
     displayUpdate(time);
-
-    return inputs;
 }
 
 static void onInterruptUpdate(uint64_t time, uint32_t irqMask)
