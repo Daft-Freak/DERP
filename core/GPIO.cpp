@@ -88,11 +88,12 @@ void GPIO::setInputs(uint32_t inputs)
                 mem.setPendingIRQ(IO_IRQ_BANK0);
             }
         }
-
-        updatePads();
     }
 
     this->inputs = inputs;
+
+    if(changed)
+        updatePads();
 }
 
 void GPIO::setOutputs(uint32_t outputs)
