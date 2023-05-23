@@ -37,6 +37,9 @@ void GPIO::reset()
 
     inputs = 0;
     outputs = 0;
+
+    outputsFromPeriph = outputsToPad = padState = 0;
+    oeFromPeriph = oeToPad = 0;
 }
 
 void GPIO::update(uint64_t target)
