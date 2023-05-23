@@ -9,6 +9,7 @@
 #include "DMA.h"
 #include "GPIO.h"
 #include "FIFO.h"
+#include "PWM.h"
 #include "Timer.h"
 #include "UART.h"
 #include "USB.h"
@@ -151,6 +152,8 @@ private:
 
     UART uart[2];
 
+    PWM pwm;
+
     Watchdog watchdog;
 
     Timer timer; // depends on watchdog
@@ -166,12 +169,6 @@ private:
 
     // temp peripherals stuff
     uint32_t ioQSPICtrl[6]{0};
-
-    uint32_t pwmCSR[8];
-    uint32_t pwmDIV[8];
-    uint32_t pwmCTR[8];
-    uint32_t pwmCC[8];
-    uint32_t pwmTOP[8];
 
     uint32_t rtcCtrl = 0;
 
