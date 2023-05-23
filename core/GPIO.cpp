@@ -306,6 +306,6 @@ void GPIO::updatePads()
     padState = outputsToPad & oeToPad;
 
     // make the inputs visible if no output
-    // TODO: input enable?, pull up/down
-    padState |= inputs & ~oeToPad;
+    // TODO: input enable?
+    padState |= inputsFromPad & ~oeToPad;
 }
