@@ -234,8 +234,8 @@ static void onGPIORead(uint64_t time, GPIO &gpio)
     // apply buttons
     int buttonMask = 0xFF0000;
 
-    gpio.setInputMask(~buttonState & buttonMask); // not pressed -> 1
-    gpio.clearInputMask(buttonState); // pressed -> 0
+    gpio.setInputFloatingMask(~buttonState & buttonMask); // not pressed -> floating
+    gpio.clearInputFloatingMask(buttonState); // pressed -> pulled down
 
     displayUpdate(time);
 }
@@ -439,6 +439,7 @@ int main(int argc, char *argv[])
         mem.setInterruptUpdateCallback(onInterruptUpdate);
         mem.setGetNextInterruptTimeCallback(onGetNextInterruptTime);
         mem.getGPIO().setReadCallback(onGPIORead);
+        mem.getGPIO().clearInputFloatingMask(1 << 8); // TE
 
         const int fps = picosystemSDK ? 40 : 50;
         displayClock.setFrequency(fps * 240);

@@ -26,13 +26,18 @@ public:
         if(readCallback)
             readCallback(time, *this);
 
-        return inputs;
+        return inputsToPeriph;
     }
 
     void setInputs(uint32_t inputs);
 
     void setInputMask(uint32_t mask) {setInputs(inputs | mask);}
     void clearInputMask(uint32_t mask) {setInputs(inputs & ~mask);}
+
+    void setInputsFloating(uint32_t inputs);
+
+    void setInputFloatingMask(uint32_t mask) {setInputsFloating(inputsFloating | mask);}
+    void clearInputFloatingMask(uint32_t mask) {setInputsFloating(inputsFloating & ~mask);}
 
     void setOutputs(uint32_t outputs);
 
@@ -64,6 +69,8 @@ public:
     ClockTarget &getClock() {return clock;}
 
 private:
+    void updateInterrupts(uint32_t oldInputs);
+    void updateInputs();
     void updateOutputs();
     void updateOutputEnables();
     void updatePads();
@@ -76,9 +83,11 @@ private:
 
     uint32_t padControl[NUM_BANK0_GPIOS + 2]; // GPIO0-29, SWCLK, SWD
 
-    uint32_t inputs;
+    uint32_t inputs, inputsFloating; // external state
     uint32_t outputs; // SIO outputs
     uint32_t outputEnables; // SIO
+
+    uint32_t inputsFromPad, inputsToPeriph;
 
     uint32_t outputsFromPeriph, outputsToPad, padState;
     uint32_t oeFromPeriph, oeToPad;

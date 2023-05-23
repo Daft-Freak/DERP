@@ -36,7 +36,10 @@ void GPIO::reset()
     padControl[31] = PADS_BANK0_SWD_RESET;
 
     inputs = 0;
+    inputsFloating = ~0u;
     outputs = 0;
+
+    inputsFromPad = inputsToPeriph = 0;
 
     outputsFromPeriph = outputsToPad = padState = 0;
     oeFromPeriph = oeToPad = 0;
@@ -57,46 +60,26 @@ void GPIO::update(uint64_t target)
 
 void GPIO::setInputs(uint32_t inputs)
 {
-    // TODO: handle floating inputs?
+    if(this->inputs == inputs)
+        return;
 
-    uint32_t changed = inputs ^ this->inputs;
-
-    if(changed)
-    {
-        for(unsigned i = 0; i < NUM_BANK0_GPIOS; i++)
-        {
-            if(!(changed & (1 << i)))
-                continue;
-
-            // TODO: proc1
-            int ioShift = i % 8 * 4;
-            auto p0IntEn = (io.proc0_irq_ctrl.inte[i / 8] >> ioShift) & 0xF;
-
-            bool newState = inputs & (1 << i);
-            bool oldState = this->inputs & (1 << i);
-
-            // TODO: level should stick
-            if(!newState && (p0IntEn & IO_BANK0_PROC0_INTE0_GPIO0_LEVEL_LOW_BITS))
-                io.intr[i / 8] |= 1 << (ioShift + 0);
-            else if(newState && (p0IntEn & IO_BANK0_PROC0_INTE0_GPIO0_LEVEL_HIGH_BITS))
-                io.intr[i / 8] |= 1 << (ioShift + 1);
-            else if(!newState && oldState && (p0IntEn & IO_BANK0_PROC0_INTE0_GPIO0_EDGE_LOW_BITS))
-                io.intr[i / 8] |= 1 << (ioShift + 2);
-            else if(newState && !oldState && (p0IntEn & IO_BANK0_PROC0_INTE0_GPIO0_EDGE_HIGH_BITS))
-                io.intr[i / 8] |= 1 << (ioShift + 3);
-
-            if(io.intr[i / 8] & io.proc0_irq_ctrl.inte[i / 8])
-            {
-                // TODO: only to one core
-                mem.setPendingIRQ(IO_IRQ_BANK0);
-            }
-        }
-    }
-
+    auto oldInputs = inputsToPeriph;
     this->inputs = inputs;
+    updateInputs();
+    updateInterrupts(oldInputs);
+    updatePads();
+}
 
-    if(changed)
-        updatePads();
+void GPIO::setInputsFloating(uint32_t inputsFloating)
+{
+    if(this->inputsFloating == inputsFloating)
+        return;
+
+    auto oldInputs = inputsToPeriph;
+    this->inputsFloating = inputsFloating;
+    updateInputs();
+    updateInterrupts(oldInputs);
+    updatePads();
 }
 
 void GPIO::setOutputs(uint32_t outputs)
@@ -236,11 +219,63 @@ void GPIO::padsRegWrite(uint32_t addr, uint32_t data)
         if(updateReg(padControl[gpio], data, atomic))
         {
             logf(LogLevel::NotImplemented, logComponent, "PADS_BANK0 GPIO%i%s%02X", gpio, op[atomic], data);
+            updateInputs();
             updatePads();
         }
     }
     else
         logf(LogLevel::Error, logComponent, "PADS_BANK0 W %04X%s%08X", addr, op[atomic], data);
+}
+
+void GPIO::updateInterrupts(uint32_t oldInputs)
+{
+    for(unsigned i = 0; i < NUM_BANK0_GPIOS; i++)
+    {
+        // TODO: proc1
+        int ioShift = i % 8 * 4;
+        auto p0IntEn = (io.proc0_irq_ctrl.inte[i / 8] >> ioShift) & 0xF;
+
+        bool newState = inputsToPeriph & (1 << i);
+        bool oldState = oldInputs & (1 << i);
+
+        // TODO: IRQOVER
+
+        // TODO: level should stick
+        if(!newState && (p0IntEn & IO_BANK0_PROC0_INTE0_GPIO0_LEVEL_LOW_BITS))
+            io.intr[i / 8] |= 1 << (ioShift + 0);
+        else if(newState && (p0IntEn & IO_BANK0_PROC0_INTE0_GPIO0_LEVEL_HIGH_BITS))
+            io.intr[i / 8] |= 1 << (ioShift + 1);
+        else if(!newState && oldState && (p0IntEn & IO_BANK0_PROC0_INTE0_GPIO0_EDGE_LOW_BITS))
+            io.intr[i / 8] |= 1 << (ioShift + 2);
+        else if(newState && !oldState && (p0IntEn & IO_BANK0_PROC0_INTE0_GPIO0_EDGE_HIGH_BITS))
+            io.intr[i / 8] |= 1 << (ioShift + 3);
+
+        if(io.intr[i / 8] & io.proc0_irq_ctrl.inte[i / 8])
+        {
+            // TODO: only to one core
+            mem.setPendingIRQ(IO_IRQ_BANK0);
+        }
+    }
+}
+
+void GPIO::updateInputs()
+{
+    inputsFromPad = inputs & ~inputsFloating;
+
+    // pulls
+    for(unsigned i = 0; i < NUM_BANK0_GPIOS; i++)
+    {
+        if(!(inputsFloating & (1 << i)))
+            continue;
+
+        if(padControl[i] & PADS_BANK0_GPIO0_PUE_BITS)
+            inputsFromPad |= (1 << i);
+        // else PDE
+        // it's already 0
+    }
+
+    // TODO: overrides
+    inputsToPeriph = inputsFromPad;
 }
 
 void GPIO::updateOutputs()
