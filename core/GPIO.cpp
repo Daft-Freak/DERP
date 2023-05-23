@@ -87,7 +87,6 @@ void GPIO::setOutputs(uint32_t outputs)
     if(this->outputs == outputs)
         return;
 
-    logf(LogLevel::Debug, logComponent, "out %08X", outputs);
     this->outputs = outputs;
 
     updateOutputs();
