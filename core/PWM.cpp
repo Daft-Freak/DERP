@@ -31,13 +31,98 @@ void PWM::reset()
     hw.intr = PWM_INTR_RESET;
     hw.inte = PWM_INTE_RESET;
     hw.intf = PWM_INTF_RESET;
+
+    for(unsigned i = 0; i < NUM_PWM_SLICES; i++)
+    {
+        divCounter[i] = 0;
+        ccAInternal[i] = hw.slice[i].cc & PWM_CH0_CC_A_BITS;
+        ccBInternal[i] = (hw.slice[i].cc & PWM_CH0_CC_B_BITS) >> PWM_CH0_CC_B_LSB;
+        topInternal[i] = hw.slice[i].top;
+    }
+
+    outputs = 0;
 }
 
 void PWM::update(uint64_t target)
 {
     auto cycles = clock.getCyclesToTime(target);
 
-    clock.addCycles(cycles);
+    while(cycles)
+    {
+        // find update step
+        auto step = cycles;
+        for(unsigned i = 0; i < NUM_PWM_SLICES; i++)
+        {
+            if(!hw.slice[i].csr & PWM_CH0_CSR_EN_BITS)
+                continue;
+
+            // first one of TOP or CC A/B that we haven't hit yet
+            uint32_t nextCheck = topInternal[i] + 1;
+            if(hw.slice[i].ctr < ccAInternal[i] && nextCheck > ccAInternal[i])
+                nextCheck = ccAInternal[i];
+            if(hw.slice[i].ctr < ccBInternal[i] && nextCheck > ccBInternal[i])
+                nextCheck = ccBInternal[i];
+
+            uint32_t cyclesToNext = ((nextCheck - hw.slice[i].ctr - 1) * hw.slice[i].div + (divCounter[i] + 15)) / 16;
+
+            if(cyclesToNext < step)
+                step = cyclesToNext;
+        }
+
+        if(!step)
+            step = 1;
+
+        clock.addCycles(step);
+
+        // update
+        for(unsigned i = 0; i < NUM_PWM_SLICES; i++)
+        {
+            if(!hw.slice[i].csr & PWM_CH0_CSR_EN_BITS)
+            {
+                outputs &= ~(3 << (i * 2));
+                continue;
+            }
+
+            divCounter[i] -= step * 16;
+
+            while(divCounter[i] < 0)
+            {
+                divCounter[i] += hw.slice[i].div;
+
+                hw.slice[i].ctr++;
+
+                if(hw.slice[i].ctr > topInternal[i])
+                {
+                    // wrap
+                    hw.slice[i].ctr = 0;
+
+                    // reload internal cc/top
+                    ccAInternal[i] = hw.slice[i].cc & PWM_CH0_CC_A_BITS;
+                    ccBInternal[i] = (hw.slice[i].cc & PWM_CH0_CC_B_BITS) >> PWM_CH0_CC_B_LSB;
+                    topInternal[i] = hw.slice[i].top;
+
+                    // go high
+                    outputs |= 3 << (i * 2);
+                }
+                else
+                {
+                    if(hw.slice[i].ctr == ccAInternal[i])
+                    {
+                        // go low A
+                        outputs &= ~(1 << (i * 2));
+                    }
+
+                    if(hw.slice[i].ctr == ccBInternal[i])
+                    {
+                        // go low B
+                        outputs &= ~(2 << (i * 2));
+                    }
+                }
+            }
+        }
+
+        cycles -= step;
+    }
 }
 
 uint64_t PWM::getNextInterruptTime(uint64_t target)
@@ -91,7 +176,11 @@ void PWM::regWrite(uint32_t addr, uint32_t data)
         switch(reg)
         {
             case PWM_CH0_CSR_OFFSET:
-                updateReg(hw.slice[slice].csr, data, atomic);
+                if(updateReg(hw.slice[slice].csr, data, atomic))
+                {
+                    if(hw.slice[slice].csr & ~PWM_CH0_CSR_EN_BITS)
+                        logf(LogLevel::NotImplemented, logComponent, "W CH%i_CSR = %08X", slice, data);
+                }
                 return;
             case PWM_CH0_DIV_OFFSET:
                 updateReg(hw.slice[slice].div, data, atomic);

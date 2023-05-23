@@ -35,4 +35,12 @@ private:
     ClockTarget clock;
 
     pwm_hw_t hw;
+
+    int divCounter[NUM_PWM_SLICES];
+
+    uint16_t ccAInternal[NUM_PWM_SLICES];
+    uint16_t ccBInternal[NUM_PWM_SLICES];
+    uint16_t topInternal[NUM_PWM_SLICES];
+
+    uint16_t outputs;
 };
