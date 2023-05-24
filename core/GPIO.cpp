@@ -115,7 +115,6 @@ void GPIO::setFuncOutputEnables(Function func, uint32_t outputEnables)
     updateOutputEnables();
 }
 
-
 void GPIO::setOutputEnables(uint32_t outputEnables)
 {
     setFuncOutputEnables(Function::SIO, outputEnables);
@@ -195,6 +194,8 @@ void GPIO::regWrite(uint32_t addr, uint32_t data)
 
                     if(newFunc != IO_BANK0_GPIO0_CTRL_FUNCSEL_VALUE_NULL)
                         functionMask[newFunc] |= 1 << gpio;
+
+                    updateOutputEnables();
                 }
 
                 updateOutputs();
@@ -317,7 +318,7 @@ void GPIO::updateOutputs()
 {
     outputsFromPeriph = 0;
     
-    for(int i = 0; i < int(Function::Clock); i++)
+    for(int i = 0; i < int(Function::Count); i++)
         outputsFromPeriph |= outputs[i] & functionMask[i];
 
     // TODO: overrides
@@ -330,7 +331,7 @@ void GPIO::updateOutputEnables()
 {
     oeFromPeriph = 0;
     
-    for(int i = 0; i < int(Function::Clock); i++)
+    for(int i = 0; i < int(Function::Count); i++)
         oeFromPeriph |= outputEnables[i] & functionMask[i];
 
     // TODO: overrides
