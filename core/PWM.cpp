@@ -74,6 +74,8 @@ void PWM::update(uint64_t target)
 
         clock.addCycles(step);
 
+        auto oldOutputs = outputs;
+
         // update
         for(unsigned i = 0; i < NUM_PWM_SLICES; i++)
         {
@@ -121,12 +123,24 @@ void PWM::update(uint64_t target)
             }
         }
 
-        mem.getGPIO().update(clock.getTime());
-        mem.getGPIO().setFuncOutputs(GPIO::Function::PWM, outputs | outputs << 16);
-        mem.getGPIO().setFuncOutputEnables(GPIO::Function::PWM, ~0u); // TODO?
+        if(outputs != oldOutputs)
+        {
+            mem.getGPIO().update(clock.getTime());
+            mem.getGPIO().setFuncOutputs(GPIO::Function::PWM, outputs | outputs << 16);
+            mem.getGPIO().setFuncOutputEnables(GPIO::Function::PWM, ~0u); // TODO?
+
+            if(outputCallback && ((outputs ^ oldOutputs) & outputCallbackMask))
+                outputCallback(clock.getTime(), outputs);
+        }
 
         cycles -= step;
     }
+}
+
+void PWM::setOutputCallback(OutputCallback cb, uint16_t mask)
+{
+    outputCallback = cb;
+    outputCallbackMask = mask;
 }
 
 uint64_t PWM::getNextInterruptTime(uint64_t target)

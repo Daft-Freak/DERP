@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <functional>
 
 #include "hardware/structs/pwm.h"
 
@@ -11,6 +12,8 @@ class MemoryBus;
 class PWM final
 {
 public:
+    using OutputCallback = std::function<void(uint64_t, uint16_t)>;
+
     PWM(MemoryBus &mem);
 
     void reset();
@@ -21,6 +24,8 @@ public:
         if(hw.inte)
             update(target);
     }
+
+    void setOutputCallback(OutputCallback cb, uint16_t mask);
 
     uint64_t getNextInterruptTime(uint64_t target);
 
@@ -43,4 +48,7 @@ private:
     uint16_t topInternal[NUM_PWM_SLICES];
 
     uint16_t outputs;
+
+    OutputCallback outputCallback;
+    uint16_t outputCallbackMask = 0;
 };
