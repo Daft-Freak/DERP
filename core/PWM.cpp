@@ -63,7 +63,7 @@ void PWM::update(uint64_t target)
             if(hw.slice[i].ctr < ccBInternal[i] && nextCheck > ccBInternal[i])
                 nextCheck = ccBInternal[i];
 
-            uint32_t cyclesToNext = ((nextCheck - hw.slice[i].ctr - 1) * hw.slice[i].div + (divCounter[i] + 15)) / 16;
+            uint32_t cyclesToNext = ((nextCheck - hw.slice[i].ctr - 1) * hw.slice[i].div + (divCounter[i] + 15)) / 16 + 1;
 
             if(cyclesToNext < step)
                 step = cyclesToNext;
@@ -87,38 +87,40 @@ void PWM::update(uint64_t target)
 
             divCounter[i] -= step * 16;
 
-            while(divCounter[i] < 0)
+            // update counter
+            if(divCounter[i] < 0)
             {
-                divCounter[i] += hw.slice[i].div;
+                int add = (-divCounter[i] + hw.slice[i].div - 1) / hw.slice[i].div;
+                divCounter[i] += hw.slice[i].div * add;
+                hw.slice[i].ctr += add;
+            }
 
-                hw.slice[i].ctr++;
+            // check thresholds
+            if(hw.slice[i].ctr > topInternal[i])
+            {
+                // wrap
+                hw.slice[i].ctr = 0;
 
-                if(hw.slice[i].ctr > topInternal[i])
+                // reload internal cc/top
+                ccAInternal[i] = hw.slice[i].cc & PWM_CH0_CC_A_BITS;
+                ccBInternal[i] = (hw.slice[i].cc & PWM_CH0_CC_B_BITS) >> PWM_CH0_CC_B_LSB;
+                topInternal[i] = hw.slice[i].top;
+
+                // go high
+                outputs |= 3 << (i * 2);
+            }
+            else
+            {
+                if(hw.slice[i].ctr == ccAInternal[i])
                 {
-                    // wrap
-                    hw.slice[i].ctr = 0;
-
-                    // reload internal cc/top
-                    ccAInternal[i] = hw.slice[i].cc & PWM_CH0_CC_A_BITS;
-                    ccBInternal[i] = (hw.slice[i].cc & PWM_CH0_CC_B_BITS) >> PWM_CH0_CC_B_LSB;
-                    topInternal[i] = hw.slice[i].top;
-
-                    // go high
-                    outputs |= 3 << (i * 2);
+                    // go low A
+                    outputs &= ~(1 << (i * 2));
                 }
-                else
-                {
-                    if(hw.slice[i].ctr == ccAInternal[i])
-                    {
-                        // go low A
-                        outputs &= ~(1 << (i * 2));
-                    }
 
-                    if(hw.slice[i].ctr == ccBInternal[i])
-                    {
-                        // go low B
-                        outputs &= ~(2 << (i * 2));
-                    }
+                if(hw.slice[i].ctr == ccBInternal[i])
+                {
+                    // go low B
+                    outputs &= ~(2 << (i * 2));
                 }
             }
         }
