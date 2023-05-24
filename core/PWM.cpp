@@ -121,6 +121,10 @@ void PWM::update(uint64_t target)
             }
         }
 
+        mem.getGPIO().update(clock.getTime());
+        mem.getGPIO().setFuncOutputs(GPIO::Function::PWM, outputs | outputs << 16);
+        mem.getGPIO().setFuncOutputEnables(GPIO::Function::PWM, ~0u); // TODO?
+
         cycles -= step;
     }
 }
