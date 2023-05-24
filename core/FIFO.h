@@ -1,3 +1,4 @@
+#pragma once
 // FIFO helper using circular buffer
 
 template<class T, int size>
