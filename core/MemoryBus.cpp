@@ -129,8 +129,7 @@ MemoryBus::MemoryBus() : gpio(*this), uart{{*this, 0}, {*this, 1}}, pwm(*this), 
 
     clocks.addClockTarget(clk_sys, dma.getClock());
     clocks.addClockTarget(clk_sys, gpio.getClock());
-
-    clocks.addClockTarget(clk_peri, pwm.getClock());
+    clocks.addClockTarget(clk_sys, pwm.getClock());
 }
 
 void MemoryBus::setBootROM(const uint8_t *rom)
