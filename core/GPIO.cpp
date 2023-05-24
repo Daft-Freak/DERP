@@ -37,7 +37,13 @@ void GPIO::reset()
 
     inputs = 0;
     inputsFloating = ~0u;
-    outputs = 0;
+
+    for(auto &out : outputs)
+        out = 0;
+
+    // default is null func on all pins
+    for(auto &mask : functionMask)
+        mask = 0;
 
     inputsFromPad = inputsToPeriph = 0;
 
@@ -82,24 +88,37 @@ void GPIO::setInputsFloating(uint32_t inputsFloating)
     updatePads();
 }
 
-void GPIO::setOutputs(uint32_t outputs)
+void GPIO::setFuncOutputs(Function func, uint32_t outputs)
 {
-    if(this->outputs == outputs)
+    int funcIndex = static_cast<int>(func);
+    if(this->outputs[funcIndex] == outputs)
         return;
 
-    this->outputs = outputs;
+    this->outputs[funcIndex] = outputs;
 
     updateOutputs();
 }
 
-void GPIO::setOutputEnables(uint32_t outputEnables)
+void GPIO::setOutputs(uint32_t outputs)
 {
-    if(this->outputEnables == outputEnables)
+    setFuncOutputs(Function::SIO, outputs);
+}
+
+void GPIO::setFuncOutputEnables(Function func, uint32_t outputEnables)
+{
+    int funcIndex = static_cast<int>(func);
+    if(this->outputEnables[funcIndex] == outputEnables)
         return;
 
-    this->outputEnables = outputEnables;
+    this->outputEnables[funcIndex] = outputEnables;
 
     updateOutputEnables();
+}
+
+
+void GPIO::setOutputEnables(uint32_t outputEnables)
+{
+    setFuncOutputEnables(Function::SIO, outputEnables);
 }
 
 bool GPIO::interruptsEnabledOnPin(int pin)
@@ -161,8 +180,25 @@ void GPIO::regWrite(uint32_t addr, uint32_t data)
     {
         if(addr & 4) // GPIOx_CTRL
         {
-            if(updateReg(io.io[addr / 8].ctrl, data, atomic))
+            auto gpio = addr / 8;
+            auto old = io.io[gpio].ctrl;
+            if(updateReg(io.io[gpio].ctrl, data, atomic))
+            {
+                // update function mask
+                auto oldFunc = old & IO_BANK0_GPIO0_CTRL_FUNCSEL_BITS;
+                auto newFunc = io.io[gpio].ctrl & IO_BANK0_GPIO0_CTRL_FUNCSEL_BITS;
+
+                if(oldFunc != newFunc)
+                {
+                    if(oldFunc != IO_BANK0_GPIO0_CTRL_FUNCSEL_VALUE_NULL)
+                        functionMask[oldFunc] &= ~(1 << gpio);
+
+                    if(newFunc != IO_BANK0_GPIO0_CTRL_FUNCSEL_VALUE_NULL)
+                        functionMask[newFunc] |= 1 << gpio;
+                }
+
                 updateOutputs();
+            }
             return;
         }
         // else status (read-only)
@@ -279,8 +315,10 @@ void GPIO::updateInputs()
 
 void GPIO::updateOutputs()
 {
-    // TODO: func sel
-    outputsFromPeriph = outputs;
+    outputsFromPeriph = 0;
+    
+    for(int i = 0; i < int(Function::Clock); i++)
+        outputsFromPeriph |= outputs[i] & functionMask[i];
 
     // TODO: overrides
     outputsToPad = outputsFromPeriph;
@@ -290,8 +328,10 @@ void GPIO::updateOutputs()
 
 void GPIO::updateOutputEnables()
 {
-    // TODO: func sel
-    oeFromPeriph = outputEnables;
+    oeFromPeriph = 0;
+    
+    for(int i = 0; i < int(Function::Clock); i++)
+        oeFromPeriph |= outputEnables[i] & functionMask[i];
 
     // TODO: overrides
     oeToPad = oeFromPeriph;

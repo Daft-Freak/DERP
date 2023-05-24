@@ -15,6 +15,22 @@ class GPIO final
 public:
     using ReadCallback = std::function<void(uint64_t, GPIO &)>;
 
+    enum class Function
+    {
+        JTAG = 0, // 0-3
+        SPI,
+        UART,
+        I2C,
+        PWM,
+        SIO,
+        PIO0,
+        PIO1,
+        Clock, // 20-25
+        USB,
+
+        Count
+    };
+
     GPIO(MemoryBus &mem);
 
     void reset();
@@ -39,17 +55,19 @@ public:
     void setInputFloatingMask(uint32_t mask) {setInputsFloating(inputsFloating | mask);}
     void clearInputFloatingMask(uint32_t mask) {setInputsFloating(inputsFloating & ~mask);}
 
+    void setFuncOutputs(Function func, uint32_t outputs);
     void setOutputs(uint32_t outputs);
 
-    void setOutputMask(uint32_t mask) {setOutputs(outputs | mask);}
-    void clearOutputMask(uint32_t mask) {setOutputs(outputs & ~mask);}
-    void xorOutputMask(uint32_t mask) {setOutputs(outputs ^ mask);}
+    void setOutputMask(uint32_t mask) {setOutputs(outputs[int(Function::SIO)] | mask);}
+    void clearOutputMask(uint32_t mask) {setOutputs(outputs[int(Function::SIO)] & ~mask);}
+    void xorOutputMask(uint32_t mask) {setOutputs(outputs[int(Function::SIO)] ^ mask);}
 
+    void setFuncOutputEnables(Function func, uint32_t outputs);
     void setOutputEnables(uint32_t outputs);
 
-    void setOutputEnableMask(uint32_t mask) {setOutputEnables(outputEnables | mask);}
-    void clearOutputEnableMask(uint32_t mask) {setOutputEnables(outputEnables & ~mask);}
-    void xorOutputEnableMask(uint32_t mask) {setOutputEnables(outputEnables ^ mask);}
+    void setOutputEnableMask(uint32_t mask) {setOutputEnables(outputEnables[int(Function::SIO)] | mask);}
+    void clearOutputEnableMask(uint32_t mask) {setOutputEnables(outputEnables[int(Function::SIO)] & ~mask);}
+    void xorOutputEnableMask(uint32_t mask) {setOutputEnables(outputEnables[int(Function::SIO)] ^ mask);}
 
     bool interruptsEnabledOnPin(int pin);
 
@@ -84,8 +102,12 @@ private:
     uint32_t padControl[NUM_BANK0_GPIOS + 2]; // GPIO0-29, SWCLK, SWD
 
     uint32_t inputs, inputsFloating; // external state
-    uint32_t outputs; // SIO outputs
-    uint32_t outputEnables; // SIO
+
+    // from peripheral
+    uint32_t outputs[int(Function::Count)];
+    uint32_t outputEnables[int(Function::Count)];
+
+    uint32_t functionMask[int(Function::Count)];
 
     uint32_t inputsFromPad, inputsToPeriph;
 
