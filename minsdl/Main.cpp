@@ -41,6 +41,12 @@ static uint32_t buttonState = 0;
 static unsigned int displayScanline = 0;
 static ClockTarget displayClock;
 
+static ClockTarget audioClock;
+static bool lastAudioVal = false;
+static const int audioBufferSize = 1024;
+static volatile int audioReadOff = 0, audioWriteOff = 0;
+static int16_t audioSamples[audioBufferSize]{};
+
 static const uint32_t uf2MagicStart0 = 0x0A324655, uf2MagicStart1 = 0x9E5D5157, uf2MagicEnd = 0x0AB16F30;
 
 struct UF2Block
@@ -229,6 +235,31 @@ static void displayUpdate(uint64_t time, bool forIntr = false)
     }
 }
 
+static int getNumAudioSamples()
+{
+    int avail = audioWriteOff - audioReadOff;
+    if(avail < 0)
+        avail += audioBufferSize;
+
+    return avail;
+}
+
+static void audioUpdate(uint64_t time)
+{
+    auto samples = audioClock.getCyclesToTime(time);
+
+    for(uint32_t i = 0; i < samples; i++)
+    {
+        while((audioWriteOff + 1) % audioBufferSize == audioReadOff);
+
+        int level = 0x1000;
+        audioSamples[audioWriteOff++] = lastAudioVal ? level : -level;
+        audioWriteOff %= audioBufferSize;
+    }
+
+    audioClock.addCycles(samples);
+}
+
 static void onGPIORead(uint64_t time, GPIO &gpio)
 {
     // apply buttons
@@ -257,6 +288,12 @@ static uint64_t onGetNextInterruptTime(uint64_t time)
     return ret;
 }
 
+static void onPWMUpdate(uint64_t time, uint16_t pwm)
+{
+    audioUpdate(time);
+    lastAudioVal = pwm & (1 << 11);
+}
+
 static void runGDBServer()
 {
     gdbServer.setCPUs(cpuCores, 2);
@@ -268,6 +305,18 @@ static void runGDBServer()
     {
         if(!gdbServer.update(true))
            logf(LogLevel::Error, logComponent, "Failed to update GDB server!");
+    }
+}
+
+static void audioCallback(void *userdata, Uint8 *stream, int len)
+{
+    auto ptr = reinterpret_cast<int16_t *>(stream);
+    for(int i = 0; i < len / 2; i++)
+    {
+        while(!getNumAudioSamples() && !quit);
+
+        *ptr++ = audioSamples[audioReadOff++];
+        audioReadOff %= audioBufferSize;
     }
 }
 
@@ -438,12 +487,18 @@ int main(int argc, char *argv[])
     {
         mem.setInterruptUpdateCallback(onInterruptUpdate);
         mem.setGetNextInterruptTimeCallback(onGetNextInterruptTime);
+
         mem.getGPIO().setReadCallback(onGPIORead);
         mem.getGPIO().clearInputFloatingMask(1 << 8); // TE
+
+        mem.getPWM().setOutputCallback(onPWMUpdate, 1 << 11); // audio
 
         const int fps = picosystemSDK ? 40 : 50;
         displayClock.setFrequency(fps * 240);
         clocks.addClockTarget(-1, displayClock);
+
+        audioClock.setFrequency(48000);
+        clocks.addClockTarget(-1, audioClock);
     }
 
     if(gdbEnabled)
@@ -482,6 +537,29 @@ int main(int argc, char *argv[])
             format = SDL_PIXELFORMAT_RGB565;
 
         texture = SDL_CreateTexture(renderer, format, SDL_TEXTUREACCESS_STREAMING, screenWidth, screenHeight);
+    }
+
+    SDL_AudioDeviceID audioDevice = 0;
+
+    if(board == Board::PimoroniPicoSystem)
+    {
+        SDL_AudioSpec spec{};
+
+        spec.freq = 48000;
+        spec.format = AUDIO_S16;
+        spec.channels = 1;
+        spec.samples = 512;
+        spec.callback = audioCallback;
+
+        audioDevice = SDL_OpenAudioDevice(nullptr, false, &spec, nullptr, 0);
+
+        if(!audioDevice)
+        {
+            logf(LogLevel::Error, logComponent, "Failed to open audio: %s", SDL_GetError());
+            quit = true;
+        }
+
+        SDL_PauseAudioDevice(audioDevice, 0);
     }
 
     auto lastTick = SDL_GetTicks();
@@ -536,7 +614,10 @@ int main(int argc, char *argv[])
             gdbServer.getCPUMutex().unlock();
 
         if(board == Board::PimoroniPicoSystem)
+        {
             displayUpdate(time);
+            audioUpdate(time);
+        }
 
         // attempt to connect USB
         if(usbEnabled)
@@ -569,6 +650,9 @@ int main(int argc, char *argv[])
         SDL_DestroyRenderer(renderer);
     if(window)
         SDL_DestroyWindow(window);
+
+    if(audioDevice)
+        SDL_CloseAudioDevice(audioDevice);
 
     if(gdbEnabled)
         gdbServerThread.join();

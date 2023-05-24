@@ -84,6 +84,7 @@ public:
 
     Clocks &getClocks() {return clocks;}
     GPIO &getGPIO() {return gpio;}
+    PWM &getPWM() {return pwm;}
     Watchdog &getWatchdog() {return watchdog;}
 
     USB &getUSB() {return usb;}
