@@ -24,7 +24,7 @@ picotool save -r 0 4000 bootrom.bin
 |---------|--------|---------
 | Display | Hack   | No PIO/SPI, hack in DMA code. (Assumes 32blit-sdk setup)
 | Buttons | Works  |
-| Sound   | TODO   |
+| Sound   | Works  |
 | LED     | TODO   |       
 
 ## RP2040 status
@@ -37,13 +37,13 @@ picotool save -r 0 4000 bootrom.bin
 | XOSC | Minimal | Fixed 12MHz
 | ROSC | Minimal | Fixed 6MHz
 | PLL | Partial |
-| GPIO | Partial | Some input and interrupt handling
+| GPIO | Partial | Missing overrides, partial interrupt handling
 | PIO | Minimal | PIO0 always returns all FIFOs empty + TXSTALL
 | USB | Partial | Optional device enumeration and USBIP server
 | UART | Minimal | Prints TX data
 | I2C | None |
 | SPI | Minimal | SPI0 TNF always set
-| PWM | Minimal | Register read/write handled
+| PWM | Partial | Enough for PicoSystem beeps
 | Timer | Partial |
 | Watchdog | Partial | Tick generation and reset timer
 | RTC | Minimal | Enough to get through init
