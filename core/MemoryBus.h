@@ -70,6 +70,8 @@ public:
     void peripheralUpdate(uint64_t target);
     void peripheralUpdate(uint64_t target, uint32_t irqMask, ARMv6MCore *core);
 
+    void gpioUpdate(uint64_t target);
+
     uint64_t getNextInterruptTime() const {return nextInterruptTime;}
     void calcNextInterruptTime();
 

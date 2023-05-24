@@ -381,6 +381,15 @@ void MemoryBus::peripheralUpdate(uint64_t target)
     usb.update(target);
 }
 
+void MemoryBus::gpioUpdate(uint64_t target)
+{
+    // update anything that might affect outputs before GPIO
+    // TODO: need to ensure correct ordering...
+    pwm.update(target);
+
+    gpio.update(target);
+}
+
 void MemoryBus::peripheralUpdate(uint64_t target, uint32_t irqMask, ARMv6MCore *core)
 {
     if(interruptUpdateCallback)
@@ -793,7 +802,7 @@ uint32_t MemoryBus::doAPBPeriphRead(ClockTarget &masterClock, uint32_t addr)
         }
 
         case APBPeripheral::IO_Bank0:
-            gpio.update(masterClock.getTime());
+            gpioUpdate(masterClock.getTime());
             return gpio.regRead(periphAddr);
 
         case APBPeripheral::IO_QSPI:
@@ -810,7 +819,7 @@ uint32_t MemoryBus::doAPBPeriphRead(ClockTarget &masterClock, uint32_t addr)
         }
 
         case APBPeripheral::Pads_Bank0:
-            gpio.update(masterClock.getTime());
+            gpioUpdate(masterClock.getTime());
             return gpio.padsRegRead(periphAddr);
 
         case APBPeripheral::PLL_Sys:
@@ -896,7 +905,7 @@ void MemoryBus::doAPBPeriphWrite(ClockTarget &masterClock, uint32_t addr, T data
         }
 
         case APBPeripheral::IO_Bank0:
-            gpio.update(masterClock.getTime());
+            gpioUpdate(masterClock.getTime());
             gpio.regWrite(periphAddr, data);
             return;
 
@@ -932,7 +941,7 @@ void MemoryBus::doAPBPeriphWrite(ClockTarget &masterClock, uint32_t addr, T data
         }
 
         case APBPeripheral::Pads_Bank0:
-            gpio.update(masterClock.getTime());
+            gpioUpdate(masterClock.getTime());
             gpio.padsRegWrite(periphAddr, data);
             return;
 
@@ -1153,7 +1162,7 @@ uint32_t MemoryBus::doIOPORTRead(ClockTarget &masterClock, int core, uint32_t ad
             return core;
 
         case SIO_GPIO_IN_OFFSET:
-            gpio.update(masterClock.getTime());
+            gpioUpdate(masterClock.getTime());
             return gpio.getInputs(masterClock.getTime());
 
         case SIO_GPIO_HI_IN_OFFSET:
@@ -1270,36 +1279,36 @@ void MemoryBus::doIOPORTWrite(ClockTarget &masterClock, int core, uint32_t addr,
     switch(addr & 0xFFF)
     {
         case SIO_GPIO_OUT_OFFSET:
-            gpio.update(masterClock.getTime());
+            gpioUpdate(masterClock.getTime());
             gpio.setOutputs(data);
             return;
         case SIO_GPIO_OUT_SET_OFFSET:
-            gpio.update(masterClock.getTime());
+            gpioUpdate(masterClock.getTime());
             gpio.setOutputMask(data);
             return;
         case SIO_GPIO_OUT_CLR_OFFSET:
-            gpio.update(masterClock.getTime());
+            gpioUpdate(masterClock.getTime());
             gpio.clearOutputMask(data);
             return;
         case SIO_GPIO_OUT_XOR_OFFSET:
-            gpio.update(masterClock.getTime());
+            gpioUpdate(masterClock.getTime());
             gpio.xorOutputMask(data);
             return;
 
         case SIO_GPIO_OE_OFFSET:
-            gpio.update(masterClock.getTime());
+            gpioUpdate(masterClock.getTime());
             gpio.setOutputEnables(data);
             return;
         case SIO_GPIO_OE_SET_OFFSET:
-            gpio.update(masterClock.getTime());
+            gpioUpdate(masterClock.getTime());
             gpio.setOutputEnableMask(data);
             return;
         case SIO_GPIO_OE_CLR_OFFSET:
-            gpio.update(masterClock.getTime());
+            gpioUpdate(masterClock.getTime());
             gpio.clearOutputEnableMask(data);
             return;
         case SIO_GPIO_OE_XOR_OFFSET:
-            gpio.update(masterClock.getTime());
+            gpioUpdate(masterClock.getTime());
             gpio.xorOutputEnableMask(data);
             return;
 

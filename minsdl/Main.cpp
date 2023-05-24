@@ -215,13 +215,13 @@ static void displayUpdate(uint64_t time, bool forIntr = false)
         if(newLine == 239) // now last line
         {
             if(forIntr)
-                mem.getGPIO().update(displayClock.getTime());
+                mem.gpioUpdate(displayClock.getTime());
             mem.getGPIO().setInputMask(1 << 8);
         }
         else if(displayScanline == 239) // was last line
         {
             if(forIntr)
-                mem.getGPIO().update(displayClock.getTime());
+                mem.gpioUpdate(displayClock.getTime());
             mem.getGPIO().clearInputMask(1 << 8);
         }
 
