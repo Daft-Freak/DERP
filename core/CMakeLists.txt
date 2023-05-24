@@ -10,6 +10,7 @@ target_sources(DERPCore INTERFACE
     GPIO.cpp
     Logging.cpp
     MemoryBus.cpp
+    PWM.cpp
     Timer.cpp
     UART.cpp
     USB.cpp

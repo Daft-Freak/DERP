@@ -32,6 +32,7 @@ namespace Logging
         GPIO,
         Main,
         MemoryBus,
+        PWM,
         Timer,
         UART,
         USB,

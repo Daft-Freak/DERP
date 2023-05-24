@@ -54,6 +54,8 @@ namespace Logging
                 return "main";
             case Component::MemoryBus:
                 return "membus";
+            case Component::PWM:
+                return "pwm";
             case Component::Timer:
                 return "timer";
             case Component::UART:
@@ -103,6 +105,8 @@ namespace Logging
             return Component::Main;
         if(str == "membus")
             return Component::MemoryBus;
+        if(str == "pwm")
+            return Component::PWM;
         if(str == "timer")
             return Component::Timer;
         if(str == "uart")

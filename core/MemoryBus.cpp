@@ -8,7 +8,6 @@
 #include "hardware/regs/io_qspi.h" // TODO: move
 #include "hardware/regs/pio.h" // TODO
 #include "hardware/regs/psm.h" // TODO
-#include "hardware/regs/pwm.h" // TODO
 #include "hardware/regs/resets.h" // TODO
 #include "hardware/regs/rtc.h" // TODO
 #include "hardware/regs/spi.h" // TODO
@@ -124,11 +123,13 @@ static inline uint32_t getStripedSRAMAddr(uint32_t addr)
     return bank * 64 * 1024 + word * 4 + (addr & 3);
 }
 
-MemoryBus::MemoryBus() : gpio(*this), uart{{*this, 0}, {*this, 1}}, watchdog(*this), timer(*this), dma(*this), usb(*this)
+MemoryBus::MemoryBus() : gpio(*this), uart{{*this, 0}, {*this, 1}}, pwm(*this), watchdog(*this), timer(*this), dma(*this), usb(*this)
 {
     clocks.addClockTarget(clk_ref, watchdog.getClock());
 
     clocks.addClockTarget(clk_sys, dma.getClock());
+    clocks.addClockTarget(clk_sys, gpio.getClock());
+    clocks.addClockTarget(clk_sys, pwm.getClock());
 }
 
 void MemoryBus::setBootROM(const uint8_t *rom)
@@ -150,6 +151,7 @@ void MemoryBus::reset()
     gpio.reset();
     uart[0].reset();
     uart[1].reset();
+    pwm.reset();
     timer.reset();
     watchdog.reset();
 
@@ -369,6 +371,8 @@ void MemoryBus::updatePC(uint32_t pc)
 
 void MemoryBus::peripheralUpdate(uint64_t target)
 {
+    pwm.update(target);
+    gpio.update(target);
     watchdog.update(target);
     timer.update(target);
 
@@ -376,16 +380,32 @@ void MemoryBus::peripheralUpdate(uint64_t target)
     usb.update(target);
 }
 
-void MemoryBus::peripheralUpdate(uint64_t target, uint32_t irqMask)
+void MemoryBus::gpioUpdate(uint64_t target)
+{
+    // update anything that might affect outputs before GPIO
+    // TODO: need to ensure correct ordering...
+    pwm.update(target);
+
+    gpio.update(target);
+}
+
+void MemoryBus::peripheralUpdate(uint64_t target, uint32_t irqMask, ARMv6MCore *core)
 {
     if(interruptUpdateCallback)
         interruptUpdateCallback(target, irqMask);
+
+    // sync core 1
+    if(core == cpuCores) // core 0
+        cpuCores[1].update(target);
 
     // only update things that might cause interrupts
     
     const auto timerIRQs = 1 << TIMER_IRQ_0 | 1 << TIMER_IRQ_1 | 1 << TIMER_IRQ_2 | 1 << TIMER_IRQ_3;
     if(irqMask & timerIRQs)
         timer.updateForInterrupts(target);
+
+    if(irqMask & (1 << PWM_IRQ_WRAP))
+        pwm.updateForInterrupts(target);
 
     if(irqMask & (1 << DMA_IRQ_0 | 1 << DMA_IRQ_1))
         dma.updateForInterrupts(target);
@@ -402,6 +422,7 @@ void MemoryBus::calcNextInterruptTime()
     if(getNextInterruptTimeCallback)
         nextInterruptTime = getNextInterruptTimeCallback(nextInterruptTime);
 
+    nextInterruptTime = pwm.getNextInterruptTime(nextInterruptTime);
     nextInterruptTime = timer.getNextInterruptTime(nextInterruptTime);
     nextInterruptTime = dma.getNextInterruptTime(nextInterruptTime);
     nextInterruptTime = usb.getNextInterruptTime(nextInterruptTime);
@@ -780,6 +801,7 @@ uint32_t MemoryBus::doAPBPeriphRead(ClockTarget &masterClock, uint32_t addr)
         }
 
         case APBPeripheral::IO_Bank0:
+            gpioUpdate(masterClock.getTime());
             return gpio.regRead(periphAddr);
 
         case APBPeripheral::IO_QSPI:
@@ -796,6 +818,7 @@ uint32_t MemoryBus::doAPBPeriphRead(ClockTarget &masterClock, uint32_t addr)
         }
 
         case APBPeripheral::Pads_Bank0:
+            gpioUpdate(masterClock.getTime());
             return gpio.padsRegRead(periphAddr);
 
         case APBPeripheral::PLL_Sys:
@@ -816,26 +839,8 @@ uint32_t MemoryBus::doAPBPeriphRead(ClockTarget &masterClock, uint32_t addr)
         }
 
         case APBPeripheral::PWM:
-        {
-            if((periphAddr & 0xFFF) < PWM_EN_OFFSET)
-            {
-                int chan = (periphAddr & 0xFFF) / 20;
-                int reg = (periphAddr ) % 20;
-
-                if(reg == PWM_CH0_CSR_OFFSET)
-                    return pwmCSR[chan];
-                else if(reg == PWM_CH0_DIV_OFFSET)
-                    return pwmDIV[chan];
-                else if(reg == PWM_CH0_CTR_OFFSET)
-                    return pwmCTR[chan];
-                else if(reg == PWM_CH0_CC_OFFSET)
-                    return pwmCC[chan];
-                else // PWM_CH0_TOP_OFFSET
-                    return pwmTOP[chan];
-            }
-
-            break;
-        }
+            pwm.update(masterClock.getTime());
+            return pwm.regRead(periphAddr);
 
         case APBPeripheral::Timer:
             timer.update(masterClock.getTime());
@@ -899,6 +904,7 @@ void MemoryBus::doAPBPeriphWrite(ClockTarget &masterClock, uint32_t addr, T data
         }
 
         case APBPeripheral::IO_Bank0:
+            gpioUpdate(masterClock.getTime());
             gpio.regWrite(periphAddr, data);
             return;
 
@@ -934,6 +940,7 @@ void MemoryBus::doAPBPeriphWrite(ClockTarget &masterClock, uint32_t addr, T data
         }
 
         case APBPeripheral::Pads_Bank0:
+            gpioUpdate(masterClock.getTime());
             gpio.padsRegWrite(periphAddr, data);
             return;
 
@@ -952,28 +959,9 @@ void MemoryBus::doAPBPeriphWrite(ClockTarget &masterClock, uint32_t addr, T data
             return;
 
         case APBPeripheral::PWM:
-        {
-            if((periphAddr & 0xFFF) < PWM_EN_OFFSET)
-            {
-                int atomic = periphAddr >> 12;
-                int chan = (periphAddr & 0xFFF) / 20;
-                int reg = periphAddr % 20;
-
-                if(reg == PWM_CH0_CSR_OFFSET)
-                    updateReg(pwmCSR[chan], data, atomic);
-                else if(reg == PWM_CH0_DIV_OFFSET)
-                    updateReg(pwmDIV[chan], data, atomic);
-                else if(reg == PWM_CH0_CTR_OFFSET)
-                    updateReg(pwmCTR[chan], data, atomic);
-                else if(reg == PWM_CH0_CC_OFFSET)
-                    updateReg(pwmCC[chan], data, atomic);
-                else // PWM_CH0_TOP_OFFSET
-                    updateReg(pwmTOP[chan], data, atomic);
-                return;
-            }
-
-            break;
-        }
+            pwm.update(masterClock.getTime());
+            pwm.regWrite(periphAddr, data);
+            return;
 
         case APBPeripheral::Timer:
             timer.update(masterClock.getTime());
@@ -1173,6 +1161,7 @@ uint32_t MemoryBus::doIOPORTRead(ClockTarget &masterClock, int core, uint32_t ad
             return core;
 
         case SIO_GPIO_IN_OFFSET:
+            gpioUpdate(masterClock.getTime());
             return gpio.getInputs(masterClock.getTime());
 
         case SIO_GPIO_HI_IN_OFFSET:
@@ -1289,16 +1278,37 @@ void MemoryBus::doIOPORTWrite(ClockTarget &masterClock, int core, uint32_t addr,
     switch(addr & 0xFFF)
     {
         case SIO_GPIO_OUT_OFFSET:
+            gpioUpdate(masterClock.getTime());
             gpio.setOutputs(data);
             return;
         case SIO_GPIO_OUT_SET_OFFSET:
+            gpioUpdate(masterClock.getTime());
             gpio.setOutputMask(data);
             return;
         case SIO_GPIO_OUT_CLR_OFFSET:
+            gpioUpdate(masterClock.getTime());
             gpio.clearOutputMask(data);
             return;
         case SIO_GPIO_OUT_XOR_OFFSET:
+            gpioUpdate(masterClock.getTime());
             gpio.xorOutputMask(data);
+            return;
+
+        case SIO_GPIO_OE_OFFSET:
+            gpioUpdate(masterClock.getTime());
+            gpio.setOutputEnables(data);
+            return;
+        case SIO_GPIO_OE_SET_OFFSET:
+            gpioUpdate(masterClock.getTime());
+            gpio.setOutputEnableMask(data);
+            return;
+        case SIO_GPIO_OE_CLR_OFFSET:
+            gpioUpdate(masterClock.getTime());
+            gpio.clearOutputEnableMask(data);
+            return;
+        case SIO_GPIO_OE_XOR_OFFSET:
+            gpioUpdate(masterClock.getTime());
+            gpio.xorOutputEnableMask(data);
             return;
 
         case SIO_FIFO_WR_OFFSET:

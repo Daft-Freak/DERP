@@ -135,7 +135,7 @@ void USB::update(uint64_t target)
 
 uint64_t USB::getNextInterruptTime(uint64_t target)
 {
-    if(shouldCheckBuffers)
+    if(interruptEnables && shouldCheckBuffers)
         return lastUpdate + 1; // "now"
 
     return target;
