@@ -576,6 +576,8 @@ int ARMv6MCore::doTHUMB04ALU(uint16_t opcode, uint32_t pc)
         case 0x2: // LSL
             carry = cpsr & Flag_C;
 
+            op2 &= 0xFF;
+
             if(op2 >= 32)
             {
                 carry = op2 == 32 ? (op1 & 1) : 0;
@@ -595,6 +597,8 @@ int ARMv6MCore::doTHUMB04ALU(uint16_t opcode, uint32_t pc)
         case 0x3: // LSR
             carry = cpsr & Flag_C;
 
+            op2 &= 0xFF;
+
             if(op2 >= 32)
             {
                 carry = op2 == 32 ? (op1 & (1 << 31)) : 0;
@@ -613,6 +617,8 @@ int ARMv6MCore::doTHUMB04ALU(uint16_t opcode, uint32_t pc)
             break;
         case 0x4: // ASR
         {
+            op2 &= 0xFF;
+
             carry = cpsr & Flag_C;
             auto sign = op1 & signBit;
             if(op2 >= 32)
@@ -658,7 +664,7 @@ int ARMv6MCore::doTHUMB04ALU(uint16_t opcode, uint32_t pc)
 
             loReg(dstReg) = res = (op1 >> shift) | (op1 << (32 - shift));
 
-            if(op2)
+            if(op2 & 0xFF)
                 carry = res & (1 << 31) ? Flag_C : 0;
 
             cpsr = (cpsr & ~(Flag_C | Flag_N | Flag_Z)) | (res & signBit) | (res == 0 ? Flag_Z : 0) | carry;
