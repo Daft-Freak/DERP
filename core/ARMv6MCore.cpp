@@ -1431,6 +1431,8 @@ int ARMv6MCore::doTHUMB32BitInstruction(uint16_t opcode, uint32_t pc)
             if((sysm >> 3) == 0)
             {
                 // APSR
+                cpsr = (cpsr & ~0xF8000000) | (reg(srcReg) & 0xF8000000);
+                return pcSCycles * 2 + 1;
             }
             else if((sysm >> 3) == 1)
             {
