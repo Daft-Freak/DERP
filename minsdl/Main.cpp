@@ -13,6 +13,7 @@
 #include "board/Pico.h"
 #include "board/Interstate75.h"
 #include "board/PicoSystem.h"
+#include "board/PicoVision.h"
 #include "board/Tufty2040.h"
 
 using Logging::logf;
@@ -26,6 +27,7 @@ enum class BoardId
 
     PimoroniInterstate75,
     PimoroniPicoSystem,
+    PimoroniPicoVision,
     PimoroniTufty2040,
 };
 
@@ -77,6 +79,9 @@ static BoardId stringToBoard(std::string_view str)
 
     if(str == "pimoroni_picosystem")
         return BoardId::PimoroniPicoSystem;
+
+    if(str == "pimoroni_picovision")
+        return BoardId::PimoroniPicoVision;
 
     if(str == "pimoroni_tufty2040")
         return BoardId::PimoroniTufty2040;
@@ -372,6 +377,10 @@ int main(int argc, char *argv[])
 
         case BoardId::PimoroniPicoSystem:
             board = new PicoSystemBoard(mem);
+            break;
+
+        case BoardId::PimoroniPicoVision:
+            board = new PicoVisionBoard(mem);
             break;
 
         case BoardId::PimoroniTufty2040:
