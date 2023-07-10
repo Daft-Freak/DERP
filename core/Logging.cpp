@@ -50,6 +50,8 @@ namespace Logging
                 return "gdb";
             case Component::GPIO:
                 return "gpio";
+            case Component::I2C:
+                return "i2c";
             case Component::Main:
                 return "main";
             case Component::MemoryBus:
@@ -101,6 +103,8 @@ namespace Logging
             return Component::GDB;
         if(str == "gpio")
             return Component::GPIO;
+        if(str == "i2c")
+            return Component::I2C;
         if(str == "main")
             return Component::Main;
         if(str == "membus")

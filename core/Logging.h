@@ -30,6 +30,7 @@ namespace Logging
         DMA,
         GDB,
         GPIO,
+        I2C,
         Main,
         MemoryBus,
         PWM,

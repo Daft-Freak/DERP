@@ -8,6 +8,7 @@ target_sources(DERPCore INTERFACE
     DMA.cpp
     GDBServer.cpp
     GPIO.cpp
+    I2C.cpp
     Logging.cpp
     MemoryBus.cpp
     PWM.cpp

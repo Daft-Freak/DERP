@@ -123,7 +123,7 @@ static inline uint32_t getStripedSRAMAddr(uint32_t addr)
     return bank * 64 * 1024 + word * 4 + (addr & 3);
 }
 
-MemoryBus::MemoryBus() : gpio(*this), uart{{*this, 0}, {*this, 1}}, pwm(*this), watchdog(*this), timer(*this), dma(*this), usb(*this)
+MemoryBus::MemoryBus() : gpio(*this), uart{{*this, 0}, {*this, 1}}, i2c{{*this, 0}, {*this, 1}}, pwm(*this), watchdog(*this), timer(*this), dma(*this), usb(*this)
 {
     clocks.addClockTarget(clk_ref, watchdog.getClock());
 
@@ -151,6 +151,8 @@ void MemoryBus::reset()
     gpio.reset();
     uart[0].reset();
     uart[1].reset();
+    i2c[0].reset();
+    i2c[1].reset();
     pwm.reset();
     timer.reset();
     watchdog.reset();
@@ -838,6 +840,11 @@ uint32_t MemoryBus::doAPBPeriphRead(ClockTarget &masterClock, uint32_t addr)
             break;
         }
 
+        case APBPeripheral::I2C0:
+            return i2c[0].regRead(periphAddr);
+        case APBPeripheral::I2C1:
+            return i2c[1].regRead(periphAddr);
+
         case APBPeripheral::PWM:
             pwm.update(masterClock.getTime());
             return pwm.regRead(periphAddr);
@@ -956,6 +963,13 @@ void MemoryBus::doAPBPeriphWrite(ClockTarget &masterClock, uint32_t addr, T data
             return;
         case APBPeripheral::UART1:
             uart[0].regWrite(periphAddr, data);
+            return;
+
+        case APBPeripheral::I2C0:
+            i2c[0].regWrite(periphAddr, data);
+            return;
+        case APBPeripheral::I2C1:
+            i2c[0].regWrite(periphAddr, data);
             return;
 
         case APBPeripheral::PWM:

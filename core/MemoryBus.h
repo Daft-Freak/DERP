@@ -9,6 +9,7 @@
 #include "DMA.h"
 #include "GPIO.h"
 #include "FIFO.h"
+#include "I2C.h"
 #include "PWM.h"
 #include "Timer.h"
 #include "UART.h"
@@ -154,6 +155,8 @@ private:
     GPIO gpio;
 
     UART uart[2];
+
+    I2C i2c[2];
 
     PWM pwm;
 
