@@ -3,6 +3,7 @@
 add_executable(DERP_SDL
     Main.cpp
     board/PicoSystem.cpp
+    board/PicoVision.cpp
     board/Tufty2040.cpp
 )
 
