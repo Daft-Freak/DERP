@@ -1057,6 +1057,11 @@ uint32_t MemoryBus::doAHBPeriphRead(ClockTarget &masterClock, uint32_t addr)
                 return PIO_FSTAT_TXEMPTY_BITS | PIO_FSTAT_RXEMPTY_BITS; // all FIFOs empty
             if(periphAddr == PIO_FDEBUG_OFFSET)
                 return PIO_FDEBUG_TXSTALL_BITS; // all TXSTALL
+            if(periphAddr == PIO_SM0_ADDR_OFFSET)
+            {
+                static int counter = 0;
+                return counter++ & PIO_SM0_ADDR_BITS;
+            }
 
             logf(LogLevel::NotImplemented, logComponent, "PIO0 R %08X", addr);
             break;
