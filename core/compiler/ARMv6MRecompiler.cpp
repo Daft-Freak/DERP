@@ -133,8 +133,6 @@ int ARMv6MRecompiler::run(int cyclesToRun)
     int cyclesExecuted = 0;
     bool didIntr = false;
 
-    auto inPC = cpu.loReg(ARMv6MCore::Reg::PC);
-
     while(true)
     {
         // calculate cycles to run
@@ -145,10 +143,17 @@ int ARMv6MRecompiler::run(int cyclesToRun)
         if(cycles <= 0)
             break;
 
+        auto inPC = cpu.loReg(ARMv6MCore::Reg::PC);
+
         if(!attemptToRun(cycles, cyclesExecuted))
             break;
 
         cpu.clock.addCycles(cycleCount);
+
+        // handle long branches
+        auto outPC = cpu.loReg(ARMv6MCore::Reg::PC);
+        if(inPC >> 24 != outPC >> 24)
+            cpu.pcPtr = nullptr; // force remap later
 
         if(cpu.loReg(ARMv6MCore::Reg::PC) >> 28 == 0xF)
             cpu.handleExceptionReturn(cpu.loReg(ARMv6MCore::Reg::PC), true);
@@ -196,11 +201,8 @@ int ARMv6MRecompiler::run(int cyclesToRun)
     {
         auto pc = cpu.loReg(ARMv6MCore::Reg::PC) - 2;
 
-        if(inPC >> 24 != pc >> 24 || !cpu.pcPtr)
-        {
-            cpu.pcPtr = nullptr; // force remap
+        if(!cpu.pcPtr)
             cpu.updateTHUMBPC(pc, true);
-        }
         else
         {
             auto thumbPCPtr = reinterpret_cast<const uint16_t *>(cpu.pcPtr + pc);
