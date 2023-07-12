@@ -1669,7 +1669,7 @@ int ARMv6MCore::handleException()
     return cycles + pcSCycles * 2 + pcNCycles;
 }
 
-int ARMv6MCore::handleExceptionReturn(uint32_t excRet)
+int ARMv6MCore::handleExceptionReturn(uint32_t excRet, bool fromCompiler)
 {
     assert((excRet & 0xFFFFFF0) == 0xFFFFFF0);
 
@@ -1701,7 +1701,7 @@ int ARMv6MCore::handleExceptionReturn(uint32_t excRet)
 
     // TODO: sleep on exit
 
-    updateTHUMBPC(newPC & ~1);
+    updateTHUMBPC(newPC & ~1, fromCompiler);
 
     checkPendingExceptions();
 

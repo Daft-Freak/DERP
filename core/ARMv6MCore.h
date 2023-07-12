@@ -123,7 +123,7 @@ private:
     void updateTHUMBPC(uint32_t pc, bool fromCompiler = false);
 
     int handleException();
-    int handleExceptionReturn(uint32_t excRet);
+    int handleExceptionReturn(uint32_t excRet, bool fromCompiler = false);
     int getExceptionPriority(int exception) const;
     void checkPendingExceptions();
 
