@@ -40,6 +40,9 @@ enum class GenReg
 
     CPSR,
 
+    Control,
+    PriMask,
+
     Temp2, // used by POP, LDM
 };
 
@@ -48,11 +51,25 @@ uint16_t getRegOffset(void *cpuPtr, uint8_t reg)
     auto cpu = reinterpret_cast<ARMv6MCore *>(cpuPtr);
 
     auto cpuPtrInt = reinterpret_cast<uintptr_t>(cpu);
-    uint16_t regsOffset = reinterpret_cast<uintptr_t>(&cpu->regs) - cpuPtrInt;
 
-    auto mapped = cpu->mapReg(static_cast<ARMv6MCore::Reg>(reg - 1));
+    auto genReg = static_cast<GenReg>(reg);
 
-    return regsOffset + static_cast<int>(mapped) * 4;
+    if(reg < 16)
+    {
+        uint16_t regsOffset = reinterpret_cast<uintptr_t>(&cpu->regs) - cpuPtrInt;
+
+        auto mapped = cpu->mapReg(static_cast<ARMv6MCore::Reg>(reg - 1));
+
+        return regsOffset + static_cast<int>(mapped) * 4;
+    }
+
+    if(genReg == GenReg::Control)
+        return reinterpret_cast<uintptr_t>(&cpu->control) - cpuPtrInt;
+    if(genReg == GenReg::PriMask)
+        return reinterpret_cast<uintptr_t>(&cpu->primask) - cpuPtrInt;
+
+    assert(!"invalid register!");
+    return 0;
 }
 
 ARMv6MRecompiler::ARMv6MRecompiler(ARMv6MCore &cpu) : cpu(cpu)
@@ -94,6 +111,10 @@ ARMv6MRecompiler::ARMv6MRecompiler(ARMv6MCore &cpu) : cpu(cpu)
 
     regsOffset = reinterpret_cast<uintptr_t>(&cpu.cpsr) - cpuPtrInt;
     sourceInfo.registers.emplace_back(SourceRegInfo{"PSR", 32, SourceRegType::Flags, 0, 0, regsOffset});
+
+    // CONTROL/PRIMASK (3 chars is not helping here)
+    sourceInfo.registers.emplace_back(SourceRegInfo{"CTL", 32, SourceRegType::General, 0, 0, 0xFFFF});
+    sourceInfo.registers.emplace_back(SourceRegInfo{"PMK", 32, SourceRegType::General, 0, 0, 0xFFFF});
 
     sourceInfo.registers.emplace_back(SourceRegInfo{"tm2", 32, SourceRegType::Temp, 0, 0, 0xFFFF});
 
