@@ -367,7 +367,7 @@ void ARMv6MRecompiler::convertTHUMBToGeneric(uint32_t &pc, GenBlockInfo &genBloc
 
         CPSR,
 
-        Temp2, // used by BL, POP, BX
+        Temp2, // used by POP, LDM
     };
 
     auto lowReg = [](int reg)
