@@ -216,9 +216,6 @@ bool ARMv6MRecompiler::attemptToRun(int cyclesToRun, int &cyclesExecuted)
     auto cpuPC = cpu.loReg(ARMv6MCore::Reg::PC) - 2;
     auto blockStartPC = cpuPC;
 
-    fflush(stdout);
-    assert(cpuPC < 0x40000000);
-
     // attempt to re-enter previous code
     int savedIndex = curSavedExit - 1;
     for(int i = 0; i < savedExitsSize; i++, savedIndex--)
