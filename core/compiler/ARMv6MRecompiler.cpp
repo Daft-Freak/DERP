@@ -1358,6 +1358,57 @@ void ARMv6MRecompiler::convertTHUMBToGeneric(uint32_t &pc, GenBlockInfo &genBloc
                             break;
                         }
 
+                        case 0x3E: // MRS
+                        case 0x3F:
+                        {
+                            auto dstReg = reg((opcode32 >> 8) & 0xF);
+                            auto sysm = opcode32 & 0xFF;
+
+                            if((sysm >> 3) == 0)
+                            {
+                                // xPSR
+                                uint32_t mask = 0;
+                                if(sysm & 1) // IPSR
+                                    mask |= 0x1FF;
+
+                                // if(sysm & 2) // T bit reads as 0 so do nothing
+
+                                if((sysm & 4) == 0) // APSR
+                                    mask |= 0xF8000000;
+
+                                // psr & mask
+                                addInstruction(loadImm(mask));
+                                addInstruction(alu(GenOpcode::And, GenReg::CPSR, GenReg::Temp, GenReg::Temp));
+                                // separate mov to help the target
+                                addInstruction(move(GenReg::Temp, dstReg, pcSCycles * 2 + 1), 4);
+
+                            }
+                            else if((sysm >> 3) == 2)
+                            {
+                                // PRIMASK/CONTROL
+                                if(sysm == 0x10)
+                                {
+                                    // primask & 1
+                                    addInstruction(loadImm(1));
+                                    addInstruction(alu(GenOpcode::And, GenReg::PriMask, GenReg::Temp, GenReg::Temp));
+                                    addInstruction(move(GenReg::Temp, dstReg, pcSCycles * 2 + 1), 4);
+                                }
+                                else if(sysm == 0x14)
+                                {
+                                    // control & 3
+                                    addInstruction(loadImm(3));
+                                    addInstruction(alu(GenOpcode::And, GenReg::Control, GenReg::Temp, GenReg::Temp));
+                                    addInstruction(move(GenReg::Temp, dstReg, pcSCycles * 2 + 1), 4);
+                                }
+                            }
+                            else
+                            {
+                                printf("unhandled MRS in convertToGeneric %02X\n", sysm);
+                                done = true;
+                            }
+                            break;
+                        }
+
                         default:
                             printf("unhandled op in convertToGeneric %08X\n", opcode32 & 0xF7F0F000);
                             done = true;
