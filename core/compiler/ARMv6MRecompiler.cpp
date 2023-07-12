@@ -704,35 +704,35 @@ void ARMv6MRecompiler::convertTHUMBToGeneric(uint32_t &pc, GenBlockInfo &genBloc
                             break;
 
                         case 3: // BX
-                            if(srcReg == 15)
+                        {
+                            if(h1)
                             {
-                                auto target = pc + 2;
-                                
-                                // clear T flag
-                                // (thumb bit can't be set here)
-                                addInstruction(loadImm(~ARMv6MCore::Flag_T));
-                                addInstruction(alu(GenOpcode::And, GenReg::CPSR, GenReg::Temp, GenReg::CPSR));
-
-                                // do the jump
-                                addInstruction(loadImm(target));
-                                addInstruction(jump(GenCondition::Always, GenReg::Temp, pcNCycles + pcSCycles * 2), 2);
-
-                                if(pc > maxBranch)
-                                    done = true;
+                                printf("unhandled BLX in convertToGeneric\n");
+                                done = true;
+                            }
+                            else if(srcReg == 15)
+                            {
+                                // there is no reason to do this, it would fault
+                                printf("unhandled BX PC in convertToGeneric\n");
+                                done = true;
                             }
                             else
                             {
+                                printf("unhandled BX in convertToGeneric\n");
+                                done = true;
+                                // TODO: handleExceptionReturn
                                 // clear T flag
-                                addInstruction(loadImm(~ARMv6MCore::Flag_T));
+                                /*addInstruction(loadImm(~ARMv6MCore::Flag_T));
                                 addInstruction(alu(GenOpcode::And, GenReg::CPSR, GenReg::Temp, GenReg::CPSR));
 
                                 // jump (without clearing low bit, will use to correct flags later)
                                 addInstruction(jump(GenCondition::Always, reg(srcReg), pcNCycles + pcSCycles * 2), 2);
 
                                 if(pc > maxBranch)
-                                    done = true;
+                                    done = true;*/
                             }
                             break;
+                        }
                     }
                 }
                 else // format 4, alu
@@ -784,7 +784,6 @@ void ARMv6MRecompiler::convertTHUMBToGeneric(uint32_t &pc, GenBlockInfo &genBloc
                             addInstruction(alu(GenOpcode::Or, dstReg, srcReg, dstReg, pcSCycles), 2, preserveV | preserveC | writeZ | writeN);
                             break;
                         case 0xD: // MUL
-                            // FIXME: variable cycles
                             addInstruction(alu(GenOpcode::Multiply, dstReg, srcReg, dstReg, pcSCycles), 2, preserveV | writeZ | writeN);
                             break;
                         case 0xE: // BIC
@@ -940,99 +939,120 @@ void ARMv6MRecompiler::convertTHUMBToGeneric(uint32_t &pc, GenBlockInfo &genBloc
                 break;
             }
 
-            case 0xB: // formats 13-14
+            case 0xB: // misxc
             {
-                if(opcode & (1 << 10)) // format 14, push/pop
+                switch((opcode >> 8) & 0xF)
                 {
-                    bool isLoad = opcode & (1 << 11);
-                    bool pclr = opcode & (1 << 8); // store LR/load PC
-                    uint8_t regList = opcode & 0xFF;
-                    auto baseReg = GenReg::R13;
-
-                    if(isLoad) // POP
+                    case 0x0: // add/sub imm to SP
                     {
-                        uint32_t offset = 0;
-                        for(int i = 0; i < 8; i++)
-                        {
-                            if(regList & (1 << i))
-                            {
-                                // load
-                                loadWithOffset(4, baseReg, offset, lowReg(i), 0, 0, (offset ? GenOp_Sequential : 0) | GenOp_ForceAlign);
-                                offset++;
-                            }
-                        }
+                        bool isNeg = opcode & (1 << 7);
+                        int off = (opcode & 0x7F) << 2;
 
-                        if(pclr)
-                        {
-                            // load pc (to temp)
-                            loadWithOffset(4, baseReg, offset, GenReg::Temp2, 0, 0, (offset ? GenOp_Sequential : 0) | GenOp_ForceAlign);
+                        addInstruction(loadImm(off));
 
-                            // clear thumb bit
-                            addInstruction(loadImm(~1u));
-                            addInstruction(alu(GenOpcode::And, GenReg::Temp2, GenReg::Temp, GenReg::Temp2));
-    
-                            offset++;
-
-                            if(pc > maxBranch)
-                                done = true;
-                        }
-
-                        // update SP
-                        addInstruction(loadImm(offset * 4));
-                        addInstruction(alu(GenOpcode::Add, baseReg, GenReg::Temp, baseReg, pclr ? 0 : pcSCycles + 1), pclr ? 0 : 2);
-
-                        if(pclr)
-                            addInstruction(jump(GenCondition::Always, GenReg::Temp2, pcSCycles + 1), 2); // TODO: cycles for branch (not implemented in CPU either)
+                        if(isNeg)
+                            addInstruction(alu(GenOpcode::Subtract, GenReg::R13, GenReg::Temp, GenReg::R13, pcSCycles), 2);
+                        else
+                            addInstruction(alu(GenOpcode::Add, GenReg::R13, GenReg::Temp, GenReg::R13, pcSCycles), 2);
+                        break;
                     }
-                    else
+
+                    case 0x4: // PUSH
+                    case 0x5:
+                    case 0xC: // POP
+                    case 0xD:
                     {
-                        uint32_t offset = 0;
+                        bool isLoad = opcode & (1 << 11);
+                        bool pclr = opcode & (1 << 8); // store LR/load PC
+                        uint8_t regList = opcode & 0xFF;
+                        auto baseReg = GenReg::R13;
 
-                        if(pclr)
-                            offset += 4;
-
-                        for(int i = 0; i < 8; i++)
+                        if(isLoad && pclr)
                         {
-                            if(regList & (1 << i))
+                            // TODO: handleExceptionReturn
+                            printf("unhandled POP PC in convertToGeneric\n");
+                            done = true;
+                            break;
+                        }
+
+                        if(isLoad) // POP
+                        {
+                            uint32_t offset = 0;
+                            for(int i = 0; i < 8; i++)
+                            {
+                                if(regList & (1 << i))
+                                {
+                                    // load
+                                    loadWithOffset(4, baseReg, offset, lowReg(i), 0, 0, (offset ? GenOp_Sequential : 0) | GenOp_ForceAlign);
+                                    offset++;
+                                }
+                            }
+
+                            if(pclr)
+                            {
+                                // load pc (to temp)
+                                loadWithOffset(4, baseReg, offset, GenReg::Temp2, 0, 0, (offset ? GenOp_Sequential : 0) | GenOp_ForceAlign);
+
+                                // clear thumb bit
+                                addInstruction(loadImm(~1u));
+                                addInstruction(alu(GenOpcode::And, GenReg::Temp2, GenReg::Temp, GenReg::Temp2));
+        
+                                offset++;
+
+                                if(pc > maxBranch)
+                                    done = true;
+                            }
+
+                            // update SP
+                            addInstruction(loadImm(offset * 4));
+                            addInstruction(alu(GenOpcode::Add, baseReg, GenReg::Temp, baseReg, pclr ? 0 : pcSCycles + 1), pclr ? 0 : 2);
+
+                            if(pclr)
+                                addInstruction(jump(GenCondition::Always, GenReg::Temp2, pcSCycles + 1), 2); // TODO: cycles for branch (not implemented in CPU either)
+                        }
+                        else
+                        {
+                            uint32_t offset = 0;
+
+                            if(pclr)
                                 offset += 4;
-                        }
 
-                        // update SP
-                        addInstruction(loadImm(offset));
-                        addInstruction(alu(GenOpcode::Subtract, baseReg, GenReg::Temp, baseReg));
-
-                        offset = 0;
-                        for(int i = 0; i < 8; i++)
-                        {
-                            if(regList & (1 << i))
+                            for(int i = 0; i < 8; i++)
                             {
-                                // store
-                                bool last = !pclr && (regList >> i) == 1;
-                                storeWithOffset(4, baseReg, offset, lowReg(i), 0, 0, (offset ? GenOp_Sequential : 0) | (last ? GenOp_UpdateCycles : 0));
-                                offset++;
+                                if(regList & (1 << i))
+                                    offset += 4;
                             }
+
+                            // update SP
+                            addInstruction(loadImm(offset));
+                            addInstruction(alu(GenOpcode::Subtract, baseReg, GenReg::Temp, baseReg));
+
+                            offset = 0;
+                            for(int i = 0; i < 8; i++)
+                            {
+                                if(regList & (1 << i))
+                                {
+                                    // store
+                                    bool last = !pclr && (regList >> i) == 1;
+                                    storeWithOffset(4, baseReg, offset, lowReg(i), 0, 0, (offset ? GenOp_Sequential : 0) | (last ? GenOp_UpdateCycles : 0));
+                                    offset++;
+                                }
+                            }
+
+                            if(pclr) // store LR
+                                storeWithOffset(4, baseReg, offset, GenReg::R14, 0, 0, (offset ? GenOp_Sequential : 0) | GenOp_UpdateCycles);
+
+                            genBlock.instructions.back().cycles = pcNCycles;
+                            genBlock.instructions.back().len = 2;
                         }
-
-                        if(pclr) // store LR
-                            storeWithOffset(4, baseReg, offset, GenReg::R14, 0, 0, (offset ? GenOp_Sequential : 0) | GenOp_UpdateCycles);
-
-                        genBlock.instructions.back().cycles = pcNCycles;
-                        genBlock.instructions.back().len = 2;
+                        break;   
                     }
-                    
-                }
-                else // format 13, add offset to SP
-                {
-                    bool isNeg = opcode & (1 << 7);
-                    int off = (opcode & 0x7F) << 2;
 
-                    addInstruction(loadImm(off));
-
-                    if(isNeg)
-                        addInstruction(alu(GenOpcode::Subtract, GenReg::R13, GenReg::Temp, GenReg::R13, pcSCycles), 2);
-                    else
-                        addInstruction(alu(GenOpcode::Add, GenReg::R13, GenReg::Temp, GenReg::R13, pcSCycles), 2);
+                    default:
+                        done = true;
+                        printf("unhandled op in convertToGeneric %04X\n", opcode & 0xFF00);
                 }
+
                 break;
             }
 
@@ -1191,7 +1211,7 @@ void ARMv6MRecompiler::convertTHUMBToGeneric(uint32_t &pc, GenBlockInfo &genBloc
                 break;
             }
 
-            case 0xF: // format 19, long branch with link
+            /*case 0xF: // format 19, long branch with link
             {
                 bool high = opcode & (1 << 11);
                 uint32_t offset = opcode & 0x7FF;
@@ -1220,7 +1240,7 @@ void ARMv6MRecompiler::convertTHUMBToGeneric(uint32_t &pc, GenBlockInfo &genBloc
                 }
 
                 break;
-            }
+            }*/
 
             default:
             {
