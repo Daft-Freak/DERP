@@ -150,6 +150,9 @@ int ARMv6MRecompiler::run(int cyclesToRun)
 
         cpu.clock.addCycles(cycleCount);
 
+        if(cpu.loReg(ARMv6MCore::Reg::PC) >> 28 == 0xF)
+            cpu.handleExceptionReturn(cpu.loReg(ARMv6MCore::Reg::PC), true);
+
         // might have tried to change mode
         if(!(cpu.cpsr & ARMv6MCore::Flag_T))
         {
@@ -721,18 +724,16 @@ void ARMv6MRecompiler::convertTHUMBToGeneric(uint32_t &pc, GenBlockInfo &genBloc
                             }
                             else
                             {
-                                printf("unhandled BX in convertToGeneric\n");
-                                done = true;
                                 // TODO: handleExceptionReturn
                                 // clear T flag
-                                /*addInstruction(loadImm(~ARMv6MCore::Flag_T));
+                                addInstruction(loadImm(~ARMv6MCore::Flag_T));
                                 addInstruction(alu(GenOpcode::And, GenReg::CPSR, GenReg::Temp, GenReg::CPSR));
 
                                 // jump (without clearing low bit, will use to correct flags later)
                                 addInstruction(jump(GenCondition::Always, reg(srcReg), pcNCycles + pcSCycles * 2), 2);
 
                                 if(pc > maxBranch)
-                                    done = true;*/
+                                    done = true;
                             }
                             break;
                         }
@@ -969,14 +970,6 @@ void ARMv6MRecompiler::convertTHUMBToGeneric(uint32_t &pc, GenBlockInfo &genBloc
                         bool pclr = opcode & (1 << 8); // store LR/load PC
                         uint8_t regList = opcode & 0xFF;
                         auto baseReg = GenReg::R13;
-
-                        if(isLoad && pclr)
-                        {
-                            // TODO: handleExceptionReturn
-                            printf("unhandled POP PC in convertToGeneric\n");
-                            done = true;
-                            break;
-                        }
 
                         if(isLoad) // POP
                         {
