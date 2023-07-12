@@ -220,9 +220,6 @@ void X86Target::init(SourceInfo sourceInfo, void *cpuPtr)
     // allocate the flags register if it isn't an alias
     if(!sourceInfo.registers[flagsReg].alias && !regAlloc.count(flagsReg))
     {
-        // assume this isn't something that has a half carry flag so ESI is free
-        assert(!flagWriteMask(SourceFlagType::HalfCarry));
-
         regAlloc.emplace(flagsReg, Reg32::ESI);
         numSavedRegs++; // need to save it
     }
@@ -324,9 +321,6 @@ bool X86Target::compile(uint8_t *&codePtr, uint8_t *codeBufEnd, uint32_t pc, Gen
     {
         if(!(flags & GenOp_WriteFlags))
             return;
-
-        assert(!writesFlag(flags, SourceFlagType::HalfCarry));
-        assert(!writesFlag(flags, SourceFlagType::WasSub));
     
         auto f = mapReg32(flagsReg);
 
@@ -1679,7 +1673,6 @@ bool X86Target::compile(uint8_t *&codePtr, uint8_t *codeBufEnd, uint32_t pc, Gen
                         // need to sync cycles *before* the jump out
                         if(instrCycles)
                         {
-                            assert(instrCycles == 1 || !(blockInfo.flags & GenBlock_StrictSync));
                             while(instrCycles--)
                                 cycleExecuted();
                         }
@@ -1778,7 +1771,6 @@ bool X86Target::compile(uint8_t *&codePtr, uint8_t *codeBufEnd, uint32_t pc, Gen
         // additional cycles
         if(instrCycles > 0)
         {
-            assert(instrCycles == 1 || !(blockInfo.flags & GenBlock_StrictSync));
             while(instrCycles--)
                 cycleExecuted();
         }
