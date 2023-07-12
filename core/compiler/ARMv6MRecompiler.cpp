@@ -1072,6 +1072,38 @@ void ARMv6MRecompiler::convertTHUMBToGeneric(uint32_t &pc, GenBlockInfo &genBloc
                         break;   
                     }
 
+                    case 0xF: // hints
+                    {
+                        auto opA = (opcode >> 4) & 0xF;
+                        auto opB = opcode & 0xF;
+
+                        if(opB == 0)
+                        {
+                            switch(opA)
+                            {
+                                case 0: // NOP
+                                {
+                                    GenOpInfo op{};
+                                    op.opcode = GenOpcode::NOP;
+                                    op.cycles = pcSCycles;
+
+                                    addInstruction(op, 2);
+                                    break;
+                                }
+
+                                default:
+                                    done = true;
+                                    printf("unhandled hint op in convertToGeneric %X %X\n", opA, opB);
+                            }
+                        }
+                        else
+                        {
+                            done = true;
+                            printf("unhandled hint op in convertToGeneric %X %X\n", opA, opB);
+                        }
+                        break;
+                    }
+
                     default:
                         done = true;
                         printf("unhandled op in convertToGeneric %04X\n", opcode & 0xFF00);
