@@ -945,7 +945,7 @@ void ARMv6MRecompiler::convertTHUMBToGeneric(uint32_t &pc, GenBlockInfo &genBloc
                 break;
             }
 
-            case 0xB: // misxc
+            case 0xB: // misc
             {
                 switch((opcode >> 8) & 0xF)
                 {
@@ -960,6 +960,32 @@ void ARMv6MRecompiler::convertTHUMBToGeneric(uint32_t &pc, GenBlockInfo &genBloc
                             addInstruction(alu(GenOpcode::Subtract, GenReg::R13, GenReg::Temp, GenReg::R13, pcSCycles), 2);
                         else
                             addInstruction(alu(GenOpcode::Add, GenReg::R13, GenReg::Temp, GenReg::R13, pcSCycles), 2);
+                        break;
+                    }
+                    
+                    case 0x2:
+                    {
+                        auto srcReg = lowReg((opcode >> 3) & 7);
+                        auto dstReg = lowReg(opcode & 7);
+
+                        switch((opcode >> 6) & 3)
+                        {
+                            //case 0x0: // SXTH
+                            //case 0x1: // SXTB
+
+                            case 0x2: // UXTH
+                                addInstruction(loadImm(0xFFFF));
+                                addInstruction(alu(GenOpcode::And, srcReg, GenReg::Temp, dstReg, pcSCycles), 2);
+                                break;
+                            case 0x3: // UXTB
+                                addInstruction(loadImm(0xFF));
+                                addInstruction(alu(GenOpcode::And, srcReg, GenReg::Temp, dstReg, pcSCycles), 2);
+                                break;
+                            default:
+                                done = true;
+                                printf("unhandled op in convertToGeneric %04X\n", opcode & 0xFFC0);
+                        }
+
                         break;
                     }
 
