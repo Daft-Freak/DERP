@@ -1209,36 +1209,57 @@ void ARMv6MRecompiler::convertTHUMBToGeneric(uint32_t &pc, GenBlockInfo &genBloc
                 break;
             }
 
-            /*case 0xF: // format 19, long branch with link
+            case 0xF: // 32-bit encoding
             {
-                bool high = opcode & (1 << 11);
-                uint32_t offset = opcode & 0x7FF;
+                uint32_t opcode32 = opcode << 16 | *pcPtr++;
+                pc += 2;
 
-                if(!high)
+                // decode
+                if((opcode32 & 0x18008000) != 0x10008000)
                 {
-                    offset <<= 12;
-                    if(offset & (1 << 22))
-                        offset |= 0xFF800000; //sign extend
-
-                    addInstruction(loadImm(pc + 2 + offset));
-                    addInstruction(move(GenReg::Temp, GenReg::R14, pcSCycles), 2);
+                    done = true;
+                    break;
                 }
-                else
+
+                auto op1 = (opcode32 >> 20) & 0x7F;
+                auto op2 = (opcode32 >> 12) & 0x7;
+
+                if((op2 & 0b101) == 0b101) // BL
                 {
-                    // addr = LR + offset * 2
-                    addInstruction(loadImm(offset * 2));
-                    addInstruction(alu(GenOpcode::Add, GenReg::Temp, GenReg::R14, GenReg::Temp2));
+                    auto imm11 = opcode32 & 0x7FF;
+                    auto imm10 = (opcode32 >> 16) & 0x3FF;
+
+                    auto s = opcode32 & (1 << 26);
+                    auto i1 = (opcode32 >> 13) & 1;
+                    auto i2 = (opcode32 >> 11) & 1;
+
+                    if(!s)
+                    {
+                        i1 ^= 1;
+                        i2 ^= 1;
+                    }
+
+                    uint32_t offset = imm11 << 1 | imm10 << 12 | i2 << 22 | i1 << 23;
+
+                    if(s)
+                        offset |= 0xFF000000; // sign extend
 
                     // LR = PC | 1
                     addInstruction(loadImm(pc | 1));
                     addInstruction(move(GenReg::Temp, GenReg::R14));
 
                     // jump
-                    addInstruction(jump(GenCondition::Always, GenReg::Temp2, pcNCycles + pcSCycles * 2), 2, GenOp_Call);
+                    addInstruction(loadImm(pc + offset));
+                    addInstruction(jump(GenCondition::Always, GenReg::Temp, pcNCycles + pcSCycles * 3), 4, GenOp_Call);
+                }
+                else
+                {
+                    printf("unhandled op in convertToGeneric %08X\n", opcode32 & 0xF7F0F000);
+                    done = true;
                 }
 
                 break;
-            }*/
+            }
 
             default:
             {
