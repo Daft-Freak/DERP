@@ -5,6 +5,10 @@
 #include "ClockTarget.h"
 #include "MemoryBus.h"
 
+#if defined(RECOMPILER_X86)
+#define RECOMPILER
+#include "compiler/ARMv6MRecompiler.h"
+#endif
 class ARMv6MCore final
 {
 public:
@@ -116,7 +120,7 @@ private:
     int doTHUMB18UncondBranch(uint16_t opcode, uint32_t pc);
     int doTHUMB32BitInstruction(uint16_t opcode, uint32_t pc);
 
-    void updateTHUMBPC(uint32_t pc);
+    void updateTHUMBPC(uint32_t pc, bool fromCompiler = false);
 
     int handleException();
     int handleExceptionReturn(uint32_t excRet);
@@ -124,6 +128,8 @@ private:
     void checkPendingExceptions();
 
     void updateSysTick(int sysCycles = 0);
+
+    void enterCompiledCode();
 
     static const uint32_t signBit = 0x80000000;
 
@@ -161,4 +167,12 @@ private:
     uint32_t mpuRegs[5]; // ED90-EDA0
 
     MemoryBus &mem;
+
+#ifdef RECOMPILER
+    bool attemptToEnterCompiledCode = false;
+
+    ARMv6MRecompiler compiler;
+    friend class ARMv6MRecompiler;
+    friend uint16_t getRegOffset(void *cpuPtr, uint8_t reg);
+#endif
 };

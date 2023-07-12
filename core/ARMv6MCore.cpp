@@ -23,6 +23,9 @@ constexpr auto logComponent = Logging::Component::ArmCore;
 // FIXME: this still thinks it's an ARMv4T
 
 ARMv6MCore::ARMv6MCore(MemoryBus &mem) : debugHalted(false), debuggerAttached(false), mem(mem)
+#ifdef RECOMPILER
+                                       , compiler(*this)
+#endif
 {}
 
 void ARMv6MCore::reset()
@@ -100,6 +103,19 @@ unsigned int ARMv6MCore::update(uint64_t target)
                 break;
             }
 
+#ifdef RECOMPILER
+            if(attemptToEnterCompiledCode)
+            {
+                exec = compiler.run(clock.getCyclesToTime(target));
+                attemptToEnterCompiledCode = false;
+                if(!exec)
+                    continue;
+
+                cycles += exec;
+                exec = 0; // we've already added it to the clock...
+            }
+            else
+#endif
             // CPU
             exec = executeTHUMBInstruction();
         }
@@ -1526,7 +1542,7 @@ int ARMv6MCore::doTHUMB32BitInstruction(uint16_t opcode, uint32_t pc)
     return pcSCycles;
 }
 
-void ARMv6MCore::updateTHUMBPC(uint32_t pc)
+void ARMv6MCore::updateTHUMBPC(uint32_t pc, bool fromCompiler)
 {
     // called when PC is updated in THUMB mode (except for incrementing)
     assert(!(pc & 1));
@@ -1571,6 +1587,9 @@ void ARMv6MCore::updateTHUMBPC(uint32_t pc)
     }
 
     loReg(Reg::PC) = pc + 2; // pointing at last fetch
+
+    if(!fromCompiler)
+        enterCompiledCode();
 }
 
 int ARMv6MCore::handleException()
@@ -1765,4 +1784,11 @@ void ARMv6MCore::updateSysTick(int sysCycles)
 
     if(!sysTickCurrent)
         sysTickCurrent = sysTickReload;
+}
+
+void ARMv6MCore::enterCompiledCode()
+{
+#ifdef RECOMPILER
+    attemptToEnterCompiledCode = true;
+#endif
 }

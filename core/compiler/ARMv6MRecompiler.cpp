@@ -193,10 +193,10 @@ int ARMv6MRecompiler::run(int cyclesToRun)
     {
         auto pc = cpu.loReg(ARMv6MCore::Reg::PC) - 2;
 
-        if(inPC >> 24 != pc >> 24)
+        if(inPC >> 24 != pc >> 24 || !cpu.pcPtr)
         {
             cpu.pcPtr = nullptr; // force remap
-            cpu.updateTHUMBPC(pc);//, true); // FIXME
+            cpu.updateTHUMBPC(pc, true);
         }
         else
         {
@@ -215,6 +215,9 @@ bool ARMv6MRecompiler::attemptToRun(int cyclesToRun, int &cyclesExecuted)
 
     auto cpuPC = cpu.loReg(ARMv6MCore::Reg::PC) - 2;
     auto blockStartPC = cpuPC;
+
+    fflush(stdout);
+    assert(cpuPC < 0x40000000);
 
     // attempt to re-enter previous code
     int savedIndex = curSavedExit - 1;
@@ -684,6 +687,7 @@ void ARMv6MRecompiler::convertTHUMBToGeneric(uint32_t &pc, GenBlockInfo &genBloc
                             break;
 
                         case 2: // MOV
+                        {
                             if(srcReg == 15) // read pc
                             {
                                 assert(dstReg != 15);
@@ -692,6 +696,7 @@ void ARMv6MRecompiler::convertTHUMBToGeneric(uint32_t &pc, GenBlockInfo &genBloc
                             }
                             else if(dstReg == 15)
                             {
+                                
                                 // clear low bit (no interworking here)
                                 addInstruction(loadImm(~1u));
                                 addInstruction(alu(GenOpcode::And, GenReg::Temp, reg(srcReg), GenReg::Temp));
@@ -702,6 +707,7 @@ void ARMv6MRecompiler::convertTHUMBToGeneric(uint32_t &pc, GenBlockInfo &genBloc
                             else
                                 addInstruction(move(reg(srcReg), reg(dstReg), pcSCycles), 2);
                             break;
+                        }
 
                         case 3: // BX
                         {
