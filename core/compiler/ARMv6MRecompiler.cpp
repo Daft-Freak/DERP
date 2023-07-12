@@ -16,6 +16,33 @@
 #include "ARMv6MCore.h"
 #include "MemoryBus.h"
 
+// reg 0 is special tmp register
+enum class GenReg
+{
+    Temp = 0, // special temp
+
+    R0,
+    R1,
+    R2,
+    R3,
+    R4,
+    R5,
+    R6,
+    R7,
+    R8,
+    R9,
+    R10,
+    R11,
+    R12,
+    R13,
+    R14,
+    // R15 = PC
+
+    CPSR,
+
+    Temp2, // used by POP, LDM
+};
+
 uint16_t getRegOffset(void *cpuPtr, uint8_t reg)
 {
     auto cpu = reinterpret_cast<ARMv6MCore *>(cpuPtr);
@@ -342,33 +369,6 @@ void ARMv6MRecompiler::convertTHUMBToGeneric(uint32_t &pc, GenBlockInfo &genBloc
 
     auto startPC = pc;
     auto maxBranch = pc;
-
-    // reg 0 is special tmp register
-    enum class GenReg
-    {
-        Temp = 0, // special temp
-
-        R0,
-        R1,
-        R2,
-        R3,
-        R4,
-        R5,
-        R6,
-        R7,
-        R8,
-        R9,
-        R10,
-        R11,
-        R12,
-        R13,
-        R14,
-        // R15 = PC
-
-        CPSR,
-
-        Temp2, // used by POP, LDM
-    };
 
     auto lowReg = [](int reg)
     {
