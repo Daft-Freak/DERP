@@ -713,12 +713,7 @@ void ARMv6MRecompiler::convertTHUMBToGeneric(uint32_t &pc, GenBlockInfo &genBloc
 
                         case 3: // BX
                         {
-                            if(h1)
-                            {
-                                printf("unhandled BLX in convertToGeneric\n");
-                                done = true;
-                            }
-                            else if(srcReg == 15)
+                            if(srcReg == 15)
                             {
                                 // there is no reason to do this, it would fault
                                 printf("unhandled BX PC in convertToGeneric\n");
@@ -726,7 +721,12 @@ void ARMv6MRecompiler::convertTHUMBToGeneric(uint32_t &pc, GenBlockInfo &genBloc
                             }
                             else
                             {
-                                // TODO: handleExceptionReturn
+                                if(h1) // BLX
+                                {
+                                    addInstruction(loadImm(pc | 1));
+                                    addInstruction(move(GenReg::Temp, GenReg::R14));
+                                }
+
                                 // clear T flag
                                 addInstruction(loadImm(~ARMv6MCore::Flag_T));
                                 addInstruction(alu(GenOpcode::And, GenReg::CPSR, GenReg::Temp, GenReg::CPSR));
