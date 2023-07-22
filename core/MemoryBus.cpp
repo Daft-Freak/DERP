@@ -319,6 +319,9 @@ const uint8_t *MemoryBus::mapAddress(uint32_t addr) const
         case Region_XIP:
             return qspiFlash + (addr & 0xFFFFFF);
 
+        case Region_XIP_CacheSRAM:
+            return xipCache + (addr & 0x3FFF);
+
         case Region_SRAM:
         {
             // SRAM0-3 is stored striped so that we can do this
@@ -340,6 +343,9 @@ uint8_t *MemoryBus::mapAddress(uint32_t addr)
     {
         case Region_XIP:
             return qspiFlash + (addr & 0xFFFFFF);
+
+        case Region_XIP_CacheSRAM:
+            return xipCache + (addr & 0x3FFF);
 
         case Region_SRAM:
         {
