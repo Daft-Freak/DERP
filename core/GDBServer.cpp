@@ -456,15 +456,31 @@ bool GDBServer::handleWriteMemory(int fd, std::string_view command)
 
     // write
     int cycles;
-    uint8_t b;
+    uint8_t b[4];
+
     for(uint32_t i = 0; i < len; i++)
     {
-        res = std::from_chars(res.ptr, res.ptr + 2, b, 16);
+        // write a word if possible
+        if(len - i >= 4 && !((addr + i) & 3))
+        {
+            for(int j = 0; j < 4; j++) {
+                res = std::from_chars(res.ptr, res.ptr + 2, b[j], 16);
+
+                if(res.ec != std::errc{})
+                    return sendEmptyReply(fd); // should probably send whatever error is appropriate...
+            }
+
+            cpus[0].writeMem32(addr + i, *(uint32_t *)b, cycles);
+            i += 3;
+            continue;
+        }
+
+        res = std::from_chars(res.ptr, res.ptr + 2, b[0], 16);
 
         if(res.ec != std::errc{})
-            return sendEmptyReply(fd); // should probably send whatever error is appropritate...
+            return sendEmptyReply(fd); // should probably send whatever error is appropriate...
 
-        cpus[0].writeMem8(addr + i, b, cycles); // TODO: more direct?
+        cpus[0].writeMem8(addr + i, b[0], cycles); // TODO: more direct?
     }
 
     return sendReply(fd, "OK", 2);
