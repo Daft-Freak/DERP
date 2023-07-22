@@ -72,11 +72,19 @@ void Watchdog::update(uint64_t target)
 
         if(timer == 0)
         {
-            //reset
+            // reset
             // TODO: WDSEL
             logf(LogLevel::Info, logComponent, "Watchdog reset!");
             mem.reset();
         }
+    }
+
+    if(ctrl & WATCHDOG_CTRL_TRIGGER_BITS)
+    {
+        // reset
+        // TODO: WDSEL
+        logf(LogLevel::Info, logComponent, "Watchdog reset!");
+        mem.reset();
     }
 
     clock.addCycles(passed);
