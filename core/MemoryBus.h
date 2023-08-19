@@ -10,6 +10,7 @@
 #include "GPIO.h"
 #include "FIFO.h"
 #include "I2C.h"
+#include "PIO.h"
 #include "PWM.h"
 #include "Timer.h"
 #include "UART.h"
@@ -167,6 +168,8 @@ private:
     DMA dma;
 
     USB usb;
+
+    PIO pio[2];
 
     uint64_t nextInterruptTime;
 

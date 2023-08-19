@@ -123,13 +123,16 @@ static inline uint32_t getStripedSRAMAddr(uint32_t addr)
     return bank * 64 * 1024 + word * 4 + (addr & 3);
 }
 
-MemoryBus::MemoryBus() : gpio(*this), uart{{*this, 0}, {*this, 1}}, i2c{{*this, 0}, {*this, 1}}, pwm(*this), watchdog(*this), timer(*this), dma(*this), usb(*this)
+MemoryBus::MemoryBus() : gpio(*this), uart{{*this, 0}, {*this, 1}}, i2c{{*this, 0}, {*this, 1}}, pwm(*this), watchdog(*this), timer(*this), dma(*this), usb(*this), pio{{*this, 0}, {*this, 1}}
 {
     clocks.addClockTarget(clk_ref, watchdog.getClock());
 
-    clocks.addClockTarget(clk_sys, dma.getClock());
     clocks.addClockTarget(clk_sys, gpio.getClock());
     clocks.addClockTarget(clk_sys, pwm.getClock());
+    
+    clocks.addClockTarget(clk_sys, dma.getClock());
+    clocks.addClockTarget(clk_sys, pio[0].getClock());
+    clocks.addClockTarget(clk_sys, pio[1].getClock());
 }
 
 void MemoryBus::setBootROM(const uint8_t *rom)
@@ -159,6 +162,8 @@ void MemoryBus::reset()
 
     dma.reset();
     usb.reset();
+    pio[0].reset();
+    pio[1].reset();
 
     nextInterruptTime = 0;
 
@@ -386,6 +391,8 @@ void MemoryBus::peripheralUpdate(uint64_t target)
 
     dma.update(target);
     usb.update(target);
+    pio[0].update(target);
+    pio[1].update(target);
 }
 
 void MemoryBus::gpioUpdate(uint64_t target)
@@ -393,6 +400,9 @@ void MemoryBus::gpioUpdate(uint64_t target)
     // update anything that might affect outputs before GPIO
     // TODO: need to ensure correct ordering...
     pwm.update(target);
+
+    pio[0].update(target);
+    pio[1].update(target);
 
     gpio.update(target);
 }
@@ -420,6 +430,12 @@ void MemoryBus::peripheralUpdate(uint64_t target, uint32_t irqMask, ARMv6MCore *
 
     if(irqMask & (1 << USBCTRL_IRQ))
         usb.updateForInterrupts(target);
+
+    if(irqMask & (1 << PIO0_IRQ_0 | 1 << PIO0_IRQ_1))
+        pio[0].update(target);
+
+    if(irqMask & (1 << PIO1_IRQ_0 | 1 << PIO1_IRQ_1))
+        pio[1].update(target);
 }
 
 void MemoryBus::calcNextInterruptTime()
@@ -434,6 +450,8 @@ void MemoryBus::calcNextInterruptTime()
     nextInterruptTime = timer.getNextInterruptTime(nextInterruptTime);
     nextInterruptTime = dma.getNextInterruptTime(nextInterruptTime);
     nextInterruptTime = usb.getNextInterruptTime(nextInterruptTime);
+    nextInterruptTime = pio[0].getNextInterruptTime(nextInterruptTime);
+    nextInterruptTime = pio[1].getNextInterruptTime(nextInterruptTime);
 }
 
 void MemoryBus::setInterruptUpdateCallback(InterruptUpdateCallback cb)
@@ -1052,30 +1070,12 @@ uint32_t MemoryBus::doAHBPeriphRead(ClockTarget &masterClock, uint32_t addr)
         }
         
         case AHBPeripheral::PIO0:
-        {
-            if(periphAddr == PIO_FSTAT_OFFSET)
-                return PIO_FSTAT_TXEMPTY_BITS | PIO_FSTAT_RXEMPTY_BITS; // all FIFOs empty
-            if(periphAddr == PIO_FDEBUG_OFFSET)
-                return PIO_FDEBUG_TXSTALL_BITS; // all TXSTALL
-            if(periphAddr == PIO_SM0_ADDR_OFFSET)
-            {
-                static int counter = 0;
-                return counter++ & PIO_SM0_ADDR_BITS;
-            }
+            pio[0].update(masterClock.getTime());
+            return pio[0].regRead(periphAddr);
 
-            logf(LogLevel::NotImplemented, logComponent, "PIO0 R %08X", addr);
-            break;
-        }
         case AHBPeripheral::PIO1:
-        {
-            if(periphAddr == PIO_FSTAT_OFFSET)
-                return PIO_FSTAT_TXEMPTY_BITS | PIO_FSTAT_RXEMPTY_BITS; // all FIFOs empty
-            if(periphAddr == PIO_FDEBUG_OFFSET)
-                return PIO_FDEBUG_TXSTALL_BITS; // all TXSTALL
-
-            logf(LogLevel::NotImplemented, logComponent, "PIO1 R %08X", addr);
-            break;
-        }
+            pio[1].update(masterClock.getTime());
+            return pio[1].regRead(periphAddr);
 
         case AHBPeripheral::XIPAux:
             logf(LogLevel::NotImplemented, logComponent, "AHBP XIP_AUX R %08X", addr);
@@ -1148,18 +1148,14 @@ void MemoryBus::doAHBPeriphWrite(ClockTarget &masterClock, uint32_t addr, T data
         
         case AHBPeripheral::PIO0:
         {
-            if(periphAddr == PIO_TXF0_OFFSET)
-            {}
-            else
-                logf(LogLevel::NotImplemented, logComponent, "PIO0 W %08X = %08X", addr, data);
+            pio[0].update(masterClock.getTime());
+            pio[0].regWrite(periphAddr, data);
             return;
         }
         case AHBPeripheral::PIO1:
         {
-            if(periphAddr == PIO_TXF0_OFFSET)
-            {}
-            else
-                logf(LogLevel::NotImplemented, logComponent, "PIO1 W %08X = %08X", addr, data);
+            pio[1].update(masterClock.getTime());
+            pio[1].regWrite(periphAddr, data);
             return;
         }
 

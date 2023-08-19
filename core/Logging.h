@@ -33,6 +33,7 @@ namespace Logging
         I2C,
         Main,
         MemoryBus,
+        PIO,
         PWM,
         Timer,
         UART,
