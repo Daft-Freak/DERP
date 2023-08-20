@@ -59,6 +59,19 @@ void PIO::update(uint64_t target)
 
         clock.addCycles(step);
 
+        // fake progress
+        for(unsigned i = 0; i < NUM_PIO_STATE_MACHINES; i++)
+        {
+            if(hw.ctrl & (1 << (PIO_CTRL_SM_ENABLE_LSB + i)))
+            {
+                if(!txFifo[i].empty())
+                {
+                    txFifo[i].pop();
+                    updateFifoStatus();
+                }
+            }
+        }
+
         cycles -= step;
     }
 }
@@ -79,7 +92,7 @@ uint32_t PIO::regRead(uint32_t addr)
             return hw.ctrl;
 
         case PIO_FSTAT_OFFSET:
-            return PIO_FSTAT_TXEMPTY_BITS | PIO_FSTAT_RXEMPTY_BITS; // all FIFOs empty
+            return hw.fstat;
         case PIO_FDEBUG_OFFSET:
             return PIO_FDEBUG_TXSTALL_BITS; // all TXSTALL
 
@@ -156,7 +169,20 @@ void PIO::regWrite(uint32_t addr, uint32_t data)
             return;
         }
         case PIO_TXF0_OFFSET:
+        case PIO_TXF1_OFFSET:
+        case PIO_TXF2_OFFSET:
+        case PIO_TXF3_OFFSET:
+        {
+            int index = (addr - PIO_TXF0_OFFSET) / 4;
+            if(txFifo[index].full())
+                hw.fdebug |= 1 << (PIO_FDEBUG_TXOVER_LSB + index);
+            else
+            {
+                txFifo[index].push(data);
+                updateFifoStatus();
+            }
             return;
+        }
 
         case PIO_INSTR_MEM0_OFFSET:
         case PIO_INSTR_MEM1_OFFSET:
@@ -240,4 +266,17 @@ void PIO::regWrite(uint32_t addr, uint32_t data)
     }
 
     logf(LogLevel::NotImplemented, logComponent, "%i W %04X%s%08X", index, addr, op[atomic], data);
+}
+
+void PIO::updateFifoStatus()
+{
+    hw.fstat = PIO_FSTAT_RXEMPTY_BITS; // TODO
+
+    for(unsigned i = 0; i < NUM_PIO_STATE_MACHINES; i++)
+    {
+        if(txFifo[i].full())
+            hw.fstat |= 1 << (PIO_FSTAT_TXFULL_LSB + i);
+        else if(txFifo[i].empty())
+            hw.fstat |= 1 << (PIO_FSTAT_TXEMPTY_LSB + i);
+    }
 }

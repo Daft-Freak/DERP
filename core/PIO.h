@@ -5,6 +5,7 @@
 #include "hardware/structs/pio.h"
 
 #include "ClockTarget.h"
+#include "FIFO.h"
 
 class MemoryBus;
 
@@ -30,10 +31,15 @@ public:
     ClockTarget &getClock() {return clock;}
 
 private:
+    void updateFifoStatus();
+
     MemoryBus &mem;
     int index;
 
     ClockTarget clock;
 
     pio_hw_t hw;
+
+    // TODO: rx, joined
+    FIFO<uint32_t, 4> txFifo[NUM_PIO_STATE_MACHINES];
 };
