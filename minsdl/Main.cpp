@@ -14,7 +14,7 @@ using Logging::logf;
 using LogLevel = Logging::Level;
 constexpr auto logComponent = Logging::Component::Main;
 
-enum class Board
+enum class BoardId
 {
     Unknown = -1,
     Pico = 0,
@@ -33,7 +33,7 @@ static uint8_t bootROM[0x4000];
 
 static std::ifstream uf2File;
 
-static Board board = Board::Unknown;
+static BoardId boardId = BoardId::Unknown;
 static bool picosystemSDK = false;
 
 uint16_t screenData[320 * 240];
@@ -78,30 +78,30 @@ static const std::unordered_map<SDL_Keycode, int> picosystemKeyMap {
     {SDLK_v,      1 << 16},
 };
 
-static Board stringToBoard(std::string_view str)
+static BoardId stringToBoard(std::string_view str)
 {
     if(str == "pico")
-        return Board::Pico;
+        return BoardId::Pico;
 
     if(str == "pimoroni_picosystem")
-        return Board::PimoroniPicoSystem;
+        return BoardId::PimoroniPicoSystem;
 
     if(str == "pimoroni_tufty2040")
-        return Board::PimoroniTufty2040;
+        return BoardId::PimoroniTufty2040;
 
     logf(LogLevel::Warning, logComponent, "Unknown board \"%.*s\", falling back to \"pico\"", int(str.length()), str.data()); 
-    return Board::Pico;
+    return BoardId::Pico;
 }
 
-static void getBoardScreenSize(Board board, int &w, int &h)
+static void getBoardScreenSize(BoardId boardId, int &w, int &h)
 {
-    switch(board)
+    switch(boardId)
     {
-        case Board::PimoroniPicoSystem:
+        case BoardId::PimoroniPicoSystem:
             w = 240;
             h = 240;
             break;
-        case Board::PimoroniTufty2040:
+        case BoardId::PimoroniTufty2040:
             w = 320;
             h = 240;
             break;
@@ -193,8 +193,8 @@ static bool parseUF2(std::ifstream &file)
                     logf(LogLevel::Info, logComponent, "\t%s: %s", idStr->second, str);
 
                 // detect board
-                if(id == 0xb63cffbb/*pico_board*/ && board == Board::Unknown)
-                    board = stringToBoard(str);
+                if(id == 0xb63cffbb/*pico_board*/ && boardId == BoardId::Unknown)
+                    boardId = stringToBoard(str);
             }
         }
     }
@@ -500,7 +500,7 @@ int main(int argc, char *argv[])
         else if(arg == "--picosystem-sdk")
             picosystemSDK = true;
         else if(arg == "--board" && i + 1 < argc)
-            board = stringToBoard(argv[++i]);
+            boardId = stringToBoard(argv[++i]);
         else if(arg == "--usb")
             usbEnabled = true;
         else if(arg == "--usbip")
@@ -544,17 +544,17 @@ int main(int argc, char *argv[])
 
         // picosystem SDK does not require the correct board to be set... so most uf2s don't
         if(picosystemSDK)
-            board = Board::PimoroniPicoSystem;
+            boardId = BoardId::PimoroniPicoSystem;
     }
 
     // default board if still not set
-    if(board == Board::Unknown)
+    if(boardId == BoardId::Unknown)
     {
         logf(LogLevel::Info, logComponent, "Board not specified, falling back to \"pico\""); 
-        board = Board::Pico;
+        boardId = BoardId::Pico;
     }
 
-    getBoardScreenSize(board, screenWidth, screenHeight);
+    getBoardScreenSize(boardId, screenWidth, screenHeight);
 
     // emu init
     mem.setCPUs(cpuCores);
@@ -580,7 +580,7 @@ int main(int argc, char *argv[])
     mem.reset();
 
     // external hardware
-    if(board == Board::PimoroniPicoSystem)
+    if(boardId == BoardId::PimoroniPicoSystem)
     {
         mem.setInterruptUpdateCallback(onInterruptUpdate);
         mem.setGetNextInterruptTimeCallback(onGetNextInterruptTime);
@@ -599,7 +599,7 @@ int main(int argc, char *argv[])
         audioClock.setFrequency(48000);
         clocks.addClockTarget(-1, audioClock);
     }
-    else if(board == Board::PimoroniTufty2040)
+    else if(boardId == BoardId::PimoroniTufty2040)
     {
         mem.getPIO(1).setUpdateCallback(onTuftyPIOUpdate);
     }
@@ -634,7 +634,7 @@ int main(int argc, char *argv[])
         // TODO: implement screen registers instead of guessing
         if(picosystemSDK)
             format = SDL_PIXELFORMAT_ARGB4444;
-        else if(board == Board::PimoroniPicoSystem) // assume 32blit-sdk
+        else if(boardId == BoardId::PimoroniPicoSystem) // assume 32blit-sdk
             format = SDL_PIXELFORMAT_BGR565;
         else
             format = SDL_PIXELFORMAT_RGB565;
@@ -644,7 +644,7 @@ int main(int argc, char *argv[])
 
     SDL_AudioDeviceID audioDevice = 0;
 
-    if(board == Board::PimoroniPicoSystem)
+    if(boardId == BoardId::PimoroniPicoSystem)
     {
         SDL_AudioSpec spec{};
 
@@ -716,7 +716,7 @@ int main(int argc, char *argv[])
         if(gdbEnabled)
             gdbServer.getCPUMutex().unlock();
 
-        if(board == Board::PimoroniPicoSystem)
+        if(boardId == BoardId::PimoroniPicoSystem)
         {
             displayUpdate(time);
             audioUpdate(time);
