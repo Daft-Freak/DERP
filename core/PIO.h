@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <functional>
 
 #include "hardware/structs/pio.h"
 
@@ -12,6 +13,8 @@ class MemoryBus;
 class PIO final
 {
 public:
+    using UpdateCallback = std::function<void(uint64_t, PIO &pio)>;
+
     PIO(MemoryBus &mem, int index);
 
     void reset();
@@ -22,6 +25,8 @@ public:
         if(hw.inte0 || hw.inte1)
             update(target);
     }
+
+    void setUpdateCallback(UpdateCallback cb);
 
     uint64_t getNextInterruptTime(uint64_t target);
 
@@ -39,6 +44,8 @@ private:
     ClockTarget clock;
 
     pio_hw_t hw;
+
+    UpdateCallback updateCallback;
 
     // TODO: rx, joined
     FIFO<uint32_t, 4> txFifo[NUM_PIO_STATE_MACHINES];

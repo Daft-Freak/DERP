@@ -57,23 +57,33 @@ void PIO::update(uint64_t target)
     {
         auto step = cycles;
 
-        clock.addCycles(step);
-
-        // fake progress
-        for(unsigned i = 0; i < NUM_PIO_STATE_MACHINES; i++)
+        if(updateCallback)
+            updateCallback(clock.getTime(), *this);
+        else
         {
-            if(hw.ctrl & (1 << (PIO_CTRL_SM_ENABLE_LSB + i)))
+            // fake progress
+            for(unsigned i = 0; i < NUM_PIO_STATE_MACHINES; i++)
             {
-                if(!txFifo[i].empty())
+                if(hw.ctrl & (1 << (PIO_CTRL_SM_ENABLE_LSB + i)))
                 {
-                    txFifo[i].pop();
-                    updateFifoStatus();
+                    if(!txFifo[i].empty())
+                    {
+                        txFifo[i].pop();
+                        updateFifoStatus();
+                    }
                 }
             }
         }
 
+        clock.addCycles(step);
+
         cycles -= step;
     }
+}
+
+void PIO::setUpdateCallback(UpdateCallback cb)
+{
+    updateCallback = cb;
 }
 
 uint64_t PIO::getNextInterruptTime(uint64_t target)
