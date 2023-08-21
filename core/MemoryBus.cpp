@@ -401,8 +401,10 @@ void MemoryBus::gpioUpdate(uint64_t target)
     // TODO: need to ensure correct ordering...
     pwm.update(target);
 
-    pio[0].update(target);
-    pio[1].update(target);
+    // technically affects IO, but not implemented yet
+    // would also need to sync DMA most of the time
+    //pio[0].update(target);
+    //pio[1].update(target);
 
     gpio.update(target);
 }
