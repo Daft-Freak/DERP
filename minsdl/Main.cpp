@@ -34,12 +34,14 @@ static uint8_t bootROM[0x4000];
 static std::ifstream uf2File;
 
 static Board board = Board::Unknown;
+static bool picosystemSDK = false;
 
 uint16_t screenData[320 * 240];
 
 static uint32_t buttonState = 0;
 static unsigned int displayScanline = 0;
 static ClockTarget displayClock;
+static int screenDataOff = 0;
 
 static ClockTarget audioClock;
 static bool lastAudioVal = false;
@@ -294,6 +296,60 @@ static void onPWMUpdate(uint64_t time, uint16_t pwm)
     lastAudioVal = pwm & (1 << 11);
 }
 
+static void onPIOUpdate(uint64_t time, PIO &pio)
+{
+    // display is usually PIO0 SM0
+    auto &txFifo = pio.getTXFIFO(0);
+    auto &smHW = pio.getHW().sm[0];
+
+    if(txFifo.empty())
+        return;
+
+    while(!txFifo.empty())
+    {
+        auto data = txFifo.pop();
+
+        if(smHW.shiftctrl & PIO_SM0_SHIFTCTRL_AUTOPULL_BITS)
+        {
+            // 32blit-sdk hires or command
+            auto pullThresh = (smHW.shiftctrl & PIO_SM0_SHIFTCTRL_PULL_THRESH_BITS) >> PIO_SM0_SHIFTCTRL_PULL_THRESH_LSB;
+            if(pullThresh == 8)
+            {
+                // commands
+                logf(LogLevel::Debug, logComponent, "ps display cmd %02X", data & 0xFF);
+                screenDataOff = 0;
+            }
+            else
+            {
+                // hires data
+                screenData[screenDataOff++] = data & 0xFFFF;
+
+                if(screenDataOff == 240 * 240)
+                    screenDataOff = 0;
+            }
+        }
+        else
+        {
+            // 32blit-sdk lores or picosystem-sdk
+
+            // picosystem sdk un-swaps in the pio program
+            if(picosystemSDK)
+                data = data >> 16 | data << 16;
+
+            // FIXME: picosystem-sdk hires
+            
+            screenData[screenDataOff++] = data & 0xFFFF;
+            screenData[screenDataOff++] = data & 0xFFFF;
+            screenData[screenDataOff++] = data >> 16;
+            screenData[screenDataOff++] = data >> 16;
+            if(screenDataOff == 240 * 240)
+                screenDataOff = 0;
+        }
+    }
+
+    pio.updateFifoStatus();
+}
+
 static void runGDBServer()
 {
     gdbServer.setCPUs(cpuCores, 2);
@@ -382,7 +438,6 @@ int main(int argc, char *argv[])
 
     std::thread gdbServerThread;
 
-    bool picosystemSDK = false;
     bool usbEnabled = false;
     bool gdbEnabled = false;
 
@@ -490,6 +545,8 @@ int main(int argc, char *argv[])
 
         mem.getGPIO().setReadCallback(onGPIORead);
         mem.getGPIO().clearInputFloatingMask(1 << 8); // TE
+
+        mem.getPIO(0).setUpdateCallback(onPIOUpdate);
 
         mem.getPWM().setOutputCallback(onPWMUpdate, 1 << 11); // audio
 
