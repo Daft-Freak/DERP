@@ -77,21 +77,6 @@ void DMA::update(uint64_t target)
             {
                 auto val = mem.read<uint8_t>(this, readAddr[curChannel], cycles, false);
                 mem.write(this, writeAddr[curChannel], val, cycles, false);
-
-                // tufty hax
-                if(writeAddr[curChannel] == 0x50300010 /*PIO1 TXF0*/)
-                {
-                    static int off = 0;
-                    extern uint16_t screenData[];
-
-                    auto screenData8 = reinterpret_cast<uint8_t *>(screenData);
-                    screenData8[off ^ 1] = val;
-                    off++;
-
-                    if(off == 320 * 240 * 2)
-                        off = 0;
-                }
-
             }
             else if(transferSize == 2)
             {

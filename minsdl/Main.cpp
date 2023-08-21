@@ -42,6 +42,7 @@ static uint32_t buttonState = 0;
 static unsigned int displayScanline = 0;
 static ClockTarget displayClock;
 static int screenDataOff = 0;
+static bool doDisplayWrite = false;
 
 static ClockTarget audioClock;
 static bool lastAudioVal = false;
@@ -350,6 +351,47 @@ static void onPIOUpdate(uint64_t time, PIO &pio)
     pio.updateFifoStatus();
 }
 
+// tufty display
+static void onTuftyPIOUpdate(uint64_t time, PIO &pio)
+{
+    // display is usually PIO1 SM0
+    auto &txFifo = pio.getTXFIFO(0);
+
+    bool rs = mem.getGPIO().getPadState() & (1 << 11);
+
+    if(txFifo.empty())
+        return;
+
+    while(!txFifo.empty())
+    {
+        auto data = txFifo.pop() & 0xFF;
+        if(!rs)
+        {
+            doDisplayWrite = false;
+
+            // RAM write command
+            if(data == 0x2C)
+            {
+                screenDataOff = 0;
+                doDisplayWrite = true;
+            }
+            else if(data)
+                logf(LogLevel::Debug, logComponent, "tf display cmd %02X", data);
+        }
+        else if(doDisplayWrite)
+        {
+            auto screenData8 = reinterpret_cast<uint8_t *>(screenData);
+            screenData8[screenDataOff ^ 1] = data & 0xFF; // byte swap
+            screenDataOff++;
+
+            if(screenDataOff == 320 * 240 * 2)
+                screenDataOff = 0;
+        }
+    }
+
+    pio.updateFifoStatus();
+}
+
 static void runGDBServer()
 {
     gdbServer.setCPUs(cpuCores, 2);
@@ -556,6 +598,10 @@ int main(int argc, char *argv[])
 
         audioClock.setFrequency(48000);
         clocks.addClockTarget(-1, audioClock);
+    }
+    else if(board == Board::PimoroniTufty2040)
+    {
+        mem.getPIO(1).setUpdateCallback(onTuftyPIOUpdate);
     }
 
     if(gdbEnabled)
