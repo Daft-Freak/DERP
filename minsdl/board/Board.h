@@ -2,6 +2,7 @@
 #include <cstdint>
 
 class MemoryBus;
+union SDL_Event;
 
 class Board
 {
@@ -14,6 +15,7 @@ public:
     virtual int getNumAudioSamples() = 0;
     virtual int16_t getAudioSample() =  0;
 
+    virtual void handleEvent(SDL_Event &event) = 0;
     virtual void update(uint64_t time) = 0;
 private:
 };
