@@ -55,7 +55,10 @@ void DMA::update(uint64_t target)
     for(uint32_t cycle = 0; cycle < passed; cycle++)
     {
         if(!channelTriggered)
+        {
+            clock.addCycles(passed - cycle);
             break;
+        }
 
         for(int i = 0; i < numChannels; i++, curChannel++)
         {
@@ -157,9 +160,9 @@ void DMA::update(uint64_t target)
             }
             break;
         }
-    }
 
-    clock.addCycles(passed);
+        clock.addCycles(1);
+    }
 }
 
 uint64_t DMA::getNextInterruptTime(uint64_t target)
