@@ -90,6 +90,7 @@ public:
     Watchdog &getWatchdog() {return watchdog;}
 
     USB &getUSB() {return usb;}
+    PIO &getPIO(int i) {return pio[i];}
 
 private:
     template<class T, size_t size>

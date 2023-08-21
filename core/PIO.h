@@ -35,9 +35,12 @@ public:
 
     ClockTarget &getClock() {return clock;}
 
-private:
+    const pio_hw_t &getHW(){return hw;}
+    FIFO<uint32_t, 4> &getTXFIFO(int i) {return txFifo[i];}
+
     void updateFifoStatus();
 
+private:
     MemoryBus &mem;
     int index;
 
