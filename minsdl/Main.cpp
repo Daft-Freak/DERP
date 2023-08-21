@@ -10,6 +10,8 @@
 #include "GDBServer.h"
 #include "Logging.h"
 
+#include "board/Pico.h"
+
 using Logging::logf;
 using LogLevel = Logging::Level;
 constexpr auto logComponent = Logging::Component::Main;
@@ -34,6 +36,7 @@ static uint8_t bootROM[0x4000];
 static std::ifstream uf2File;
 
 static BoardId boardId = BoardId::Unknown;
+static Board *board = nullptr;
 static bool picosystemSDK = false;
 
 uint16_t screenData[320 * 240];
@@ -554,7 +557,17 @@ int main(int argc, char *argv[])
         boardId = BoardId::Pico;
     }
 
-    getBoardScreenSize(boardId, screenWidth, screenHeight);
+    // create board
+    switch(boardId)
+    {
+        default:
+            board = new PicoBoard(mem);
+    }
+
+    board->getScreenSize(screenWidth, screenHeight);
+
+    if(!screenWidth && !screenHeight)
+        getBoardScreenSize(boardId, screenWidth, screenHeight);
 
     // emu init
     mem.setCPUs(cpuCores);
@@ -644,7 +657,7 @@ int main(int argc, char *argv[])
 
     SDL_AudioDeviceID audioDevice = 0;
 
-    if(boardId == BoardId::PimoroniPicoSystem)
+    if(board->hasAudio() || boardId == BoardId::PimoroniPicoSystem)
     {
         SDL_AudioSpec spec{};
 
@@ -716,6 +729,9 @@ int main(int argc, char *argv[])
         if(gdbEnabled)
             gdbServer.getCPUMutex().unlock();
 
+
+        board->update(time);
+
         if(boardId == BoardId::PimoroniPicoSystem)
         {
             displayUpdate(time);
@@ -746,6 +762,8 @@ int main(int argc, char *argv[])
             SDL_RenderPresent(renderer);
         }
     }
+
+    delete board;
 
     if(texture)
         SDL_DestroyTexture(texture);
