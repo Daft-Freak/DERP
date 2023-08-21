@@ -26,6 +26,7 @@ namespace Logging
         Other = 0,
 
         ArmCore,
+        Board,
         Clocks,
         DMA,
         GDB,

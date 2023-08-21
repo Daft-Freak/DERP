@@ -42,6 +42,8 @@ namespace Logging
                 return "other";
             case Component::ArmCore:
                 return "armcore";
+            case Component::Board:
+                return "board";
             case Component::Clocks:
                 return "clocks";
             case Component::DMA:
@@ -97,6 +99,8 @@ namespace Logging
             return Component::Other;
         if(str == "armcore")
             return Component::ArmCore;
+        if(str == "board")
+            return Component::Board;
         if(str == "clocks")
             return Component::Clocks;
         if(str == "dma")
