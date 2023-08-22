@@ -12,6 +12,7 @@
 
 #include "board/Pico.h"
 #include "board/PicoSystem.h"
+#include "board/Tufty2040.h"
 
 using Logging::logf;
 using LogLevel = Logging::Level;
@@ -40,9 +41,6 @@ static BoardId boardId = BoardId::Unknown;
 static Board *board = nullptr;
 
 uint16_t screenData[320 * 240];
-
-static int screenDataOff = 0;
-static bool doDisplayWrite = false;
 
 static const uint32_t uf2MagicStart0 = 0x0A324655, uf2MagicStart1 = 0x9E5D5157, uf2MagicEnd = 0x0AB16F30;
 
@@ -74,21 +72,6 @@ static BoardId stringToBoard(std::string_view str)
 
     logf(LogLevel::Warning, logComponent, "Unknown board \"%.*s\", falling back to \"pico\"", int(str.length()), str.data()); 
     return BoardId::Pico;
-}
-
-static void getBoardScreenSize(BoardId boardId, int &w, int &h)
-{
-    switch(boardId)
-    {
-        case BoardId::PimoroniTufty2040:
-            w = 320;
-            h = 240;
-            break;
-
-        default:
-            w = 0;
-            h = 0;
-    }
 }
 
 static bool parseUF2(std::ifstream &file)
@@ -179,47 +162,6 @@ static bool parseUF2(std::ifstream &file)
     }
 
     return true;
-}
-
-// tufty display
-static void onTuftyPIOUpdate(uint64_t time, PIO &pio)
-{
-    // display is usually PIO1 SM0
-    auto &txFifo = pio.getTXFIFO(0);
-
-    bool rs = mem.getGPIO().getPadState() & (1 << 11);
-
-    if(txFifo.empty())
-        return;
-
-    while(!txFifo.empty())
-    {
-        auto data = txFifo.pop() & 0xFF;
-        if(!rs)
-        {
-            doDisplayWrite = false;
-
-            // RAM write command
-            if(data == 0x2C)
-            {
-                screenDataOff = 0;
-                doDisplayWrite = true;
-            }
-            else if(data)
-                logf(LogLevel::Debug, logComponent, "tf display cmd %02X", data);
-        }
-        else if(doDisplayWrite)
-        {
-            auto screenData8 = reinterpret_cast<uint8_t *>(screenData);
-            screenData8[screenDataOff ^ 1] = data & 0xFF; // byte swap
-            screenDataOff++;
-
-            if(screenDataOff == 320 * 240 * 2)
-                screenDataOff = 0;
-        }
-    }
-
-    pio.updateFifoStatus();
 }
 
 static void runGDBServer()
@@ -402,20 +344,15 @@ int main(int argc, char *argv[])
             board = new PicoSystemBoard(mem, picosystemSDK);
             break;
 
+        case BoardId::PimoroniTufty2040:
+            board = new Tufty2040Board(mem);
+            break;
+
         default:
             board = new PicoBoard(mem);
     }
 
     board->getScreenSize(screenWidth, screenHeight);
-
-    if(!screenWidth && !screenHeight)
-        getBoardScreenSize(boardId, screenWidth, screenHeight);
-
-    // external hardware
-    if(boardId == BoardId::PimoroniTufty2040)
-    {
-        mem.getPIO(1).setUpdateCallback(onTuftyPIOUpdate);
-    }
 
     if(gdbEnabled)
         gdbServerThread = std::thread(runGDBServer);
