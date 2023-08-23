@@ -12,6 +12,7 @@ public:
     PicoSystemBoard(MemoryBus &mem, bool picosystemSDK);
 
     void getScreenSize(int &w, int &h) override;
+    const uint8_t *getScreenData() override;
 
     bool hasAudio() override;
     int getNumAudioSamples() override;
@@ -25,6 +26,8 @@ private:
     bool isPicoSystemSDK;
 
     uint32_t buttonState = 0;
+
+    uint16_t screenData[240 * 240];
     unsigned int displayScanline = 0;
     ClockTarget displayClock;
     int screenDataOff = 0;

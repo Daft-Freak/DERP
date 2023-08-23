@@ -9,8 +9,6 @@ using Logging::logf;
 using LogLevel = Logging::Level;
 constexpr auto logComponent = Logging::Component::Board;
 
-extern uint16_t screenData[320 * 240];
-
 static const std::unordered_map<SDL_Keycode, int> picosystemKeyMap {
     {SDLK_RIGHT,  1 << 21},
     {SDLK_LEFT,   1 << 22},
@@ -49,6 +47,11 @@ void PicoSystemBoard::getScreenSize(int &w, int &h)
 {
     w = 240;
     h = 240;
+}
+
+const uint8_t *PicoSystemBoard::getScreenData()
+{
+    return reinterpret_cast<uint8_t *>(screenData);
 }
 
 bool PicoSystemBoard::hasAudio()

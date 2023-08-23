@@ -10,6 +10,7 @@ public:
     virtual ~Board() = default;
 
     virtual void getScreenSize(int &w, int &h) = 0;
+    virtual const uint8_t *getScreenData() = 0;
 
     virtual bool hasAudio() = 0;
     virtual int getNumAudioSamples() = 0;

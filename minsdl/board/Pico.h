@@ -8,6 +8,7 @@ public:
     PicoBoard(MemoryBus &mem){}
 
     void getScreenSize(int &w, int &h) override {w = h = 0;}
+    const uint8_t *getScreenData() override {return nullptr;}
 
     bool hasAudio() override {return false;}
     int getNumAudioSamples() override {return 0;}

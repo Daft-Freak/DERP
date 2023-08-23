@@ -40,8 +40,6 @@ static std::ifstream uf2File;
 static BoardId boardId = BoardId::Unknown;
 static Board *board = nullptr;
 
-uint16_t screenData[320 * 240];
-
 static const uint32_t uf2MagicStart0 = 0x0A324655, uf2MagicStart1 = 0x9E5D5157, uf2MagicEnd = 0x0AB16F30;
 
 struct UF2Block
@@ -486,7 +484,7 @@ int main(int argc, char *argv[])
         if(renderer)
         {
             // TODO: sync
-            SDL_UpdateTexture(texture, nullptr, screenData, screenWidth * 2);
+            SDL_UpdateTexture(texture, nullptr, board->getScreenData(), screenWidth * 2);
             SDL_RenderClear(renderer);
             SDL_RenderCopy(renderer, texture, nullptr, nullptr);
             SDL_RenderPresent(renderer);
