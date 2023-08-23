@@ -236,17 +236,30 @@ void PicoSystemBoard::onPIOUpdate(uint64_t time, PIO &pio)
         else
         {
             // 32blit-sdk lores or picosystem-sdk
+            bool lores = true;
 
-            // picosystem sdk un-swaps in the pio program
             if(isPicoSystemSDK)
+            {
+                // picosystem sdk un-swaps in the pio program
                 data = data >> 16 | data << 16;
+
+                // try to work out if this is hires mode
+                int top = (smHW.execctrl & PIO_SM0_EXECCTRL_WRAP_TOP_BITS) >> PIO_SM0_EXECCTRL_WRAP_TOP_LSB;
+                int bottom = (smHW.execctrl & PIO_SM0_EXECCTRL_WRAP_BOTTOM_BITS) >> PIO_SM0_EXECCTRL_WRAP_BOTTOM_LSB;
+            
+                if(top - bottom < 12) // hires program is shorter (8 vs 18 instrs)
+                    lores = false;
+            }
 
             // FIXME: picosystem-sdk hires
             
             screenData[screenDataOff++] = data & 0xFFFF;
-            screenData[screenDataOff++] = data & 0xFFFF;
+            if(lores)
+                screenData[screenDataOff++] = data & 0xFFFF;
             screenData[screenDataOff++] = data >> 16;
-            screenData[screenDataOff++] = data >> 16;
+            if(lores)
+                screenData[screenDataOff++] = data >> 16;
+        
             if(screenDataOff == 240 * 240)
                 screenDataOff = 0;
         }
