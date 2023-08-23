@@ -12,6 +12,7 @@ public:
     PicoSystemBoard(MemoryBus &mem, bool picosystemSDK);
 
     void getScreenSize(int &w, int &h) override;
+    int getScreenFormat() override;
     const uint8_t *getScreenData() override;
 
     bool hasAudio() override;

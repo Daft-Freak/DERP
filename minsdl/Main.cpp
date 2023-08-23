@@ -377,17 +377,7 @@ int main(int argc, char *argv[])
         SDL_RenderSetLogicalSize(renderer, screenWidth, screenHeight);
         SDL_RenderSetIntegerScale(renderer, SDL_TRUE);
 
-        Uint32 format;
-
-        // TODO: implement screen registers instead of guessing
-        if(picosystemSDK)
-            format = SDL_PIXELFORMAT_ARGB4444;
-        else if(boardId == BoardId::PimoroniPicoSystem) // assume 32blit-sdk
-            format = SDL_PIXELFORMAT_BGR565;
-        else
-            format = SDL_PIXELFORMAT_RGB565;
-
-        texture = SDL_CreateTexture(renderer, format, SDL_TEXTUREACCESS_STREAMING, screenWidth, screenHeight);
+        texture = SDL_CreateTexture(renderer, board->getScreenFormat(), SDL_TEXTUREACCESS_STREAMING, screenWidth, screenHeight);
     }
 
     SDL_AudioDeviceID audioDevice = 0;

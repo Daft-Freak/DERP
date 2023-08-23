@@ -49,6 +49,15 @@ void PicoSystemBoard::getScreenSize(int &w, int &h)
     h = 240;
 }
 
+int PicoSystemBoard::getScreenFormat()
+{
+    // TODO: implement screen registers instead of guessing
+    if(isPicoSystemSDK)
+        return SDL_PIXELFORMAT_ARGB4444;
+    else // assume 32blit-sdk
+        return SDL_PIXELFORMAT_BGR565;
+}
+
 const uint8_t *PicoSystemBoard::getScreenData()
 {
     return reinterpret_cast<uint8_t *>(screenData);

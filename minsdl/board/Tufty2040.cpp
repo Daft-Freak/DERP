@@ -1,3 +1,5 @@
+#include <SDL.h>
+
 #include "Tufty2040.h"
 
 #include "Logging.h"
@@ -16,6 +18,11 @@ void Tufty2040Board::getScreenSize(int &w, int &h)
 {
     w = 320;
     h = 240;
+}
+
+int Tufty2040Board::getScreenFormat()
+{
+    return SDL_PIXELFORMAT_RGB565;
 }
 
 const uint8_t *Tufty2040Board::getScreenData()

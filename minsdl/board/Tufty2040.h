@@ -9,6 +9,7 @@ public:
     Tufty2040Board(MemoryBus &mem);
 
     void getScreenSize(int &w, int &h) override;
+    int getScreenFormat() override;
     const uint8_t *getScreenData() override;
 
     bool hasAudio() override {return false;}
