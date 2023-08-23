@@ -481,8 +481,6 @@ int main(int argc, char *argv[])
         }
     }
 
-    delete board;
-
     if(texture)
         SDL_DestroyTexture(texture);
     if(renderer)
@@ -492,6 +490,8 @@ int main(int argc, char *argv[])
 
     if(audioDevice)
         SDL_CloseAudioDevice(audioDevice);
+
+    delete board;
 
     if(gdbEnabled)
         gdbServerThread.join();
