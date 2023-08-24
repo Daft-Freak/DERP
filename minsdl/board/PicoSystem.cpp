@@ -28,8 +28,10 @@ PicoSystemBoard::PicoSystemBoard(MemoryBus &mem, bool picosystemSDK) : mem(mem),
     mem.setInterruptUpdateCallback([this](auto time, auto irqMask){onInterruptUpdate(time, irqMask);});
     mem.setGetNextInterruptTimeCallback([this](auto time){return onGetNextInterruptTime(time);});
 
+    int buttonMask = 0xFF0000;
+
     mem.getGPIO().setReadCallback([this](auto time, auto &gpio){onGPIORead(time, gpio);});
-    mem.getGPIO().clearInputFloatingMask(1 << 8); // TE
+    mem.getGPIO().clearInputFloatingMask(1 << 8/*TE*/ | buttonMask); // buttons pulled high on board
 
     mem.getPIO(0).setUpdateCallback([this](auto time, auto &pio){onPIOUpdate(time, pio);});
 
@@ -172,8 +174,8 @@ void PicoSystemBoard::onGPIORead(uint64_t time, GPIO &gpio)
     // apply buttons
     int buttonMask = 0xFF0000;
 
-    gpio.setInputFloatingMask(~buttonState & buttonMask); // not pressed -> floating
-    gpio.clearInputFloatingMask(buttonState); // pressed -> pulled down
+    gpio.setInputMask(~buttonState & buttonMask); // not pressed -> pulled high
+    gpio.clearInputMask(buttonState); // pressed -> pulled down
 
     displayUpdate(time);
 }
