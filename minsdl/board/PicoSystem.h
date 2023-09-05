@@ -24,6 +24,7 @@ public:
 
 private:
     void handleDisplayCommandData(uint8_t data);
+    void updateDisplayFormat();
 
     MemoryBus &mem;
     bool isPicoSystemSDK;
@@ -34,10 +35,14 @@ private:
     unsigned int displayScanline = 0;
     ClockTarget displayClock;
     int screenDataOff = 0;
+    int displayFormat = 0;
 
     int displayCommand = -1;
     int displayCommandOff = 0;
     uint8_t displayCommandData[4];
+
+    // some registers (picosystem-sdk values by default as we don't handle SPI yet)
+    uint8_t pixelFormat = 0x03, addressMode = 0x04;
 
     ClockTarget audioClock;
     bool lastAudioVal = false;

@@ -9,6 +9,8 @@ using Logging::logf;
 using LogLevel = Logging::Level;
 constexpr auto logComponent = Logging::Component::Board;
 
+extern void updateScreenSettings(); // TODO: declare this... somewhere
+
 static const std::unordered_map<SDL_Keycode, int> picosystemKeyMap {
     {SDLK_RIGHT,  1 << 21},
     {SDLK_LEFT,   1 << 22},
@@ -43,6 +45,8 @@ PicoSystemBoard::PicoSystemBoard(MemoryBus &mem, bool picosystemSDK) : mem(mem),
 
     audioClock.setFrequency(48000);
     clocks.addClockTarget(-1, audioClock);
+
+    updateDisplayFormat();
 }
 
 void PicoSystemBoard::getScreenSize(int &w, int &h)
@@ -53,11 +57,7 @@ void PicoSystemBoard::getScreenSize(int &w, int &h)
 
 int PicoSystemBoard::getScreenFormat()
 {
-    // TODO: implement screen registers instead of guessing
-    if(isPicoSystemSDK)
-        return SDL_PIXELFORMAT_ARGB4444;
-    else // assume 32blit-sdk
-        return SDL_PIXELFORMAT_BGR565;
+    return displayFormat;
 }
 
 const uint8_t *PicoSystemBoard::getScreenData()
@@ -309,6 +309,8 @@ void PicoSystemBoard::handleDisplayCommandData(uint8_t data)
 
         case 0x36: // set address mode
         {
+            addressMode = data;
+
             bool mh  = data & (1 << 2);
             bool rgb = data & (1 << 3);
             bool ml  = data & (1 << 4);
@@ -317,11 +319,16 @@ void PicoSystemBoard::handleDisplayCommandData(uint8_t data)
             bool my  = data & (1 << 7);
             logf(LogLevel::Debug, logComponent, "display addr mode:%s%s%s%s%s%s",
                  mh ? " MH" : "", rgb ? " RGB" : "", ml ? " ML" : "", mv ? " MV" : "", mx ? " MX" : "", my ? " MY" : "");
+            
+            updateDisplayFormat();
             break;
         }
 
         case 0x3A: // set pixel format
+            pixelFormat = data;
             logf(LogLevel::Debug, logComponent, "display format %x", data & 7);
+
+            updateDisplayFormat();
             break;
 
 
@@ -340,5 +347,32 @@ void PicoSystemBoard::handleDisplayCommandData(uint8_t data)
 
         default:
             logf(LogLevel::Debug, logComponent, "display cmd %02X %i = %02X", displayCommand, displayCommandOff, data);
+    }
+}
+
+void PicoSystemBoard::updateDisplayFormat()
+{
+    bool bgr = addressMode & (1 << 3); // bit is called "RGB", but RGB=1 means BGR...
+
+    SDL_PixelFormatEnum newFormat;
+
+    switch(pixelFormat & 0x7)
+    {
+        case 3: // 12-bit
+            newFormat = bgr ? SDL_PIXELFORMAT_BGRA4444 : SDL_PIXELFORMAT_ARGB4444;
+            break;
+        case 5: // 16-bit
+            newFormat = bgr ? SDL_PIXELFORMAT_BGR565 : SDL_PIXELFORMAT_RGB565;
+            break;
+        // case 6: // 18-bit
+
+        default:
+            newFormat = SDL_PIXELFORMAT_UNKNOWN;
+    }
+
+    if(newFormat != displayFormat)
+    {
+        displayFormat = newFormat;
+        updateScreenSettings();
     }
 }
