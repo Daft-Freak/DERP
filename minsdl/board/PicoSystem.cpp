@@ -253,8 +253,6 @@ void PicoSystemBoard::onPIOUpdate(uint64_t time, PIO &pio)
                     lores = false;
             }
 
-            // FIXME: picosystem-sdk hires
-            
             screenData[screenDataOff++] = data & 0xFFFF;
             if(lores)
                 screenData[screenDataOff++] = data & 0xFFFF;
