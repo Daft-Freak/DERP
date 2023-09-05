@@ -248,7 +248,6 @@ int main(int argc, char *argv[])
 
     std::thread gdbServerThread;
 
-    bool picosystemSDK = false;
     bool usbEnabled = false;
     bool gdbEnabled = false;
 
@@ -267,7 +266,11 @@ int main(int argc, char *argv[])
         if(arg == "--scale" && i + 1 < argc)
             screenScale = std::stoi(argv[++i]);
         else if(arg == "--picosystem-sdk")
-            picosystemSDK = true;
+        {
+            // picosystem SDK does not require the correct board to be set... so most uf2s don't
+            boardId = BoardId::PimoroniPicoSystem;
+            logf(LogLevel::Warning, logComponent, "Use --board pimoroni_picosystem instead of --picosystem-sdk");
+        }
         else if(arg == "--board" && i + 1 < argc)
             boardId = stringToBoard(argv[++i]);
         else if(arg == "--usb")
@@ -310,10 +313,6 @@ int main(int argc, char *argv[])
             logf(LogLevel::Error, logComponent, "Failed to open UF2 \"%s\"", romFilename.c_str());
             return 1;
         }
-
-        // picosystem SDK does not require the correct board to be set... so most uf2s don't
-        if(picosystemSDK)
-            boardId = BoardId::PimoroniPicoSystem;
     }
 
     // default board if still not set
@@ -350,7 +349,7 @@ int main(int argc, char *argv[])
     switch(boardId)
     {
         case BoardId::PimoroniPicoSystem:
-            board = new PicoSystemBoard(mem, picosystemSDK);
+            board = new PicoSystemBoard(mem);
             break;
 
         case BoardId::PimoroniTufty2040:

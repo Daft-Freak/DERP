@@ -23,7 +23,7 @@ static const std::unordered_map<SDL_Keycode, int> picosystemKeyMap {
     {SDLK_v,      1 << 16},
 };
 
-PicoSystemBoard::PicoSystemBoard(MemoryBus &mem, bool picosystemSDK) : mem(mem), isPicoSystemSDK(picosystemSDK)
+PicoSystemBoard::PicoSystemBoard(MemoryBus &mem) : mem(mem)
 {
     auto &clocks = mem.getClocks();
 

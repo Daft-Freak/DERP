@@ -9,7 +9,7 @@ class PIO;
 class PicoSystemBoard final : public Board
 {
 public:
-    PicoSystemBoard(MemoryBus &mem, bool picosystemSDK);
+    PicoSystemBoard(MemoryBus &mem);
 
     void getScreenSize(int &w, int &h) override;
     int getScreenFormat() override;
@@ -27,7 +27,6 @@ private:
     void updateDisplayFormat();
 
     MemoryBus &mem;
-    bool isPicoSystemSDK;
 
     uint32_t buttonState = 0;
 
