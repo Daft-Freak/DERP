@@ -37,7 +37,7 @@ PicoSystemBoard::PicoSystemBoard(MemoryBus &mem, bool picosystemSDK) : mem(mem),
 
     mem.getPWM().setOutputCallback([this](auto time, auto pwm){onPWMUpdate(time, pwm);}, 1 << 11); // audio
 
-    const int fps = picosystemSDK ? 40 : 50;
+    const int fps = 40; // default to picosystem sdk setting
     displayClock.setFrequency(fps * 240);
     clocks.addClockTarget(-1, displayClock);
 
@@ -323,6 +323,20 @@ void PicoSystemBoard::handleDisplayCommandData(uint8_t data)
         case 0x3A: // set pixel format
             logf(LogLevel::Debug, logComponent, "display format %x", data & 7);
             break;
+
+
+        case 0xC6: // frame rate control
+        {
+            int rtna = data & 0x1F;
+            int fpa = 0xC, bpa = 0xC; // assuming defaults
+
+            // datasheet says 10MHz, but 10.24 matches the results in the table...
+            int framerate = 10240000 / ((320 + fpa + bpa) * (250 + rtna * 16));
+            logf(LogLevel::Debug, logComponent, "display fps %i", framerate);
+
+            displayClock.setFrequency(framerate * 240);
+            break;
+        }
 
         default:
             logf(LogLevel::Debug, logComponent, "display cmd %02X %i = %02X", displayCommand, displayCommandOff, data);
