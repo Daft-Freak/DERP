@@ -1,3 +1,5 @@
+#include <cassert>
+
 #include <SDL.h>
 
 #include "PicoSystem.h"
@@ -229,7 +231,12 @@ void PicoSystemBoard::onPIOUpdate(uint64_t time, PIO &pio)
                 {
                     displayCommand = data & 0xFF;
                     displayCommandOff = 0;
-                    screenDataOff = 0;
+
+                    if(displayCommand == 0x2C)
+                    {
+                        screenDataOffX = windowMinX;
+                        screenDataOffY = windowMinY;
+                    }
                 }
                 else
                 {
@@ -240,10 +247,15 @@ void PicoSystemBoard::onPIOUpdate(uint64_t time, PIO &pio)
             else
             {
                 // hires data
-                screenData[screenDataOff++] = data & 0xFFFF;
+                screenData[screenDataOffX + screenDataOffY * 240] = data & 0xFFFF;
 
-                if(screenDataOff == 240 * 240)
-                    screenDataOff = 0;
+                if(screenDataOffX++ == windowMaxX)
+                {
+                    screenDataOffX = windowMinX;
+
+                    if(screenDataOffY++ == windowMaxY)
+                        screenDataOffY = windowMinY;
+                }
             }
         }
         else
@@ -265,15 +277,26 @@ void PicoSystemBoard::onPIOUpdate(uint64_t time, PIO &pio)
                     lores = false;
             }
 
-            screenData[screenDataOff++] = data & 0xFFFF;
+            auto offset = screenDataOffX + screenDataOffY * 240;
+
+            screenData[offset++] = data & 0xFFFF;
             if(lores)
-                screenData[screenDataOff++] = data & 0xFFFF;
-            screenData[screenDataOff++] = data >> 16;
+                screenData[offset++] = data & 0xFFFF;
+            screenData[offset++] = data >> 16;
             if(lores)
-                screenData[screenDataOff++] = data >> 16;
+                screenData[offset++] = data >> 16;
         
-            if(screenDataOff == 240 * 240)
-                screenDataOff = 0;
+            // update offset
+            screenDataOffX += lores ? 3 : 1;
+            assert(screenDataOffX <= windowMaxX);
+
+            if(screenDataOffX++ == windowMaxX)
+            {
+                screenDataOffX = windowMinX;
+
+                if(screenDataOffY++ == windowMaxY)
+                    screenDataOffY = windowMinY;
+            }
         }
     }
 
@@ -294,6 +317,9 @@ void PicoSystemBoard::handleDisplayCommandData(uint8_t data)
                 auto start = displayCommandData[0] << 8 | displayCommandData[1];
                 auto end = displayCommandData[2] << 8 | displayCommandData[3];
                 logf(LogLevel::Debug, logComponent, "display cols %i -> %i", start, end);
+
+                windowMinX = start;
+                windowMaxX = end;
             }
             break;
         }
@@ -304,6 +330,9 @@ void PicoSystemBoard::handleDisplayCommandData(uint8_t data)
                 auto start = displayCommandData[0] << 8 | displayCommandData[1];
                 auto end = displayCommandData[2] << 8 | displayCommandData[3];
                 logf(LogLevel::Debug, logComponent, "display rows %i -> %i", start, end);
+
+                windowMinY = start;
+                windowMaxY = end;
             }
             break;
         }

@@ -33,7 +33,7 @@ private:
     uint16_t screenData[240 * 240];
     unsigned int displayScanline = 0;
     ClockTarget displayClock;
-    int screenDataOff = 0;
+    int screenDataOffX = 0, screenDataOffY = 0;
     int displayFormat = 0;
 
     int displayCommand = -1;
@@ -42,6 +42,7 @@ private:
 
     // some registers (picosystem-sdk values by default as we don't handle SPI yet)
     uint8_t pixelFormat = 0x03, addressMode = 0x04;
+    uint16_t windowMinX = 0, windowMinY = 0, windowMaxX = 239, windowMaxY = 239;
 
     ClockTarget audioClock;
     bool lastAudioVal = false;
