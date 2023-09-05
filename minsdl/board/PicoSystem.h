@@ -23,6 +23,8 @@ public:
     void update(uint64_t time) override;
 
 private:
+    void handleDisplayCommandData(uint8_t data);
+
     MemoryBus &mem;
     bool isPicoSystemSDK;
 
@@ -32,6 +34,10 @@ private:
     unsigned int displayScanline = 0;
     ClockTarget displayClock;
     int screenDataOff = 0;
+
+    int displayCommand = -1;
+    int displayCommandOff = 0;
+    uint8_t displayCommandData[4];
 
     ClockTarget audioClock;
     bool lastAudioVal = false;

@@ -223,8 +223,19 @@ void PicoSystemBoard::onPIOUpdate(uint64_t time, PIO &pio)
             if(pullThresh == 8)
             {
                 // commands
-                logf(LogLevel::Debug, logComponent, "ps display cmd %02X", data & 0xFF);
-                screenDataOff = 0;
+                bool dc = mem.getGPIO().getPadState() & (1 << 9);
+
+                if(!dc)
+                {
+                    displayCommand = data & 0xFF;
+                    displayCommandOff = 0;
+                    screenDataOff = 0;
+                }
+                else
+                {
+                    handleDisplayCommandData(data & 0xFF);
+                    displayCommandOff++;
+                }
             }
             else
             {
@@ -266,4 +277,54 @@ void PicoSystemBoard::onPIOUpdate(uint64_t time, PIO &pio)
     }
 
     pio.updateFifoStatus();
+}
+
+void PicoSystemBoard::handleDisplayCommandData(uint8_t data)
+{
+    if(displayCommandOff < 4)
+        displayCommandData[displayCommandOff] = data;
+
+    switch(displayCommand)
+    {
+        case 0x2A: // set column address
+        {
+            if(displayCommandOff == 3)
+            {
+                auto start = displayCommandData[0] << 8 | displayCommandData[1];
+                auto end = displayCommandData[2] << 8 | displayCommandData[3];
+                logf(LogLevel::Debug, logComponent, "display cols %i -> %i", start, end);
+            }
+            break;
+        }
+        case 0x2B: // set row address
+        {
+            if(displayCommandOff == 3)
+            {
+                auto start = displayCommandData[0] << 8 | displayCommandData[1];
+                auto end = displayCommandData[2] << 8 | displayCommandData[3];
+                logf(LogLevel::Debug, logComponent, "display rows %i -> %i", start, end);
+            }
+            break;
+        }
+
+        case 0x36: // set address mode
+        {
+            bool mh  = data & (1 << 2);
+            bool rgb = data & (1 << 3);
+            bool ml  = data & (1 << 4);
+            bool mv  = data & (1 << 5);
+            bool mx  = data & (1 << 6);
+            bool my  = data & (1 << 7);
+            logf(LogLevel::Debug, logComponent, "display addr mode:%s%s%s%s%s%s",
+                 mh ? " MH" : "", rgb ? " RGB" : "", ml ? " ML" : "", mv ? " MV" : "", mx ? " MX" : "", my ? " MY" : "");
+            break;
+        }
+
+        case 0x3A: // set pixel format
+            logf(LogLevel::Debug, logComponent, "display format %x", data & 7);
+            break;
+
+        default:
+            logf(LogLevel::Debug, logComponent, "display cmd %02X %i = %02X", displayCommand, displayCommandOff, data);
+    }
 }
