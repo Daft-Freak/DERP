@@ -251,7 +251,8 @@ void PicoSystemBoard::onPIOUpdate(uint64_t time, PIO &pio)
             // 32blit-sdk lores or picosystem-sdk
             bool lores = true;
 
-            if(isPicoSystemSDK)
+            // assume ARGB4444 == picosystem-sdk
+            if(displayFormat == SDL_PIXELFORMAT_ARGB4444)
             {
                 // picosystem sdk un-swaps in the pio program
                 data = data >> 16 | data << 16;
