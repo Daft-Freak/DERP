@@ -40,6 +40,11 @@ static std::ifstream uf2File;
 static BoardId boardId = BoardId::Unknown;
 static Board *board = nullptr;
 
+static SDL_Renderer *renderer = nullptr;
+static SDL_Texture *texture = nullptr;
+static int screenWidth = 240;
+static int screenHeight = 240;
+
 static const uint32_t uf2MagicStart0 = 0x0A324655, uf2MagicStart1 = 0x9E5D5157, uf2MagicEnd = 0x0AB16F30;
 
 struct UF2Block
@@ -229,10 +234,16 @@ static void handleLogArg(const char *arg)
     }
 }
 
+void updateScreenSettings()
+{
+    if(!renderer)
+        return;
+
+    texture = SDL_CreateTexture(renderer, board->getScreenFormat(), SDL_TEXTUREACCESS_STREAMING, screenWidth, screenHeight);
+}
+
 int main(int argc, char *argv[])
 {
-    int screenWidth = 240;
-    int screenHeight = 240;
     int screenScale = 5;
 
     std::thread gdbServerThread;
@@ -364,8 +375,6 @@ int main(int argc, char *argv[])
 
     bool boardHasScreen = screenWidth && screenHeight;
     SDL_Window *window = nullptr;
-    SDL_Renderer *renderer = nullptr;
-    SDL_Texture *texture = nullptr;
 
     if(boardHasScreen)
     {
