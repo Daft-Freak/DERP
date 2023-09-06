@@ -104,7 +104,17 @@ uint32_t PIO::regRead(uint32_t addr)
         case PIO_FSTAT_OFFSET:
             return hw.fstat;
         case PIO_FDEBUG_OFFSET:
-            return PIO_FDEBUG_TXSTALL_BITS; // all TXSTALL
+        {
+            // HACK: set txstall if FIFO empty
+            // FIXME: this is wrong but we're not running the program
+            for(unsigned i = 0; i < NUM_PIO_STATE_MACHINES; i++)
+            {
+                if(txFifo[i].empty())
+                    hw.fdebug |= 1 << (PIO_FDEBUG_TXSTALL_LSB + i);
+            }
+
+            return hw.fdebug;
+        }
 
         case PIO_SM0_CLKDIV_OFFSET:
         case PIO_SM1_CLKDIV_OFFSET:
@@ -178,6 +188,18 @@ void PIO::regWrite(uint32_t addr, uint32_t data)
             }
             return;
         }
+        
+        case PIO_FDEBUG_OFFSET:
+        {
+            if(atomic == 0)
+            {
+                hw.fdebug &= ~data;
+                return;
+            }
+            
+            break;
+        }
+
         case PIO_TXF0_OFFSET:
         case PIO_TXF1_OFFSET:
         case PIO_TXF2_OFFSET:
