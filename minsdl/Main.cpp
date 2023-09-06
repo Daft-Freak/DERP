@@ -10,11 +10,15 @@
 #include "GDBServer.h"
 #include "Logging.h"
 
+#include "board/Pico.h"
+#include "board/PicoSystem.h"
+#include "board/Tufty2040.h"
+
 using Logging::logf;
 using LogLevel = Logging::Level;
 constexpr auto logComponent = Logging::Component::Main;
 
-enum class Board
+enum class BoardId
 {
     Unknown = -1,
     Pico = 0,
@@ -33,19 +37,13 @@ static uint8_t bootROM[0x4000];
 
 static std::ifstream uf2File;
 
-static Board board = Board::Unknown;
+static BoardId boardId = BoardId::Unknown;
+static Board *board = nullptr;
 
-uint16_t screenData[320 * 240];
-
-static uint32_t buttonState = 0;
-static unsigned int displayScanline = 0;
-static ClockTarget displayClock;
-
-static ClockTarget audioClock;
-static bool lastAudioVal = false;
-static const int audioBufferSize = 1024;
-static volatile int audioReadOff = 0, audioWriteOff = 0;
-static int16_t audioSamples[audioBufferSize]{};
+static SDL_Renderer *renderer = nullptr;
+static SDL_Texture *texture = nullptr;
+static int screenWidth = 240;
+static int screenHeight = 240;
 
 static const uint32_t uf2MagicStart0 = 0x0A324655, uf2MagicStart1 = 0x9E5D5157, uf2MagicEnd = 0x0AB16F30;
 
@@ -63,50 +61,20 @@ struct UF2Block
 };
 static_assert(sizeof(UF2Block) == 512);
 
-static const std::unordered_map<SDL_Keycode, int> picosystemKeyMap {
-    {SDLK_RIGHT,  1 << 21},
-    {SDLK_LEFT,   1 << 22},
-    {SDLK_UP,     1 << 23},
-    {SDLK_DOWN,   1 << 20},
 
-    {SDLK_z,      1 << 18},
-    {SDLK_x,      1 << 19},
-    {SDLK_c,      1 << 17},
-    {SDLK_v,      1 << 16},
-};
-
-static Board stringToBoard(std::string_view str)
+static BoardId stringToBoard(std::string_view str)
 {
     if(str == "pico")
-        return Board::Pico;
+        return BoardId::Pico;
 
     if(str == "pimoroni_picosystem")
-        return Board::PimoroniPicoSystem;
+        return BoardId::PimoroniPicoSystem;
 
     if(str == "pimoroni_tufty2040")
-        return Board::PimoroniTufty2040;
+        return BoardId::PimoroniTufty2040;
 
     logf(LogLevel::Warning, logComponent, "Unknown board \"%.*s\", falling back to \"pico\"", int(str.length()), str.data()); 
-    return Board::Pico;
-}
-
-static void getBoardScreenSize(Board board, int &w, int &h)
-{
-    switch(board)
-    {
-        case Board::PimoroniPicoSystem:
-            w = 240;
-            h = 240;
-            break;
-        case Board::PimoroniTufty2040:
-            w = 320;
-            h = 240;
-            break;
-
-        default:
-            w = 0;
-            h = 0;
-    }
+    return BoardId::Pico;
 }
 
 static bool parseUF2(std::ifstream &file)
@@ -190,108 +158,13 @@ static bool parseUF2(std::ifstream &file)
                     logf(LogLevel::Info, logComponent, "\t%s: %s", idStr->second, str);
 
                 // detect board
-                if(id == 0xb63cffbb/*pico_board*/ && board == Board::Unknown)
-                    board = stringToBoard(str);
+                if(id == 0xb63cffbb/*pico_board*/ && boardId == BoardId::Unknown)
+                    boardId = stringToBoard(str);
             }
         }
     }
 
     return true;
-}
-
-// picosystem external hardware/IO
-static void displayUpdate(uint64_t time, bool forIntr = false)
-{
-    auto lines = displayClock.getCyclesToTime(time);
-
-    if(!lines)
-        return;
-
-    while(lines)
-    {
-        int step = std::max(1u, std::min(lines, 239 - displayScanline));
-        lines -= step;
-
-        displayClock.addCycles(step);
-
-        // set TE when we're on the last scanline
-        // TODO: use STE reg
-        auto newLine = (displayScanline + step) % 240;
-
-        if(newLine == 239) // now last line
-        {
-            if(forIntr)
-                mem.gpioUpdate(displayClock.getTime());
-            mem.getGPIO().setInputMask(1 << 8);
-        }
-        else if(displayScanline == 239) // was last line
-        {
-            if(forIntr)
-                mem.gpioUpdate(displayClock.getTime());
-            mem.getGPIO().clearInputMask(1 << 8);
-        }
-
-        displayScanline = newLine;
-    }
-}
-
-static int getNumAudioSamples()
-{
-    int avail = audioWriteOff - audioReadOff;
-    if(avail < 0)
-        avail += audioBufferSize;
-
-    return avail;
-}
-
-static void audioUpdate(uint64_t time)
-{
-    auto samples = audioClock.getCyclesToTime(time);
-
-    for(uint32_t i = 0; i < samples; i++)
-    {
-        while((audioWriteOff + 1) % audioBufferSize == audioReadOff);
-
-        int level = 0x1000;
-        audioSamples[audioWriteOff++] = lastAudioVal ? level : -level;
-        audioWriteOff %= audioBufferSize;
-    }
-
-    audioClock.addCycles(samples);
-}
-
-static void onGPIORead(uint64_t time, GPIO &gpio)
-{
-    // apply buttons
-    int buttonMask = 0xFF0000;
-
-    gpio.setInputFloatingMask(~buttonState & buttonMask); // not pressed -> floating
-    gpio.clearInputFloatingMask(buttonState); // pressed -> pulled down
-
-    displayUpdate(time);
-}
-
-static void onInterruptUpdate(uint64_t time, uint32_t irqMask)
-{
-    if(irqMask & (1 << 13) /*IO_IRQ_BANK0*/)
-        displayUpdate(time, true);
-}
-
-static uint64_t onGetNextInterruptTime(uint64_t time)
-{
-    if(!mem.getGPIO().interruptsEnabledOnPin(8))
-        return time;
-
-    int lines = std::max(1u, 239 - displayScanline);
-    auto ret = displayClock.getTimeToCycles(lines);
-
-    return ret;
-}
-
-static void onPWMUpdate(uint64_t time, uint16_t pwm)
-{
-    audioUpdate(time);
-    lastAudioVal = pwm & (1 << 11);
 }
 
 static void runGDBServer()
@@ -313,10 +186,9 @@ static void audioCallback(void *userdata, Uint8 *stream, int len)
     auto ptr = reinterpret_cast<int16_t *>(stream);
     for(int i = 0; i < len / 2; i++)
     {
-        while(!getNumAudioSamples() && !quit);
+        while(!board->getNumAudioSamples() && !quit);
 
-        *ptr++ = audioSamples[audioReadOff++];
-        audioReadOff %= audioBufferSize;
+        *ptr++ = board->getAudioSample();
     }
 }
 
@@ -325,22 +197,10 @@ static void pollEvents()
     SDL_Event event;
     while(SDL_PollEvent(&event))
     {
+        board->handleEvent(event);
+
         switch(event.type)
         {
-            case SDL_KEYDOWN:
-            {
-                auto it = picosystemKeyMap.find(event.key.keysym.sym);
-                if(it != picosystemKeyMap.end())
-                    buttonState |= it->second;
-                break;
-            }
-            case SDL_KEYUP:
-            {
-                auto it = picosystemKeyMap.find(event.key.keysym.sym);
-                if(it != picosystemKeyMap.end())
-                    buttonState &= ~it->second;
-                break;
-            }
             case SDL_QUIT:
                 quit = true;
                 break;
@@ -374,15 +234,20 @@ static void handleLogArg(const char *arg)
     }
 }
 
+void updateScreenSettings()
+{
+    if(!renderer)
+        return;
+
+    texture = SDL_CreateTexture(renderer, board->getScreenFormat(), SDL_TEXTUREACCESS_STREAMING, screenWidth, screenHeight);
+}
+
 int main(int argc, char *argv[])
 {
-    int screenWidth = 240;
-    int screenHeight = 240;
     int screenScale = 5;
 
     std::thread gdbServerThread;
 
-    bool picosystemSDK = false;
     bool usbEnabled = false;
     bool gdbEnabled = false;
 
@@ -401,9 +266,13 @@ int main(int argc, char *argv[])
         if(arg == "--scale" && i + 1 < argc)
             screenScale = std::stoi(argv[++i]);
         else if(arg == "--picosystem-sdk")
-            picosystemSDK = true;
+        {
+            // picosystem SDK does not require the correct board to be set... so most uf2s don't
+            boardId = BoardId::PimoroniPicoSystem;
+            logf(LogLevel::Warning, logComponent, "Use --board pimoroni_picosystem instead of --picosystem-sdk");
+        }
         else if(arg == "--board" && i + 1 < argc)
-            board = stringToBoard(argv[++i]);
+            boardId = stringToBoard(argv[++i]);
         else if(arg == "--usb")
             usbEnabled = true;
         else if(arg == "--usbip")
@@ -444,20 +313,14 @@ int main(int argc, char *argv[])
             logf(LogLevel::Error, logComponent, "Failed to open UF2 \"%s\"", romFilename.c_str());
             return 1;
         }
-
-        // picosystem SDK does not require the correct board to be set... so most uf2s don't
-        if(picosystemSDK)
-            board = Board::PimoroniPicoSystem;
     }
 
     // default board if still not set
-    if(board == Board::Unknown)
+    if(boardId == BoardId::Unknown)
     {
         logf(LogLevel::Info, logComponent, "Board not specified, falling back to \"pico\""); 
-        board = Board::Pico;
+        boardId = BoardId::Pico;
     }
-
-    getBoardScreenSize(board, screenWidth, screenHeight);
 
     // emu init
     mem.setCPUs(cpuCores);
@@ -482,24 +345,22 @@ int main(int argc, char *argv[])
 
     mem.reset();
 
-    // external hardware
-    if(board == Board::PimoroniPicoSystem)
+    // create board
+    switch(boardId)
     {
-        mem.setInterruptUpdateCallback(onInterruptUpdate);
-        mem.setGetNextInterruptTimeCallback(onGetNextInterruptTime);
+        case BoardId::PimoroniPicoSystem:
+            board = new PicoSystemBoard(mem);
+            break;
 
-        mem.getGPIO().setReadCallback(onGPIORead);
-        mem.getGPIO().clearInputFloatingMask(1 << 8); // TE
+        case BoardId::PimoroniTufty2040:
+            board = new Tufty2040Board(mem);
+            break;
 
-        mem.getPWM().setOutputCallback(onPWMUpdate, 1 << 11); // audio
-
-        const int fps = picosystemSDK ? 40 : 50;
-        displayClock.setFrequency(fps * 240);
-        clocks.addClockTarget(-1, displayClock);
-
-        audioClock.setFrequency(48000);
-        clocks.addClockTarget(-1, audioClock);
+        default:
+            board = new PicoBoard(mem);
     }
+
+    board->getScreenSize(screenWidth, screenHeight);
 
     if(gdbEnabled)
         gdbServerThread = std::thread(runGDBServer);
@@ -513,8 +374,6 @@ int main(int argc, char *argv[])
 
     bool boardHasScreen = screenWidth && screenHeight;
     SDL_Window *window = nullptr;
-    SDL_Renderer *renderer = nullptr;
-    SDL_Texture *texture = nullptr;
 
     if(boardHasScreen)
     {
@@ -526,22 +385,12 @@ int main(int argc, char *argv[])
         SDL_RenderSetLogicalSize(renderer, screenWidth, screenHeight);
         SDL_RenderSetIntegerScale(renderer, SDL_TRUE);
 
-        Uint32 format;
-
-        // TODO: implement screen registers instead of guessing
-        if(picosystemSDK)
-            format = SDL_PIXELFORMAT_ARGB4444;
-        else if(board == Board::PimoroniPicoSystem) // assume 32blit-sdk
-            format = SDL_PIXELFORMAT_BGR565;
-        else
-            format = SDL_PIXELFORMAT_RGB565;
-
-        texture = SDL_CreateTexture(renderer, format, SDL_TEXTUREACCESS_STREAMING, screenWidth, screenHeight);
+        texture = SDL_CreateTexture(renderer, board->getScreenFormat(), SDL_TEXTUREACCESS_STREAMING, screenWidth, screenHeight);
     }
 
     SDL_AudioDeviceID audioDevice = 0;
 
-    if(board == Board::PimoroniPicoSystem)
+    if(board->hasAudio())
     {
         SDL_AudioSpec spec{};
 
@@ -613,11 +462,7 @@ int main(int argc, char *argv[])
         if(gdbEnabled)
             gdbServer.getCPUMutex().unlock();
 
-        if(board == Board::PimoroniPicoSystem)
-        {
-            displayUpdate(time);
-            audioUpdate(time);
-        }
+        board->update(time);
 
         // attempt to connect USB
         if(usbEnabled)
@@ -637,7 +482,7 @@ int main(int argc, char *argv[])
         if(renderer)
         {
             // TODO: sync
-            SDL_UpdateTexture(texture, nullptr, screenData, screenWidth * 2);
+            SDL_UpdateTexture(texture, nullptr, board->getScreenData(), screenWidth * 2);
             SDL_RenderClear(renderer);
             SDL_RenderCopy(renderer, texture, nullptr, nullptr);
             SDL_RenderPresent(renderer);
@@ -653,6 +498,8 @@ int main(int argc, char *argv[])
 
     if(audioDevice)
         SDL_CloseAudioDevice(audioDevice);
+
+    delete board;
 
     if(gdbEnabled)
         gdbServerThread.join();

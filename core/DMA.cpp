@@ -55,7 +55,10 @@ void DMA::update(uint64_t target)
     for(uint32_t cycle = 0; cycle < passed; cycle++)
     {
         if(!channelTriggered)
+        {
+            clock.addCycles(passed - cycle);
             break;
+        }
 
         for(int i = 0; i < numChannels; i++, curChannel++)
         {
@@ -74,21 +77,6 @@ void DMA::update(uint64_t target)
             {
                 auto val = mem.read<uint8_t>(this, readAddr[curChannel], cycles, false);
                 mem.write(this, writeAddr[curChannel], val, cycles, false);
-
-                // tufty hax
-                if(writeAddr[curChannel] == 0x50300010 /*PIO1 TXF0*/)
-                {
-                    static int off = 0;
-                    extern uint16_t screenData[];
-
-                    auto screenData8 = reinterpret_cast<uint8_t *>(screenData);
-                    screenData8[off ^ 1] = val;
-                    off++;
-
-                    if(off == 320 * 240 * 2)
-                        off = 0;
-                }
-
             }
             else if(transferSize == 2)
             {
@@ -97,18 +85,6 @@ void DMA::update(uint64_t target)
                     val = val >> 8 | val << 8;
 
                 mem.write(this, writeAddr[curChannel], val, cycles, false);
-
-                // picosystem hax (hires)
-                if(writeAddr[curChannel] == 0x50200010 /*PIO0 TXF0*/)
-                {
-                    static int off = 0;
-                    extern uint16_t screenData[];
-
-                    screenData[off++] = val;
-
-                    if(off == 240 * 240)
-                        off = 0;
-                }
             }
             else
             {
@@ -117,25 +93,6 @@ void DMA::update(uint64_t target)
                     val = val >> 24 | val << 24 | (val & 0xFF00) << 8 | (val & 0xFF0000) >> 8;
 
                 mem.write(this, writeAddr[curChannel], val, cycles, false);
-
-                // picosystem hax (lores)
-                if(writeAddr[curChannel] == 0x50200010 /*PIO0 TXF0*/)
-                {
-                    static int off = 0;
-                    extern uint16_t screenData[];
-
-                    // picosystem sdk unswaps in the pio program
-                    if(bswap)
-                        val = val >> 16 | val << 16;
-
-                    screenData[off++] = val;
-                    screenData[off++] = val;
-                    screenData[off++] = val >> 16;
-                    screenData[off++] = val >> 16;
-
-                    if(off == 240 * 240)
-                        off = 0;
-                }
             }
 
             if(ctrl[curChannel] & DMA_CH0_CTRL_TRIG_INCR_READ_BITS)
@@ -157,9 +114,9 @@ void DMA::update(uint64_t target)
             }
             break;
         }
-    }
 
-    clock.addCycles(passed);
+        clock.addCycles(1);
+    }
 }
 
 uint64_t DMA::getNextInterruptTime(uint64_t target)
@@ -320,4 +277,9 @@ void DMA::regWrite(uint32_t addr, uint32_t data)
 
         logf(LogLevel::NotImplemented, logComponent, "W %03X%s%08X", addr, op[atomic], data);
     }
+}
+
+bool DMA::isChannelActive(int ch) const
+{
+    return channelTriggered & (1 << ch);
 }

@@ -42,6 +42,8 @@ namespace Logging
                 return "other";
             case Component::ArmCore:
                 return "armcore";
+            case Component::Board:
+                return "board";
             case Component::Clocks:
                 return "clocks";
             case Component::DMA:
@@ -56,6 +58,8 @@ namespace Logging
                 return "main";
             case Component::MemoryBus:
                 return "membus";
+            case Component::PIO:
+                return "pio";
             case Component::PWM:
                 return "pwm";
             case Component::Timer:
@@ -95,6 +99,8 @@ namespace Logging
             return Component::Other;
         if(str == "armcore")
             return Component::ArmCore;
+        if(str == "board")
+            return Component::Board;
         if(str == "clocks")
             return Component::Clocks;
         if(str == "dma")
@@ -109,6 +115,8 @@ namespace Logging
             return Component::Main;
         if(str == "membus")
             return Component::MemoryBus;
+        if(str == "pio")
+            return Component::PIO;
         if(str == "pwm")
             return Component::PWM;
         if(str == "timer")

@@ -73,6 +73,8 @@ public:
 
     void setReadCallback(ReadCallback cb);
 
+    uint32_t getPadState() const {return padState;}
+
     void openLogFile(const char *filename);
     void closeLogFile();
 

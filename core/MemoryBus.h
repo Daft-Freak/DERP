@@ -10,6 +10,7 @@
 #include "GPIO.h"
 #include "FIFO.h"
 #include "I2C.h"
+#include "PIO.h"
 #include "PWM.h"
 #include "Timer.h"
 #include "UART.h"
@@ -88,7 +89,9 @@ public:
     PWM &getPWM() {return pwm;}
     Watchdog &getWatchdog() {return watchdog;}
 
+    DMA &getDMA() {return dma;}
     USB &getUSB() {return usb;}
+    PIO &getPIO(int i) {return pio[i];}
 
 private:
     template<class T, size_t size>
@@ -167,6 +170,8 @@ private:
     DMA dma;
 
     USB usb;
+
+    PIO pio[2];
 
     uint64_t nextInterruptTime;
 

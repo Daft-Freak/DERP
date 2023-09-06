@@ -26,6 +26,7 @@ namespace Logging
         Other = 0,
 
         ArmCore,
+        Board,
         Clocks,
         DMA,
         GDB,
@@ -33,6 +34,7 @@ namespace Logging
         I2C,
         Main,
         MemoryBus,
+        PIO,
         PWM,
         Timer,
         UART,

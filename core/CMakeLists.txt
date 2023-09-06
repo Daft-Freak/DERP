@@ -11,6 +11,7 @@ target_sources(DERPCore INTERFACE
     I2C.cpp
     Logging.cpp
     MemoryBus.cpp
+    PIO.cpp
     PWM.cpp
     Timer.cpp
     UART.cpp
