@@ -89,6 +89,7 @@ public:
     PWM &getPWM() {return pwm;}
     Watchdog &getWatchdog() {return watchdog;}
 
+    DMA &getDMA() {return dma;}
     USB &getUSB() {return usb;}
     PIO &getPIO(int i) {return pio[i];}
 

@@ -214,7 +214,11 @@ void PicoSystemBoard::onPIOUpdate(uint64_t time, PIO &pio)
     if(txFifo.empty())
         return;
 
-    while(!txFifo.empty())
+    // avoid entirely emptying FIFO while DMA is active
+    // (workaround for PIO brokenness)
+    int minLevel = mem.getDMA().isChannelActive(0) ? 1 : 0;
+
+    while(txFifo.getCount() > minLevel)
     {
         auto data = txFifo.pop();
 

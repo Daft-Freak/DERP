@@ -278,3 +278,8 @@ void DMA::regWrite(uint32_t addr, uint32_t data)
         logf(LogLevel::NotImplemented, logComponent, "W %03X%s%08X", addr, op[atomic], data);
     }
 }
+
+bool DMA::isChannelActive(int ch) const
+{
+    return channelTriggered & (1 << ch);
+}

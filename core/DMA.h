@@ -29,6 +29,8 @@ public:
 
     ClockTarget &getClock() {return clock;}
 
+    bool isChannelActive(int ch) const;
+
 private:
     MemoryBus &mem;
 
