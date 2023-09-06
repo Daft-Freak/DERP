@@ -1050,10 +1050,14 @@ uint32_t MemoryBus::doAHBPeriphRead(ClockTarget &masterClock, uint32_t addr)
     auto peripheral = static_cast<AHBPeripheral>((addr >> 20) & 0xF);
     auto periphAddr = addr & 0xFFFF;
 
+    // update DMA for any periph read
+    // TODO: any access that DMA could affect, possibly filter by dest addrs
+    dma.update(masterClock.getTime());
+
     switch(peripheral)
     {
         case AHBPeripheral::DMA:
-            dma.update(masterClock.getTime());
+            //dma.update(masterClock.getTime());
             return dma.regRead(periphAddr);
 
         case AHBPeripheral::USB:
