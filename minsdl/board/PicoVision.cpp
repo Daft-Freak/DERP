@@ -11,8 +11,11 @@ constexpr auto logComponent = Logging::Component::Board;
 
 PicoVisionBoard::PicoVisionBoard(MemoryBus &mem) : mem(mem)
 {
+    mem.getGPIO().setReadCallback([this](auto time, auto &gpio){onGPIORead(time, gpio);});
     mem.getGPIO().clearInputFloatingMask(1 << 16); // vsync
-    mem.getGPIO().setInputMask(1 << 16); // TODO
+
+    displayClock.setFrequency(60 * 1000);
+    mem.getClocks().addClockTarget(-1, displayClock);
 
     mem.getPIO(1).setUpdateCallback([this](auto time, auto &pio){onPIOUpdate(time, pio);});
 }
@@ -33,6 +36,53 @@ int PicoVisionBoard::getScreenFormat()
 const uint8_t *PicoVisionBoard::getScreenData()
 {
     return reinterpret_cast<uint8_t *>(screenData);
+}
+
+void PicoVisionBoard::update(uint64_t time)
+{
+    displayUpdate(time);
+}
+
+void PicoVisionBoard::displayUpdate(uint64_t time, bool forIntr)
+{
+    auto ticks = displayClock.getCyclesToTime(time);
+
+    if(!ticks)
+        return;
+
+    while(ticks)
+    {
+        // tick 60 * 1000 times a second to create a short vsync pulse
+        const uint32_t numDisplayTicks = 1000;
+
+        int step = std::max(1u, std::min(ticks, numDisplayTicks - 1 - displayTick));
+        ticks -= step;
+
+        displayClock.addCycles(step);
+
+        // set/clear vsync
+        auto newTick = (displayTick + step) % numDisplayTicks;
+
+        if(newTick == numDisplayTicks - 1) // now last tick
+        {
+            if(forIntr)
+                mem.gpioUpdate(displayClock.getTime());
+            mem.getGPIO().setInputMask(1 << 16);
+        }
+        else if(displayTick == numDisplayTicks - 1) // was last tick
+        {
+            if(forIntr)
+                mem.gpioUpdate(displayClock.getTime());
+            mem.getGPIO().clearInputMask(1 << 16);
+        }
+
+        displayTick = newTick;
+    }
+}
+
+void PicoVisionBoard::onGPIORead(uint64_t time, GPIO &gpio)
+{
+    displayUpdate(time);
 }
 
 void PicoVisionBoard::onPIOUpdate(uint64_t time, PIO &pio)
