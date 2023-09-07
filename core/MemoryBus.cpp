@@ -995,7 +995,7 @@ void MemoryBus::doAPBPeriphWrite(ClockTarget &masterClock, uint32_t addr, T data
             i2c[0].regWrite(periphAddr, data);
             return;
         case APBPeripheral::I2C1:
-            i2c[0].regWrite(periphAddr, data);
+            i2c[1].regWrite(periphAddr, data);
             return;
 
         case APBPeripheral::PWM:
