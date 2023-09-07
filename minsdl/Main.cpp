@@ -498,9 +498,12 @@ int main(int argc, char *argv[])
         if(renderer)
         {
             // TODO: sync
-            SDL_UpdateTexture(texture, nullptr, board->getScreenData(), screenWidth * 2);
+            int fmtSize = board->getScreenFormat() == SDL_PIXELFORMAT_BGR24 ? 3 : 2; // so far the only 3 byte format
+            SDL_UpdateTexture(texture, nullptr, board->getScreenData(), screenWidth * fmtSize);
+
             SDL_RenderClear(renderer);
             SDL_RenderCopy(renderer, texture, nullptr, nullptr);
+
             SDL_RenderPresent(renderer);
         }
     }

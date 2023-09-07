@@ -23,7 +23,7 @@ public:
 private:
     MemoryBus &mem;
 
-    uint16_t screenData[640 * 480];
+    uint8_t screenData[800 * 600 * 3];
 
     ClockTarget displayClock;
     int displayTick = 0;
@@ -39,6 +39,7 @@ private:
     uint8_t psramData[2][8 * 1024 * 1024];
 
     void displayUpdate(uint64_t time, bool forIntr = false);
+    void updateScreenData();
 
     void onGPIORead(uint64_t time, GPIO &gpio);
 
