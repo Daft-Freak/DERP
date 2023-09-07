@@ -522,6 +522,7 @@ int main(int argc, char *argv[])
             SDL_UpdateTexture(texture, nullptr, board->getScreenData(), screenWidth * boardPixelStride);
             SDL_RenderClear(renderer);
             SDL_RenderCopy(renderer, texture, nullptr, nullptr);
+
             SDL_RenderPresent(renderer);
         }
     }
