@@ -120,6 +120,10 @@ uint32_t PIO::regRead(uint32_t addr)
             return hw.fdebug;
         }
 
+        case PIO_IRQ_OFFSET:
+            logf(LogLevel::NotImplemented, logComponent, "%i R %04X", index, addr);
+            return 1; // PicoVision hack (causes swd load to fail instead of hang)
+
         case PIO_SM0_CLKDIV_OFFSET:
         case PIO_SM1_CLKDIV_OFFSET:
         case PIO_SM2_CLKDIV_OFFSET:
