@@ -83,6 +83,7 @@ uint64_t Timer::getNextInterruptTime(uint64_t target)
         return target;
 
     // assumes watchdog is up to date
+    auto &watchdog = mem.getWatchdog();
 
     for(int i = 0; i < 4; i++)
     {
@@ -91,7 +92,11 @@ uint64_t Timer::getNextInterruptTime(uint64_t target)
 
         int ticksToIntr = alarms[i] - (time & 0xFFFFFFFF);
 
-        auto tickTarget = mem.getWatchdog().getTickTarget(ticksToIntr);
+        auto tickTarget = watchdog.getTickTarget(ticksToIntr);
+
+        // if the clock has overflowed, the event if far enough in the future to not worry about yet
+        if(tickTarget < watchdog.getClock().getTime())
+            continue;
 
         if(tickTarget < target)
             target = tickTarget;
