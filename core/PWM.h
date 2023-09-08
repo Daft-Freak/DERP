@@ -47,6 +47,8 @@ private:
     uint16_t ccBInternal[NUM_PWM_SLICES];
     uint16_t topInternal[NUM_PWM_SLICES];
 
+    uint8_t sliceEnabled = 0;
+
     uint16_t outputs;
 
     OutputCallback outputCallback;

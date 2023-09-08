@@ -47,13 +47,20 @@ void PWM::update(uint64_t target)
 {
     auto cycles = clock.getCyclesToTime(target);
 
+    if(!sliceEnabled && !outputs)
+    {
+        clock.addCycles(cycles);
+        return;
+    }
+
     while(cycles)
     {
         // find update step
         auto step = cycles;
-        for(unsigned i = 0; i < NUM_PWM_SLICES; i++)
+        auto enabled = sliceEnabled;
+        for(unsigned i = 0; i < NUM_PWM_SLICES && enabled; i++, enabled >>= 1)
         {
-            if(!hw.slice[i].csr & PWM_CH0_CSR_EN_BITS)
+            if(!(enabled & 1))
                 continue;
 
             // first one of TOP or CC A/B that we haven't hit yet
@@ -77,9 +84,11 @@ void PWM::update(uint64_t target)
         auto oldOutputs = outputs;
 
         // update
-        for(unsigned i = 0; i < NUM_PWM_SLICES; i++)
+        unsigned i = 0;
+        enabled = sliceEnabled;
+        for(; i < NUM_PWM_SLICES && enabled; i++, enabled >>= 1)
         {
-            if(!hw.slice[i].csr & PWM_CH0_CSR_EN_BITS)
+            if(!(enabled & 1))
             {
                 outputs &= ~(3 << (i * 2));
                 continue;
@@ -124,6 +133,10 @@ void PWM::update(uint64_t target)
                 }
             }
         }
+
+        // clear any remaining slices
+        if(i < NUM_PWM_SLICES && outputs)
+            outputs &= ~(0xFFFF << (i * 2));
 
         if(outputs != oldOutputs)
         {
@@ -200,6 +213,11 @@ void PWM::regWrite(uint32_t addr, uint32_t data)
                 {
                     if(hw.slice[slice].csr & ~PWM_CH0_CSR_EN_BITS)
                         logf(LogLevel::NotImplemented, logComponent, "W CH%i_CSR = %08X", slice, data);
+
+                    if(hw.slice[slice].csr & PWM_CH0_CSR_EN_BITS)
+                        sliceEnabled |= 1 << slice;
+                    else
+                        sliceEnabled &= ~(1 << slice);
                 }
                 return;
             case PWM_CH0_DIV_OFFSET:
