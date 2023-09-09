@@ -39,6 +39,9 @@ void DMA::reset()
     for(auto &reg : ctrl)
         reg = DMA_CH0_CTRL_TRIG_RESET;
 
+    for(auto &t : transfersInProgress)
+        t = 0;
+
     interrupts = 0;
     interruptEnables[0] = interruptEnables[1] = 0;
 
@@ -50,69 +53,125 @@ void DMA::update(uint64_t target)
     auto passed = clock.getCyclesToTime(target);
 
 
-    // TODO: DREQ, FIFOs, priority, ring, chaining, bswap, sniff...
+    // TODO: DREQ, priority, ring, chaining, sniff...
 
     for(uint32_t cycle = 0; cycle < passed; cycle++)
     {
-        if(!channelTriggered)
+        if(!channelTriggered && writeAddressFifo.empty())
         {
             clock.addCycles(passed - cycle);
             break;
         }
 
-        for(int i = 0; i < numChannels; i++, curChannel++)
+        // transfer write data
+        if(!transferDataFifo.empty() && curWriteChannel >= 0)
         {
-            if(curChannel == numChannels)
-                curChannel = 0;
-
-            if(!(channelTriggered & (1 << curChannel)) || !(ctrl[curChannel] & DMA_CH0_CTRL_TRIG_EN_BITS))
-                continue;
-
-            bool bswap = ctrl[curChannel] & DMA_CH0_CTRL_TRIG_BSWAP_BITS;
-
-            int transferSize = 1 << ((ctrl[curChannel] & DMA_CH0_CTRL_TRIG_DATA_SIZE_BITS) >> DMA_CH0_CTRL_TRIG_DATA_SIZE_LSB);
+            int transferSize = 1 << ((ctrl[curWriteChannel] & DMA_CH0_CTRL_TRIG_DATA_SIZE_BITS) >> DMA_CH0_CTRL_TRIG_DATA_SIZE_LSB);
 
             int cycles; // TODO
+            uint32_t val = transferDataFifo.pop();
+
             if(transferSize == 1)
+                mem.write<uint8_t>(this, curWriteAddr, val, cycles);
+            else if(transferSize == 2)
+                mem.write<uint16_t>(this, curWriteAddr, val, cycles);
+            else
+                mem.write<uint32_t>(this, curWriteAddr, val, cycles);
+
+            transfersInProgress[curWriteChannel]--;
+            
+            // decrement count/finish
+            if(--transferCount[curWriteChannel] == 0)
             {
-                auto val = mem.read<uint8_t>(this, readAddr[curChannel], cycles);
-                mem.write(this, writeAddr[curChannel], val, cycles);
+                channelTriggered &= ~(1 << curWriteChannel); // done
+
+                interrupts |= (1 << curWriteChannel);
+            
+                if(interruptEnables[0] & (1 << curWriteChannel))
+                    mem.setPendingIRQ(DMA_IRQ_0);
+                if(interruptEnables[1] & (1 << curWriteChannel))
+                    mem.setPendingIRQ(DMA_IRQ_1);
             }
+    
+            curWriteChannel = -1;
+        }
+
+        // set write address
+        if(!writeAddressFifo.empty() && !transferDataFifo.empty() && curWriteChannel == -1)
+        {
+            curWriteChannel = writeChannelFifo.pop();
+            curWriteAddr = writeAddressFifo.pop();
+        }
+
+        // transfer read data
+        if(!transferDataFifo.full() && curReadChannel >= 0)
+        {
+            int transferSize = 1 << ((ctrl[curReadChannel] & DMA_CH0_CTRL_TRIG_DATA_SIZE_BITS) >> DMA_CH0_CTRL_TRIG_DATA_SIZE_LSB);
+            bool bswap = ctrl[curReadChannel] & DMA_CH0_CTRL_TRIG_BSWAP_BITS;
+            
+            int cycles; // TODO
+            uint32_t val;
+
+            if(transferSize == 1)
+                val = mem.read<uint8_t>(this, curReadAddr, cycles);
             else if(transferSize == 2)
             {
-                auto val = mem.read<uint16_t>(this, readAddr[curChannel], cycles);
+                val = mem.read<uint16_t>(this, curReadAddr, cycles);
                 if(bswap)
                     val = val >> 8 | val << 8;
-
-                mem.write(this, writeAddr[curChannel], val, cycles);
             }
             else
             {
-                auto val = mem.read<uint32_t>(this, readAddr[curChannel], cycles);
+                val = mem.read<uint32_t>(this, curReadAddr, cycles);
                 if(bswap)
                     val = val >> 24 | val << 24 | (val & 0xFF00) << 8 | (val & 0xFF0000) >> 8;
-
-                mem.write(this, writeAddr[curChannel], val, cycles);
             }
 
-            if(ctrl[curChannel] & DMA_CH0_CTRL_TRIG_INCR_READ_BITS)
-                readAddr[curChannel] += transferSize;
+            transferDataFifo.push(val);
+            curReadChannel = -1;
+        }
 
-            if(ctrl[curChannel] & DMA_CH0_CTRL_TRIG_INCR_WRITE_BITS)
-                writeAddr[curChannel] += transferSize;
+        // set read address
+        if(!readAddressFifo.empty() && !transferDataFifo.full()/*?*/ && curReadChannel == -1)
+        {
+            curReadChannel = readChannelFifo.pop();
+            curReadAddr = readAddressFifo.pop();
+        }
 
-            if(--transferCount[curChannel] == 0)
+        // address generation
+        if(!readAddressFifo.full() && !writeAddressFifo.full())
+        {
+            for(int i = 0; i < numChannels; i++, curChannel++)
             {
-                channelTriggered &= ~(1 << curChannel); // done
+                if(curChannel == numChannels)
+                    curChannel = 0;
 
-                interrupts |= (1 << curChannel);
-            
-                if(interruptEnables[0] & (1 << curChannel))
-                    mem.setPendingIRQ(DMA_IRQ_0);
-                if(interruptEnables[1] & (1 << curChannel))
-                    mem.setPendingIRQ(DMA_IRQ_1);
+                if(!(channelTriggered & (1 << curChannel)) || !(ctrl[curChannel] & DMA_CH0_CTRL_TRIG_EN_BITS))
+                    continue;
+
+                // don't queue any more if enough transfers in progress to complete
+                if(transferCount[curChannel] <= transfersInProgress[curChannel])
+                    continue;
+
+                transfersInProgress[curChannel]++;
+
+                readAddressFifo.push(readAddr[curChannel]);
+                writeAddressFifo.push(writeAddr[curChannel]);
+
+                readChannelFifo.push(curChannel);
+                writeChannelFifo.push(curChannel);
+
+                // increment
+                int transferSize = 1 << ((ctrl[curChannel] & DMA_CH0_CTRL_TRIG_DATA_SIZE_BITS) >> DMA_CH0_CTRL_TRIG_DATA_SIZE_LSB);
+
+                if(ctrl[curChannel] & DMA_CH0_CTRL_TRIG_INCR_READ_BITS)
+                    readAddr[curChannel] += transferSize;
+
+                if(ctrl[curChannel] & DMA_CH0_CTRL_TRIG_INCR_WRITE_BITS)
+                    writeAddr[curChannel] += transferSize;
+
+                break;
             }
-            break;
         }
 
         clock.addCycles(1);
