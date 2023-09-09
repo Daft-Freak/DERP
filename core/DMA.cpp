@@ -64,16 +64,18 @@ void DMA::update(uint64_t target)
         }
 
         // transfer write data
-        if(!transferDataFifo.empty() && curWriteChannel >= 0)
+        if(curWriteChannel >= 0)
         {
-            int transferSize = 1 << ((ctrl[curWriteChannel] & DMA_CH0_CTRL_TRIG_DATA_SIZE_BITS) >> DMA_CH0_CTRL_TRIG_DATA_SIZE_LSB);
+            assert(!transferDataFifo.empty());
+
+            int transferSize = ((ctrl[curWriteChannel] & DMA_CH0_CTRL_TRIG_DATA_SIZE_BITS) >> DMA_CH0_CTRL_TRIG_DATA_SIZE_LSB);
 
             int cycles; // TODO
             uint32_t val = transferDataFifo.pop();
 
-            if(transferSize == 1)
+            if(transferSize == 0)
                 mem.write<uint8_t>(this, curWriteAddr, val, cycles);
-            else if(transferSize == 2)
+            else if(transferSize == 1)
                 mem.write<uint16_t>(this, curWriteAddr, val, cycles);
             else
                 mem.write<uint32_t>(this, curWriteAddr, val, cycles);
@@ -97,8 +99,10 @@ void DMA::update(uint64_t target)
         }
 
         // set write address
-        if(!writeAddressFifo.empty() && !transferDataFifo.empty() && curWriteChannel == -1)
+        if(!transferDataFifo.empty() && curWriteChannel == -1)
         {
+            assert(!writeAddressFifo.empty());
+
             curWriteChannel = writeChannelFifo.pop();
             curWriteAddr = writeAddressFifo.pop();
         }
@@ -106,15 +110,15 @@ void DMA::update(uint64_t target)
         // transfer read data
         if(!transferDataFifo.full() && curReadChannel >= 0)
         {
-            int transferSize = 1 << ((ctrl[curReadChannel] & DMA_CH0_CTRL_TRIG_DATA_SIZE_BITS) >> DMA_CH0_CTRL_TRIG_DATA_SIZE_LSB);
+            int transferSize = ((ctrl[curReadChannel] & DMA_CH0_CTRL_TRIG_DATA_SIZE_BITS) >> DMA_CH0_CTRL_TRIG_DATA_SIZE_LSB);
             bool bswap = ctrl[curReadChannel] & DMA_CH0_CTRL_TRIG_BSWAP_BITS;
             
             int cycles; // TODO
             uint32_t val;
 
-            if(transferSize == 1)
+            if(transferSize == 0)
                 val = mem.read<uint8_t>(this, curReadAddr, cycles);
-            else if(transferSize == 2)
+            else if(transferSize == 1)
             {
                 val = mem.read<uint16_t>(this, curReadAddr, cycles);
                 if(bswap)
