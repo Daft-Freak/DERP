@@ -5,6 +5,7 @@
 #include "hardware/platform_defs.h"
 
 #include "ClockTarget.h"
+#include "FIFO.h"
 
 class MemoryBus;
 
@@ -36,7 +37,20 @@ private:
 
     ClockTarget clock;
 
+    // for address generator
     int curChannel;
+
+    // sizes are a guess
+    FIFO<uint32_t, 4> readAddressFifo;
+    FIFO<uint32_t, 4> writeAddressFifo;
+    FIFO<uint32_t, 4> transferDataFifo;
+
+    // need to know which channel a read/write is for to get the ctrl and count
+    FIFO<int, 4> readChannelFifo;
+    FIFO<int, 4> writeChannelFifo;
+
+    uint32_t curReadAddr, curWriteAddr;
+    int curReadChannel = -1, curWriteChannel = -1;
 
     // not using the structs here, too much repetition+padding
     static const int numChannels = NUM_DMA_CHANNELS;
@@ -44,6 +58,8 @@ private:
     uint32_t writeAddr[numChannels];
     uint32_t transferCount[numChannels], transferCountReload[numChannels];
     uint32_t ctrl[numChannels];
+
+    uint32_t transfersInProgress[numChannels];
 
     uint32_t interrupts;
     uint32_t interruptEnables[2];
