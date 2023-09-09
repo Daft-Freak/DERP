@@ -174,7 +174,7 @@ void MemoryBus::reset()
 template<class T>
 T MemoryBus::read(BusMasterPtr master, uint32_t addr, int &cycles, bool sequential)
 {
-    auto masterClock = std::holds_alternative<ARMv6MCore *>(master) ?
+    auto &masterClock = std::holds_alternative<ARMv6MCore *>(master) ?
         std::get<ARMv6MCore *>(master)->getClock() :
         std::get<DMA *>(master)->getClock();
 
@@ -246,7 +246,7 @@ T MemoryBus::read(BusMasterPtr master, uint32_t addr, int &cycles, bool sequenti
 template<class T>
 void MemoryBus::write(BusMasterPtr master, uint32_t addr, T data, int &cycles, bool sequential)
 {
-    auto masterClock = std::holds_alternative<ARMv6MCore *>(master) ?
+    auto &masterClock = std::holds_alternative<ARMv6MCore *>(master) ?
         std::get<ARMv6MCore *>(master)->getClock() :
         std::get<DMA *>(master)->getClock();
 
