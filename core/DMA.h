@@ -33,8 +33,17 @@ public:
     bool isChannelActive(int ch) const;
 
 private:
-    uint32_t doRead(int transferSize, bool bswap, int &cycles);
-    void doWrite(uint32_t val, int transferSize, int &cycles);
+    using ReadFunc = uint32_t(DMA::*)(int &);
+    using WriteFunc = void(DMA::*)(uint32_t, int &);
+
+    template<class T, bool bswap>
+    uint32_t doRead(int &cycles);
+
+    template<class T>
+    void doWrite(uint32_t val, int &cycles);
+
+    void updateReadFunc(int channel);
+    void updateWriteFunc(int channel);
 
     MemoryBus &mem;
 
@@ -63,6 +72,9 @@ private:
     uint32_t ctrl[numChannels];
 
     uint32_t transfersInProgress[numChannels];
+
+    ReadFunc readFuncs[numChannels];
+    WriteFunc writeFuncs[numChannels];
 
     uint32_t interrupts;
     uint32_t interruptEnables[2];
