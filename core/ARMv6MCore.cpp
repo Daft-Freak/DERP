@@ -69,8 +69,8 @@ void ARMv6MCore::reset()
     mpuRegs[0] = M0PLUS_MPU_TYPE_RESET;
 
     int cycles;
-    reg(Reg::SP) = mem.read<uint32_t>(this, 0, cycles, false); // MSP
-    updateTHUMBPC( mem.read<uint32_t>(this, 4, cycles, false) & ~ 1); // Reset vector
+    reg(Reg::SP) = mem.read<uint32_t>(this, 0, cycles); // MSP
+    updateTHUMBPC( mem.read<uint32_t>(this, 4, cycles) & ~ 1); // Reset vector
 }
 
 unsigned int ARMv6MCore::run(int ms)
@@ -294,14 +294,14 @@ void ARMv6MCore::writeReg(uint32_t addr, uint32_t data)
 
 uint8_t ARMv6MCore::readMem8(uint32_t addr, int &cycles, bool sequential)
 {
-    return mem.read<uint8_t>(this, addr, cycles, sequential);
+    return mem.read<uint8_t>(this, addr, cycles);
 }
 
 uint16_t ARMv6MCore::readMem16(uint32_t addr, int &cycles, bool sequential)
 {
     assert((addr & 1) == 0);
 
-    return mem.read<uint16_t>(this, addr, cycles, sequential);
+    return mem.read<uint16_t>(this, addr, cycles);
 }
 
 
@@ -309,22 +309,22 @@ uint32_t ARMv6MCore::readMem32(uint32_t addr, int &cycles, bool sequential)
 {
     assert((addr & 3) == 0);
 
-    return mem.read<uint32_t>(this, addr, cycles, sequential);
+    return mem.read<uint32_t>(this, addr, cycles);
 }
 
 void ARMv6MCore::writeMem8(uint32_t addr, uint8_t data, int &cycles, bool sequential)
 {
-    mem.write<uint8_t>(this, addr, data, cycles, sequential);
+    mem.write<uint8_t>(this, addr, data, cycles);
 }
 
 void ARMv6MCore::writeMem16(uint32_t addr, uint16_t data, int &cycles, bool sequential)
 {
-    mem.write<uint16_t>(this, addr, data, cycles, sequential);
+    mem.write<uint16_t>(this, addr, data, cycles);
 }
 
 void ARMv6MCore::writeMem32(uint32_t addr, uint32_t data, int &cycles, bool sequential)
 {
-    mem.write<uint32_t>(this, addr, data, cycles, sequential);
+    mem.write<uint32_t>(this, addr, data, cycles);
 }
 
 int ARMv6MCore::executeTHUMBInstruction()
@@ -344,7 +344,7 @@ int ARMv6MCore::executeTHUMBInstruction()
     else
     {
         int tmp;
-        fetchOp = mem.read<uint16_t>(this, pc, tmp, true);
+        fetchOp = mem.read<uint16_t>(this, pc, tmp);
     }
 
     switch(opcode >> 12)
@@ -1147,7 +1147,7 @@ int ARMv6MCore::doTHUMB14PushPop(uint16_t opcode, uint32_t pc)
     {
         auto addr = loReg(curSP);
         auto ptr = reinterpret_cast<uint32_t *>(mem.mapAddress(addr & ~3));
-        auto loadCycles = mem.getAccessCycles(addr, 4, true);
+        auto loadCycles = mem.getAccessCycles(addr, 4);
 
         loReg(curSP) = addr + numRegs * 4;
 
@@ -1180,7 +1180,7 @@ int ARMv6MCore::doTHUMB14PushPop(uint16_t opcode, uint32_t pc)
         loReg(curSP) = addr;
 
         auto ptr = reinterpret_cast<uint32_t *>(mem.mapAddress(addr & ~3));
-        auto storeCycles = mem.getAccessCycles(addr, 4, true);
+        auto storeCycles = mem.getAccessCycles(addr, 4);
 
         int i = 0;
         for(; regList; regList >>= 1, i++)
@@ -1380,7 +1380,7 @@ int ARMv6MCore::doTHUMB32BitInstruction(uint16_t opcode, uint32_t pc)
     else
     {
         int tmp;
-        fetchOp = mem.read<uint16_t>(this, pc, tmp, true);
+        fetchOp = mem.read<uint16_t>(this, pc, tmp);
     }
 
     loReg(Reg::PC) = pc;
@@ -1549,8 +1549,7 @@ void ARMv6MCore::updateTHUMBPC(uint32_t pc)
         pcPtr = std::as_const(mem).mapAddress(pc); // force const mapAddress
         if(pcPtr)
             pcPtr -= pc;
-        pcSCycles = mem.getAccessCycles(pc, 2, true);
-        pcNCycles = mem.getAccessCycles(pc, 2, false);
+        pcSCycles = pcNCycles = mem.getAccessCycles(pc, 2);
     }
 
     mem.updatePC(pc);
@@ -1566,8 +1565,8 @@ void ARMv6MCore::updateTHUMBPC(uint32_t pc)
     {
         // TODO: either fix the optimisation or remove it, this is messy
         int tmp;
-        decodeOp = mem.read<uint16_t>(this, pc, tmp, true);
-        fetchOp = mem.read<uint16_t>(this, pc + 2, tmp, true);
+        decodeOp = mem.read<uint16_t>(this, pc, tmp);
+        fetchOp = mem.read<uint16_t>(this, pc + 2, tmp);
     }
 
     loReg(Reg::PC) = pc + 2; // pointing at last fetch

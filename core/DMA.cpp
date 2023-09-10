@@ -326,7 +326,7 @@ bool DMA::isChannelActive(int ch) const
 template<class T, bool bswap>
 uint32_t DMA::doRead(int &cycles)
 {
-    uint32_t val = mem.read<T>(this, curReadAddr, cycles, false);
+    uint32_t val = mem.read<T>(this, curReadAddr, cycles);
 
     if(bswap)
     {
@@ -342,7 +342,7 @@ uint32_t DMA::doRead(int &cycles)
 template<class T>
 void DMA::doWrite(uint32_t val, int &cycles)
 {
-    mem.write<T>(this, curWriteAddr, val, cycles, false);
+    mem.write<T>(this, curWriteAddr, val, cycles);
 }
 
 void DMA::updateReadFunc(int channel)

@@ -38,14 +38,14 @@ public:
     void reset();
 
     template<class T>
-    T read(BusMasterPtr master, uint32_t addr, int &cycles, bool sequential);
+    T read(BusMasterPtr master, uint32_t addr, int &cycles);
     template<class T>
-    void write(BusMasterPtr master, uint32_t addr, T data, int &cycles, bool sequential);
+    void write(BusMasterPtr master, uint32_t addr, T data, int &cycles);
 
     const uint8_t *mapAddress(uint32_t addr) const;
     uint8_t *mapAddress(uint32_t addr);
 
-    int getAccessCycles(uint32_t addr, int width, bool sequential) const;
+    int getAccessCycles(uint32_t addr, int width) const;
 
     void updatePC(uint32_t pc);
 
