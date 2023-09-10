@@ -33,6 +33,9 @@ public:
     bool isChannelActive(int ch) const;
 
 private:
+    uint32_t doRead(int transferSize, bool bswap, int &cycles);
+    void doWrite(uint32_t val, int transferSize, int &cycles);
+
     MemoryBus &mem;
 
     ClockTarget clock;
