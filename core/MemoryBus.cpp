@@ -108,12 +108,12 @@ enum class AHBPeripheral
 
 #undef PERIPH
 
-template uint8_t MemoryBus::read(BusMasterPtr master, uint32_t addr, int &cycles, bool sequential);
-template uint16_t MemoryBus::read(BusMasterPtr master, uint32_t addr, int &cycles, bool sequential);
-template uint32_t MemoryBus::read(BusMasterPtr master, uint32_t addr, int &cycles, bool sequential);
-template void MemoryBus::write(BusMasterPtr master, uint32_t addr, uint8_t val, int &cycles, bool sequential);
-template void MemoryBus::write(BusMasterPtr master, uint32_t addr, uint16_t val, int &cycles, bool sequential);
-template void MemoryBus::write(BusMasterPtr master, uint32_t addr, uint32_t val, int &cycles, bool sequential);
+template uint8_t MemoryBus::read(BusMasterPtr master, uint32_t addr, int &cycles);
+template uint16_t MemoryBus::read(BusMasterPtr master, uint32_t addr, int &cycles);
+template uint32_t MemoryBus::read(BusMasterPtr master, uint32_t addr, int &cycles);
+template void MemoryBus::write(BusMasterPtr master, uint32_t addr, uint8_t val, int &cycles);
+template void MemoryBus::write(BusMasterPtr master, uint32_t addr, uint16_t val, int &cycles);
+template void MemoryBus::write(BusMasterPtr master, uint32_t addr, uint32_t val, int &cycles);
 
 static inline uint32_t getStripedSRAMAddr(uint32_t addr)
 {
@@ -172,7 +172,7 @@ void MemoryBus::reset()
 }
 
 template<class T>
-T MemoryBus::read(BusMasterPtr master, uint32_t addr, int &cycles, bool sequential)
+T MemoryBus::read(BusMasterPtr master, uint32_t addr, int &cycles)
 {
     auto &masterClock = std::holds_alternative<ARMv6MCore *>(master) ?
         std::get<ARMv6MCore *>(master)->getClock() :
@@ -244,7 +244,7 @@ T MemoryBus::read(BusMasterPtr master, uint32_t addr, int &cycles, bool sequenti
 }
 
 template<class T>
-void MemoryBus::write(BusMasterPtr master, uint32_t addr, T data, int &cycles, bool sequential)
+void MemoryBus::write(BusMasterPtr master, uint32_t addr, T data, int &cycles)
 {
     auto &masterClock = std::holds_alternative<ARMv6MCore *>(master) ?
         std::get<ARMv6MCore *>(master)->getClock() :
@@ -371,7 +371,7 @@ uint8_t *MemoryBus::mapAddress(uint32_t addr)
     return nullptr;
 }
 
-int MemoryBus::getAccessCycles(uint32_t addr, int width, bool sequential) const
+int MemoryBus::getAccessCycles(uint32_t addr, int width) const
 {
     return 1;
 }

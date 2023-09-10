@@ -75,24 +75,24 @@ void DMA::update(uint64_t target)
             int cycles; // TODO
             if(transferSize == 1)
             {
-                auto val = mem.read<uint8_t>(this, readAddr[curChannel], cycles, false);
-                mem.write(this, writeAddr[curChannel], val, cycles, false);
+                auto val = mem.read<uint8_t>(this, readAddr[curChannel], cycles);
+                mem.write(this, writeAddr[curChannel], val, cycles);
             }
             else if(transferSize == 2)
             {
-                auto val = mem.read<uint16_t>(this, readAddr[curChannel], cycles, false);
+                auto val = mem.read<uint16_t>(this, readAddr[curChannel], cycles);
                 if(bswap)
                     val = val >> 8 | val << 8;
 
-                mem.write(this, writeAddr[curChannel], val, cycles, false);
+                mem.write(this, writeAddr[curChannel], val, cycles);
             }
             else
             {
-                auto val = mem.read<uint32_t>(this, readAddr[curChannel], cycles, false);
+                auto val = mem.read<uint32_t>(this, readAddr[curChannel], cycles);
                 if(bswap)
                     val = val >> 24 | val << 24 | (val & 0xFF00) << 8 | (val & 0xFF0000) >> 8;
 
-                mem.write(this, writeAddr[curChannel], val, cycles, false);
+                mem.write(this, writeAddr[curChannel], val, cycles);
             }
 
             if(ctrl[curChannel] & DMA_CH0_CTRL_TRIG_INCR_READ_BITS)
