@@ -73,12 +73,7 @@ void DMA::update(uint64_t target)
             int cycles; // TODO
             uint32_t val = transferDataFifo.pop();
 
-            if(transferSize == 0)
-                mem.write<uint8_t>(this, curWriteAddr, val, cycles);
-            else if(transferSize == 1)
-                mem.write<uint16_t>(this, curWriteAddr, val, cycles);
-            else
-                mem.write<uint32_t>(this, curWriteAddr, val, cycles);
+            doWrite(val, transferSize, cycles);
 
             transfersInProgress[curWriteChannel]--;
             
@@ -114,23 +109,7 @@ void DMA::update(uint64_t target)
             bool bswap = ctrl[curReadChannel] & DMA_CH0_CTRL_TRIG_BSWAP_BITS;
             
             int cycles; // TODO
-            uint32_t val;
-
-            if(transferSize == 0)
-                val = mem.read<uint8_t>(this, curReadAddr, cycles);
-            else if(transferSize == 1)
-            {
-                val = mem.read<uint16_t>(this, curReadAddr, cycles);
-                if(bswap)
-                    val = val >> 8 | val << 8;
-            }
-            else
-            {
-                val = mem.read<uint32_t>(this, curReadAddr, cycles);
-                if(bswap)
-                    val = val >> 24 | val << 24 | (val & 0xFF00) << 8 | (val & 0xFF0000) >> 8;
-            }
-
+            uint32_t val = doRead(transferSize, bswap, cycles);
             transferDataFifo.push(val);
             curReadChannel = -1;
         }
@@ -345,4 +324,36 @@ void DMA::regWrite(uint32_t addr, uint32_t data)
 bool DMA::isChannelActive(int ch) const
 {
     return channelTriggered & (1 << ch);
+}
+
+uint32_t DMA::doRead(int transferSize, bool bswap, int &cycles)
+{
+    uint32_t val;
+
+    if(transferSize == 0)
+        val = mem.read<uint8_t>(this, curReadAddr, cycles);
+    else if(transferSize == 1)
+    {
+        val = mem.read<uint16_t>(this, curReadAddr, cycles);
+        if(bswap)
+            val = val >> 8 | val << 8;
+    }
+    else
+    {
+        val = mem.read<uint32_t>(this, curReadAddr, cycles);
+        if(bswap)
+            val = val >> 24 | val << 24 | (val & 0xFF00) << 8 | (val & 0xFF0000) >> 8;
+    }
+
+    return val;
+}
+
+void DMA::doWrite(uint32_t val, int transferSize, int &cycles)
+{
+    if(transferSize == 0)
+        mem.write<uint8_t>(this, curWriteAddr, val, cycles);
+    else if(transferSize == 1)
+        mem.write<uint16_t>(this, curWriteAddr, val, cycles);
+    else
+        mem.write<uint32_t>(this, curWriteAddr, val, cycles);
 }
