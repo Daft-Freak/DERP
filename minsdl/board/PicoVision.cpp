@@ -178,14 +178,35 @@ void PicoVisionBoard::updateScreenData()
 
         addr += offset;
 
-        static const int formatBytes[]{0, 2, 1, 3};
+        static const int formatBytes[]{2, 2, 1, 3};
 
         for(int x = 0; x < hLen; x += hRepeat)
         {
             for(int r = 0; r < hRepeat; r++)
             {
-                for(int b = 0; b < formatBytes[format]; b++)
-                    screenData[(x + r + line * vRepeat * hLen) * formatBytes[format] + b] = psram[addr + b];
+                auto outOff = (x + r + line * vRepeat * hLen) * 3;
+                if(format == 0/*?*/ || format == 1) // RGB555
+                {
+                    uint16_t rgb555 = psram[addr] | psram[addr + 1] << 8;
+                    auto b =  rgb555        & 0x1F;
+                    auto g = (rgb555 >>  5) & 0x1F;
+                    auto r = (rgb555 >> 10) & 0x1F;
+
+                    r = r << 3 | r >> 2;
+                    g = g << 3 | g >> 2;
+                    b = b << 3 | b >> 2;
+
+                    screenData[outOff + 0] = b;
+                    screenData[outOff + 1] = g;
+                    screenData[outOff + 2] = r;
+                }
+                // TODO: paletted
+                else if(format == 3) // RGB8
+                {
+                    screenData[outOff + 0] = psram[addr + 0];
+                    screenData[outOff + 1] = psram[addr + 1];
+                    screenData[outOff + 2] = psram[addr + 2];
+                }
             }
             addr += formatBytes[format];
         }
