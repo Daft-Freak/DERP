@@ -221,6 +221,10 @@ void PicoVisionBoard::updateScreenData()
                 }
             }
             addr += formatBytes[format];
+
+            // v repeat
+            for(int r = 1; r < vRepeat; r++)
+                memcpy(&screenData[(line * vRepeat + r) * hLen * 3], &screenData[line * vRepeat * hLen * 3], hLen * 3);
         }
     }
 }
