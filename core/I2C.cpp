@@ -122,3 +122,8 @@ void I2C::setWriteCallback(WriteCallback cb)
 {
     writeCallback = cb;
 }
+
+uint16_t I2C::getTargetAddr() const
+{
+    return hw.tar & I2C_IC_TAR_IC_TAR_BITS;
+}

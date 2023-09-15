@@ -88,6 +88,7 @@ public:
 
     Clocks &getClocks() {return clocks;}
     GPIO &getGPIO() {return gpio;}
+    I2C &getI2C(int i) {return i2c[i];}
     PWM &getPWM() {return pwm;}
     Watchdog &getWatchdog() {return watchdog;}
 
