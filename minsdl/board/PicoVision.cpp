@@ -261,6 +261,16 @@ void PicoVisionBoard::onPIOUpdate(uint64_t time, PIO &pio)
 
     int ramBank = (mem.getGPIO().getPadState() & (1 << 8)) ? 1 : 0;
 
+    if(lastRamBank != ramBank)
+    {
+        // if just changed bank and last bank not finished by one word overwrite bank
+        // this is definitely not another sync hack
+        if(ramCmdOffset[lastRamBank] && ramCmdOffset[lastRamBank] == ramCmdLenWords[lastRamBank])
+            std::swap(ramBank, lastRamBank);
+        else
+            lastRamBank = ramBank;
+    }
+
     while(!txFifo.empty())
     {
         auto data = txFifo.pop();
