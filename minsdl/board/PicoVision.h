@@ -29,6 +29,7 @@ private:
     ClockTarget displayClock;
     int displayTick = 0;
 
+    int lastRamBank = 0;
     int ramCmdOffset[2] = {0, 0};
     int ramCmdLenWords[2] = {0, 0};
     int ramDataLenBytes[2] = {0, 0};
