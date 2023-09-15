@@ -48,6 +48,9 @@ private:
 
     void onGPIORead(uint64_t time, GPIO &gpio);
 
+    void onInterruptUpdate(uint64_t time, uint32_t irqMask);
+    uint64_t onGetNextInterruptTime(uint64_t time);
+
     void onPIOUpdate(uint64_t time, PIO &pio);
 
     void onI2CWrite(uint64_t time, I2C &i2c, uint8_t data, bool stop);
