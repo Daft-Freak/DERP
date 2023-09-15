@@ -167,10 +167,16 @@ void PicoVisionBoard::updateScreenData()
 
         auto meta = psram[offset++];
 
-        // TODO
-        // auto scrollIndex = meta >> 6;
+        auto scrollIndex = meta >> 6;
         auto format = (meta >> 4) & 3;
         auto hRepeat = meta & 0xF;
+
+        // apply scroll offset
+        int32_t offset = 0;
+        if(scrollIndex)
+            offset = *reinterpret_cast<int32_t *>(i2cRegData + 0xF0 + (scrollIndex - 1) * 4);
+
+        addr += offset;
 
         static const int formatBytes[]{0, 2, 1, 3};
 
