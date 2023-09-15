@@ -230,6 +230,20 @@ void updateScreenSettings()
     if(!renderer)
         return;
 
+    // check for size change
+    int newWidth, newHeight;
+    board->getScreenSize(newWidth, newHeight);
+
+    if(newWidth != screenWidth || newHeight != screenHeight)
+    {
+        screenWidth = newWidth;
+        screenHeight = newHeight;
+
+        // update renderer
+        SDL_RenderSetLogicalSize(renderer, screenWidth, screenHeight);
+        SDL_RenderSetIntegerScale(renderer, SDL_TRUE);
+    }
+
     texture = SDL_CreateTexture(renderer, board->getScreenFormat(), SDL_TEXTUREACCESS_STREAMING, screenWidth, screenHeight);
 }
 
