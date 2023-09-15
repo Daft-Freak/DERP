@@ -21,6 +21,8 @@ public:
 
     void setWriteCallback(WriteCallback cb);
 
+    uint16_t getTargetAddr() const;
+
 private:
     MemoryBus &mem;
     int index;
