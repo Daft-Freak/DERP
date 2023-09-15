@@ -4,6 +4,7 @@
 #include "ClockTarget.h"
 
 class GPIO;
+class I2C;
 class PIO;
 
 class PicoVisionBoard final : public Board
@@ -38,10 +39,16 @@ private:
 
     uint8_t psramData[2][8 * 1024 * 1024];
 
+    int i2cReg = -1;
+
+    uint8_t i2cRegData[256]{};
+
     void displayUpdate(uint64_t time, bool forIntr = false);
     void updateScreenData();
 
     void onGPIORead(uint64_t time, GPIO &gpio);
 
     void onPIOUpdate(uint64_t time, PIO &pio);
+
+    void onI2CWrite(uint64_t time, I2C &i2c, uint8_t data, bool stop);
 };

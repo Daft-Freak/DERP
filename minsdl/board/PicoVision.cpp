@@ -18,6 +18,8 @@ PicoVisionBoard::PicoVisionBoard(MemoryBus &mem) : mem(mem)
     mem.getClocks().addClockTarget(-1, displayClock);
 
     mem.getPIO(1).setUpdateCallback([this](auto time, auto &pio){onPIOUpdate(time, pio);});
+
+    mem.getI2C(1).setWriteCallback([this](auto time, auto &i2c, auto data, auto stop){onI2CWrite(time, i2c, data, stop);});
 }
 
 void PicoVisionBoard::getScreenSize(int &w, int &h)
@@ -212,4 +214,22 @@ void PicoVisionBoard::onPIOUpdate(uint64_t time, PIO &pio)
         else
             ramCmdOffset[ramBank]++;
     }
+}
+
+void PicoVisionBoard::onI2CWrite(uint64_t time, I2C &i2c, uint8_t data, bool stop)
+{
+    if(i2c.getTargetAddr() != 0x0D)
+        return;
+
+    if(i2cReg == -1)
+        i2cReg = data;
+    else
+    {
+        logf(LogLevel::Info, logComponent, "I2C reg %02X = %02X", i2cReg, data);
+        i2cRegData[i2cReg++] = data;
+    }
+
+    // TODO: need to keep for reads
+    if(stop)
+        i2cReg = -1;
 }
