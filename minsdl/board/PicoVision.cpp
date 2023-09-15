@@ -9,6 +9,40 @@ using Logging::logf;
 using LogLevel = Logging::Level;
 constexpr auto logComponent = Logging::Component::Board;
 
+extern void updateScreenSettings(); // TODO: declare this... somewhere
+
+static const int modeWidth[]
+{
+    640,
+    720,
+    720,
+    720,
+
+    // "wide"
+    800,
+    800,
+    800,
+    960,
+    960,
+    1280,
+};
+
+static const int modeHeight[]
+{
+    480,
+    480,
+    400,
+    576,
+
+    // "wide"
+    600,
+    480,
+    450,
+    540,
+    540,
+    720,
+};
+
 PicoVisionBoard::PicoVisionBoard(MemoryBus &mem) : mem(mem)
 {
     mem.getGPIO().setReadCallback([this](auto time, auto &gpio){onGPIORead(time, gpio);});
@@ -24,14 +58,19 @@ PicoVisionBoard::PicoVisionBoard(MemoryBus &mem) : mem(mem)
 
 void PicoVisionBoard::getScreenSize(int &w, int &h)
 {
-    // TODO: configurable at runtime
-    w = 720;
-    h = 480;
+    int mode = i2cRegData[0xFC];
+
+    if(mode >= 0x10)
+        mode -= 12;
+
+    w = modeWidth[mode];
+    h = modeHeight[mode];
 }
 
 int PicoVisionBoard::getScreenFormat()
 {
     // TODO: also configurable
+    // but set per-line, so using the highest bit depth is the easiest thing to do...
     return SDL_PIXELFORMAT_BGR24;
 }
 
@@ -87,6 +126,9 @@ void PicoVisionBoard::displayUpdate(uint64_t time, bool forIntr)
 
 void PicoVisionBoard::updateScreenData()
 {
+    if(!i2cRegData[0xFD])
+        return;
+
     int ramBank = (mem.getGPIO().getPadState() & (1 << 8)) ? 0 : 1;
     auto psram = psramData[ramBank];
 
@@ -226,6 +268,11 @@ void PicoVisionBoard::onI2CWrite(uint64_t time, I2C &i2c, uint8_t data, bool sto
     else
     {
         logf(LogLevel::Info, logComponent, "I2C reg %02X = %02X", i2cReg, data);
+
+        // update screen settings on enable
+        if(i2cReg == 0xFD && data && !i2cRegData[i2cReg])
+            updateScreenSettings();
+
         i2cRegData[i2cReg++] = data;
     }
 
