@@ -5,6 +5,8 @@
 #include "Logging.h"
 #include "MemoryBus.h"
 
+#include "hardware/regs/intctrl.h"
+
 using Logging::logf;
 using LogLevel = Logging::Level;
 constexpr auto logComponent = Logging::Component::Board;
@@ -45,6 +47,9 @@ static const int modeHeight[]
 
 PicoVisionBoard::PicoVisionBoard(MemoryBus &mem) : mem(mem)
 {
+    mem.setInterruptUpdateCallback([this](auto time, auto irqMask){onInterruptUpdate(time, irqMask);});
+    mem.setGetNextInterruptTimeCallback([this](auto time){return onGetNextInterruptTime(time);});
+
     mem.getGPIO().setReadCallback([this](auto time, auto &gpio){onGPIORead(time, gpio);});
     mem.getGPIO().clearInputFloatingMask(1 << 16); // vsync
 
@@ -90,6 +95,13 @@ void PicoVisionBoard::displayUpdate(uint64_t time, bool forIntr)
 
     if(!ticks)
         return;
+
+    // do nothing if not enabled yet
+    if(!i2cRegData[0xFD])
+    {
+        displayClock.addCycles(ticks);
+        return;
+    }
 
     while(ticks)
     {
@@ -216,6 +228,23 @@ void PicoVisionBoard::updateScreenData()
 void PicoVisionBoard::onGPIORead(uint64_t time, GPIO &gpio)
 {
     displayUpdate(time);
+}
+
+void PicoVisionBoard::onInterruptUpdate(uint64_t time, uint32_t irqMask)
+{
+    if(i2cRegData[0xFD] && (irqMask & (1 << IO_IRQ_BANK0)))
+        displayUpdate(time, true);
+}
+
+uint64_t PicoVisionBoard::onGetNextInterruptTime(uint64_t time)
+{
+    if(!i2cRegData[0xFD] || !mem.getGPIO().interruptsEnabledOnPin(16))
+        return time;
+
+    int lines = std::max(1, 999 - displayTick);
+    auto ret = displayClock.getTimeToCycles(lines);
+
+    return ret;
 }
 
 void PicoVisionBoard::onPIOUpdate(uint64_t time, PIO &pio)
