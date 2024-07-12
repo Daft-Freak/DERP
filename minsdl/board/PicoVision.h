@@ -41,8 +41,11 @@ private:
     uint8_t psramData[2][8 * 1024 * 1024];
 
     int i2cReg = -1;
+    int i2cRegIndex = 0;
 
     uint8_t i2cRegData[256]{};
+
+    uint8_t scrollGroupData[7 * 13];
 
     void displayUpdate(uint64_t time, bool forIntr = false);
     void updateScreenData();
