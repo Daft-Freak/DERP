@@ -179,14 +179,20 @@ void PicoVisionBoard::updateScreenData()
 
         auto meta = psram[offset++];
 
-        auto scrollIndex = meta >> 6;
-        auto format = (meta >> 4) & 3;
-        auto hRepeat = meta & 0xF;
+        auto scrollIndex = meta >> 5;
+        auto format = (meta >> 3) & 3;
+        auto hRepeat = meta & 0x7;
 
         // apply scroll offset
         int32_t offset = 0;
         if(scrollIndex)
-            offset = *reinterpret_cast<int32_t *>(i2cRegData + 0xF0 + (scrollIndex - 1) * 4);
+        {
+            auto scrollData = scrollGroupData + (scrollIndex - 1) * 13;
+
+            offset = scrollData[0] | scrollData[1] << 8 | scrollData[2] << 16;
+
+            // also max addr, offset2, wrap position and wrap offset (for wrapping)
+        }
 
         addr += offset;
 
@@ -334,7 +340,10 @@ void PicoVisionBoard::onI2CWrite(uint64_t time, I2C &i2c, uint8_t data, bool sto
         return;
 
     if(i2cReg == -1)
+    {
         i2cReg = data;
+        i2cRegIndex = 0;
+    }
     else
     {
         logf(LogLevel::Info, logComponent, "I2C reg %02X = %02X", i2cReg, data);
@@ -343,7 +352,18 @@ void PicoVisionBoard::onI2CWrite(uint64_t time, I2C &i2c, uint8_t data, bool sto
         if(i2cReg == 0xFD && data && !i2cRegData[i2cReg])
             updateScreenSettings();
 
-        i2cRegData[i2cReg++] = data;
+        // scroll registers are E1-E8
+        if(i2cReg >= 0xE1 && i2cReg < 0xE8)
+        {
+            int offset = (i2cReg - 0xE1) * 13 + i2cRegIndex;
+
+            scrollGroupData[offset] = data;
+
+            if(i2cRegIndex++ == 13)
+                i2cRegIndex = 0;
+        }
+        else
+            i2cRegData[i2cReg++] = data;
     }
 
     // TODO: need to keep for reads
