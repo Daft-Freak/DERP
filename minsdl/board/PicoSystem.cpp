@@ -4,14 +4,14 @@
 
 #include "PicoSystem.h"
 
+#include "../Main.h"
+
 #include "Logging.h"
 #include "MemoryBus.h"
 
 using Logging::logf;
 using LogLevel = Logging::Level;
 constexpr auto logComponent = Logging::Component::Board;
-
-extern void updateScreenSettings(); // TODO: declare this... somewhere
 
 static const std::unordered_map<SDL_Keycode, int> picosystemKeyMap {
     {SDLK_RIGHT,  1 << 21},
