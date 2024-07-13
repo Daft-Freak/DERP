@@ -16,8 +16,6 @@ public:
     const uint8_t *getScreenData() override;
 
     bool hasAudio() override;
-    int getNumAudioSamples() override;
-    int16_t getAudioSample() override;
 
     void handleEvent(SDL_Event &event) override;
     void update(uint64_t time) override;
@@ -47,7 +45,7 @@ private:
     ClockTarget audioClock;
     bool lastAudioVal = false;
     static const int audioBufferSize = 1024;
-    volatile int audioReadOff = 0, audioWriteOff = 0;
+    int audioWriteOff = 0;
     int16_t audioSamples[audioBufferSize]{};
 
     void displayUpdate(uint64_t time, bool forIntr = false);

@@ -12,8 +12,6 @@ public:
     const uint8_t *getScreenData() override {return nullptr;}
 
     bool hasAudio() override {return false;}
-    int getNumAudioSamples() override {return 0;}
-    int16_t getAudioSample() override {return 0;}
 
     void handleEvent(SDL_Event &event) override {}
     void update(uint64_t time) override {}

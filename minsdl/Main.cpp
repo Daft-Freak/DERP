@@ -45,6 +45,8 @@ static SDL_Texture *texture = nullptr;
 static int screenWidth = 240;
 static int screenHeight = 240;
 
+static SDL_AudioDeviceID audioDevice = 0;
+
 static const uint32_t uf2MagicStart0 = 0x0A324655, uf2MagicStart1 = 0x9E5D5157, uf2MagicEnd = 0x0AB16F30;
 
 struct UF2Block
@@ -181,17 +183,6 @@ static void runGDBServer()
     }
 }
 
-static void audioCallback(void *userdata, Uint8 *stream, int len)
-{
-    auto ptr = reinterpret_cast<int16_t *>(stream);
-    for(int i = 0; i < len / 2; i++)
-    {
-        while(!board->getNumAudioSamples() && !quit);
-
-        *ptr++ = board->getAudioSample();
-    }
-}
-
 static void pollEvents()
 {
     SDL_Event event;
@@ -240,6 +231,11 @@ void updateScreenSettings()
         return;
 
     texture = SDL_CreateTexture(renderer, board->getScreenFormat(), SDL_TEXTUREACCESS_STREAMING, screenWidth, screenHeight);
+}
+
+void queueAudio(const int16_t *samples, unsigned int numSamples)
+{
+    SDL_QueueAudio(audioDevice, samples, numSamples * sizeof(int16_t));
 }
 
 int main(int argc, char *argv[])
@@ -388,8 +384,6 @@ int main(int argc, char *argv[])
         texture = SDL_CreateTexture(renderer, board->getScreenFormat(), SDL_TEXTUREACCESS_STREAMING, screenWidth, screenHeight);
     }
 
-    SDL_AudioDeviceID audioDevice = 0;
-
     if(board->hasAudio())
     {
         SDL_AudioSpec spec{};
@@ -398,7 +392,6 @@ int main(int argc, char *argv[])
         spec.format = AUDIO_S16;
         spec.channels = 1;
         spec.samples = 512;
-        spec.callback = audioCallback;
 
         audioDevice = SDL_OpenAudioDevice(nullptr, false, &spec, nullptr, 0);
 

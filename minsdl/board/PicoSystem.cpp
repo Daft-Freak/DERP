@@ -72,26 +72,6 @@ bool PicoSystemBoard::hasAudio()
     return true;
 }
 
-int PicoSystemBoard::getNumAudioSamples()
-{
-    int avail = audioWriteOff - audioReadOff;
-    if(avail < 0)
-        avail += audioBufferSize;
-
-    return avail;
-}
-
-int16_t PicoSystemBoard::getAudioSample()
-{
-    if(!getNumAudioSamples())
-        return 0;
-
-    auto val = audioSamples[audioReadOff++];
-    audioReadOff %= audioBufferSize;
-
-    return val;
-}
-
 void PicoSystemBoard::handleEvent(SDL_Event &event)
 {
     switch(event.type)
@@ -161,11 +141,14 @@ void PicoSystemBoard::audioUpdate(uint64_t time)
 
     for(uint32_t i = 0; i < samples; i++)
     {
-        while((audioWriteOff + 1) % audioBufferSize == audioReadOff);
-
         int level = 0x1000;
         audioSamples[audioWriteOff++] = lastAudioVal ? level : -level;
-        audioWriteOff %= audioBufferSize;
+
+        if(audioWriteOff == audioBufferSize)
+        {
+            queueAudio(audioSamples, audioBufferSize);
+            audioWriteOff = 0;
+        }
     }
 
     audioClock.addCycles(samples);
