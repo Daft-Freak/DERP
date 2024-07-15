@@ -37,6 +37,14 @@ public:
         return (targetTime - emuTime + (round ? clockScale - 1 : 0)) / clockScale;
     }
 
+    uint32_t getCyclesFromTime(uint64_t oldTime) const
+    {
+        if(oldTime > emuTime)
+            return 0;
+
+        return (emuTime - oldTime) / clockScale;
+    }
+
     uint64_t getTimeToCycles(uint32_t cycles) const
     {
         return emuTime + cycles * clockScale;
