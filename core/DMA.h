@@ -9,7 +9,7 @@
 
 class MemoryBus;
 
-class DMA final
+class DMA final : public ClockedDevice
 {
 public:
     DMA(MemoryBus &mem);
@@ -31,6 +31,8 @@ public:
     ClockTarget &getClock() {return clock;}
 
     bool isChannelActive(int ch) const;
+
+    int getDeviceFlags() const {return 0;}
 
 private:
     using ReadFunc = uint32_t(DMA::*)(int &);
