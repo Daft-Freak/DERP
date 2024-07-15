@@ -62,3 +62,18 @@ private:
     uint64_t emuTime = 0;
     uint64_t clockScale = 1;
 };
+
+enum ClockedDeviceFlags
+{
+    ClockedDevice_CPU = 1 << 0,
+};
+
+class ClockedDevice
+{
+public:
+    virtual void update(uint64_t target) = 0;
+
+    virtual ClockTarget &getClock() = 0;
+
+    virtual int getDeviceFlags() const = 0;
+};
