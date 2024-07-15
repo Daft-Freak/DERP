@@ -66,5 +66,5 @@ void Tufty2040Board::onPIOUpdate(uint64_t time, PIO &pio)
         }
     }
 
-    pio.updateFifoStatus();
+    pio.updateFifoStatus(0);
 }

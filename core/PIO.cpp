@@ -74,7 +74,7 @@ void PIO::update(uint64_t target)
                     {
                         txFifo[i].pop();
                         if(!txFifo[i].empty())
-                            updateFifoStatus();
+                            updateFifoStatus(i);
                     }
                 }
             }
@@ -218,7 +218,7 @@ void PIO::regWrite(uint32_t addr, uint32_t data)
                 txFifo[index].push(data);
 
                 if(txFifo[index].full())
-                    updateFifoStatus();
+                    updateFifoStatus(index);
             }
             return;
         }
@@ -307,15 +307,17 @@ void PIO::regWrite(uint32_t addr, uint32_t data)
     logf(LogLevel::NotImplemented, logComponent, "%i W %04X%s%08X", index, addr, op[atomic], data);
 }
 
-void PIO::updateFifoStatus()
+void PIO::updateFifoStatus(int sm)
 {
-    hw.fstat = PIO_FSTAT_RXEMPTY_BITS; // TODO
+    hw.fstat |= 1 << (PIO_FSTAT_RXEMPTY_LSB + sm); // TODO
 
-    for(unsigned i = 0; i < NUM_PIO_STATE_MACHINES; i++)
-    {
-        if(txFifo[i].full())
-            hw.fstat |= 1 << (PIO_FSTAT_TXFULL_LSB + i);
-        else if(txFifo[i].empty())
-            hw.fstat |= 1 << (PIO_FSTAT_TXEMPTY_LSB + i);
-    }
+    if(txFifo[sm].full())
+        hw.fstat |= 1 << (PIO_FSTAT_TXFULL_LSB + sm);
+    else
+        hw.fstat &= ~(1 << (PIO_FSTAT_TXFULL_LSB + sm));
+
+    if(txFifo[sm].empty())
+        hw.fstat |= 1 << (PIO_FSTAT_TXEMPTY_LSB + sm);
+    else
+        hw.fstat &= ~(1 << (PIO_FSTAT_TXEMPTY_LSB + sm));
 }

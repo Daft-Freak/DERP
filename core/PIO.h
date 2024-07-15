@@ -38,7 +38,7 @@ public:
     const pio_hw_t &getHW(){return hw;}
     FIFO<uint32_t, 4> &getTXFIFO(int i) {return txFifo[i];}
 
-    void updateFifoStatus();
+    void updateFifoStatus(int sm);
 
 private:
     MemoryBus &mem;
