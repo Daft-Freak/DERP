@@ -108,12 +108,12 @@ enum class AHBPeripheral
 
 #undef PERIPH
 
-template uint8_t MemoryBus::read(BusMasterPtr master, uint32_t addr, int &cycles);
-template uint16_t MemoryBus::read(BusMasterPtr master, uint32_t addr, int &cycles);
-template uint32_t MemoryBus::read(BusMasterPtr master, uint32_t addr, int &cycles);
-template void MemoryBus::write(BusMasterPtr master, uint32_t addr, uint8_t val, int &cycles);
-template void MemoryBus::write(BusMasterPtr master, uint32_t addr, uint16_t val, int &cycles);
-template void MemoryBus::write(BusMasterPtr master, uint32_t addr, uint32_t val, int &cycles);
+template uint8_t MemoryBus::read(ClockedDevice *master, uint32_t addr, int &cycles);
+template uint16_t MemoryBus::read(ClockedDevice *master, uint32_t addr, int &cycles);
+template uint32_t MemoryBus::read(ClockedDevice *master, uint32_t addr, int &cycles);
+template void MemoryBus::write(ClockedDevice *master, uint32_t addr, uint8_t val, int &cycles);
+template void MemoryBus::write(ClockedDevice *master, uint32_t addr, uint16_t val, int &cycles);
+template void MemoryBus::write(ClockedDevice *master, uint32_t addr, uint32_t val, int &cycles);
 
 static inline uint32_t getStripedSRAMAddr(uint32_t addr)
 {
@@ -172,12 +172,8 @@ void MemoryBus::reset()
 }
 
 template<class T>
-T MemoryBus::read(BusMasterPtr master, uint32_t addr, int &cycles)
+T MemoryBus::read(ClockedDevice *master, uint32_t addr, int &cycles)
 {
-    auto &masterClock = std::holds_alternative<ARMv6MCore *>(master) ?
-        std::get<ARMv6MCore *>(master)->getClock() :
-        std::get<DMA *>(master)->getClock();
-
     auto accessCycles = [&cycles, this](int c)
     {
         cycles += c;
@@ -218,38 +214,34 @@ T MemoryBus::read(BusMasterPtr master, uint32_t addr, int &cycles)
 
         case Region_APBPeriph:
             accessCycles(3);
-            return doAPBPeriphRead<T>(masterClock, addr);
+            return doAPBPeriphRead<T>(master->getClock(), addr);
 
         case Region_AHBPeriph:
             accessCycles(1);
-            return doAHBPeriphRead<T>(masterClock, addr);
+            return doAHBPeriphRead<T>(master->getClock(), addr);
 
         case Region_IOPORT:
         {
-            assert(std::holds_alternative<ARMv6MCore *>(master));
-            int core = std::get<ARMv6MCore *>(master) - cpuCores;
-            return doIOPORTRead<T>(masterClock, core, addr);
+            assert(master->getDeviceFlags() & ClockedDevice_CPU);
+            int core = static_cast<ARMv6MCore *>(master) - cpuCores;
+            return doIOPORTRead<T>(master->getClock(), core, addr);
         }
 
         case Region_CPUInternal:
             accessCycles(1);
-            assert(std::holds_alternative<ARMv6MCore *>(master));
-            return doCPUInternalRead<T>(*std::get<ARMv6MCore *>(master), addr);
+            assert(master->getDeviceFlags() & ClockedDevice_CPU);
+            return doCPUInternalRead<T>(*static_cast<ARMv6MCore *>(master), addr);
     }
 
-    if(std::holds_alternative<ARMv6MCore *>(master))
-        std::get<ARMv6MCore *>(master)->fault("Memory read");
+    if(master->getDeviceFlags() & ClockedDevice_CPU)
+        static_cast<ARMv6MCore *>(master)->fault("Memory read");
 
     return doOpenRead<T>(addr);
 }
 
 template<class T>
-void MemoryBus::write(BusMasterPtr master, uint32_t addr, T data, int &cycles)
+void MemoryBus::write(ClockedDevice *master, uint32_t addr, T data, int &cycles)
 {
-    auto &masterClock = std::holds_alternative<ARMv6MCore *>(master) ?
-        std::get<ARMv6MCore *>(master)->getClock() :
-        std::get<DMA *>(master)->getClock();
-
     auto accessCycles = [&cycles, this](int c)
     {
         cycles += c;
@@ -287,31 +279,31 @@ void MemoryBus::write(BusMasterPtr master, uint32_t addr, T data, int &cycles)
 
         case Region_APBPeriph:
             accessCycles(4);
-            doAPBPeriphWrite<T>(masterClock, addr, data);
+            doAPBPeriphWrite<T>(master->getClock(), addr, data);
             return;
 
         case Region_AHBPeriph:
             accessCycles(1);
-            doAHBPeriphWrite<T>(masterClock, addr, data);
+            doAHBPeriphWrite<T>(master->getClock(), addr, data);
             return;
 
         case Region_IOPORT:
         {
-            assert(std::holds_alternative<ARMv6MCore *>(master));
-            int core = std::get<ARMv6MCore *>(master) - cpuCores;
-            doIOPORTWrite<T>(masterClock, core, addr, data);
+            assert(master->getDeviceFlags() & ClockedDevice_CPU);
+            int core = static_cast<ARMv6MCore *>(master) - cpuCores;
+            doIOPORTWrite<T>(master->getClock(), core, addr, data);
             return;
         }   
 
         case Region_CPUInternal:
             accessCycles(1);
-            assert(std::holds_alternative<ARMv6MCore *>(master));
-            doCPUInternalWrite<T>(*std::get<ARMv6MCore *>(master), addr, data);
+            assert(master->getDeviceFlags() & ClockedDevice_CPU);
+            doCPUInternalWrite<T>(*static_cast<ARMv6MCore *>(master), addr, data);
             return;
     }
 
-    if(std::holds_alternative<ARMv6MCore *>(master))
-        std::get<ARMv6MCore *>(master)->fault("Memory write");
+    if(master->getDeviceFlags() & ClockedDevice_CPU)
+        static_cast<ARMv6MCore *>(master)->fault("Memory write");
 }
 
 const uint8_t *MemoryBus::mapAddress(uint32_t addr) const
