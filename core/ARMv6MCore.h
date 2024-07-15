@@ -5,7 +5,7 @@
 #include "ClockTarget.h"
 #include "MemoryBus.h"
 
-class ARMv6MCore final
+class ARMv6MCore final : public ClockedDevice
 {
 public:
     ARMv6MCore(MemoryBus &mem);
@@ -25,6 +25,8 @@ public:
     MemoryBus &getMem() {return mem;}
 
     ClockTarget &getClock() {return clock;}
+
+    int getDeviceFlags() const {return ClockedDevice_CPU;}
 
 private:
     friend class GDBServer; // needs ALL the CPU internals
