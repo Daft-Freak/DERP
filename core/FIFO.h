@@ -11,10 +11,9 @@ public:
     {
         assert(!fullFlag);
 
-        data[writeOff++] = val;
+        data[writeOff] = val;
 
-        if(writeOff == size)
-            writeOff = 0;
+        writeOff = (writeOff + 1) % size;
 
         fullFlag = readOff == writeOff;
     }
@@ -31,10 +30,9 @@ public:
     {
         assert(!empty());
 
-        auto ret = data[readOff++];
+        auto ret = data[readOff];
 
-        if(readOff == size)
-            readOff = 0;
+        readOff = (readOff + 1) % size;
 
         fullFlag = false;
 
@@ -51,7 +49,7 @@ public:
 
     bool empty() const
     {
-        return !fullFlag && readOff == writeOff;
+        return readOff == writeOff && !fullFlag;
     }
 
     bool full() const {return fullFlag;}
@@ -70,6 +68,6 @@ public:
 private:
     T data[size];
 
-    int readOff = 0, writeOff = 0;
+    unsigned int readOff = 0, writeOff = 0;
     bool fullFlag = false;
 };
