@@ -52,6 +52,8 @@ void DMA::update(uint64_t target)
 {
     auto passed = clock.getCyclesToTime(target);
 
+    auto readChannel = curReadChannel;
+    auto writeChannel = curWriteChannel;
 
     // TODO: DREQ, priority, ring, chaining, sniff...
 
@@ -64,55 +66,55 @@ void DMA::update(uint64_t target)
         }
 
         // transfer write data
-        if(curWriteChannel >= 0)
+        if(writeChannel >= 0)
         {
             assert(!transferDataFifo.empty());
 
             int cycles; // TODO
             uint32_t val = transferDataFifo.pop();
 
-            (this->*writeFuncs[curWriteChannel])(val, cycles);
+            (this->*writeFuncs[writeChannel])(val, cycles);
 
-            transfersInProgress[curWriteChannel]--;
+            transfersInProgress[writeChannel]--;
             
             // decrement count/finish
-            if(--transferCount[curWriteChannel] == 0)
+            if(--transferCount[writeChannel] == 0)
             {
-                channelTriggered &= ~(1 << curWriteChannel); // done
+                channelTriggered &= ~(1 << writeChannel); // done
 
-                interrupts |= (1 << curWriteChannel);
+                interrupts |= (1 << writeChannel);
             
-                if(interruptEnables[0] & (1 << curWriteChannel))
+                if(interruptEnables[0] & (1 << writeChannel))
                     mem.setPendingIRQ(DMA_IRQ_0);
-                if(interruptEnables[1] & (1 << curWriteChannel))
+                if(interruptEnables[1] & (1 << writeChannel))
                     mem.setPendingIRQ(DMA_IRQ_1);
             }
     
-            curWriteChannel = -1;
+            writeChannel = -1;
         }
 
         // set write address
-        if(!transferDataFifo.empty() && curWriteChannel == -1)
+        if(writeChannel == -1 && !transferDataFifo.empty())
         {
             assert(!writeAddressFifo.empty());
 
-            curWriteChannel = writeChannelFifo.pop();
+            writeChannel = writeChannelFifo.pop();
             curWriteAddr = writeAddressFifo.pop();
         }
 
         // transfer read data
-        if(!transferDataFifo.full() && curReadChannel >= 0)
+        if(readChannel >= 0 && !transferDataFifo.full())
         {
             int cycles; // TODO
-            uint32_t val = (this->*readFuncs[curReadChannel])(cycles);
+            uint32_t val = (this->*readFuncs[readChannel])(cycles);
             transferDataFifo.push(val);
-            curReadChannel = -1;
+            readChannel = -1;
         }
 
         // set read address
-        if(!readAddressFifo.empty() && !transferDataFifo.full()/*?*/ && curReadChannel == -1)
+        if(readChannel == -1 && !readAddressFifo.empty() && !transferDataFifo.full()/*?*/)
         {
-            curReadChannel = readChannelFifo.pop();
+            readChannel = readChannelFifo.pop();
             curReadAddr = readAddressFifo.pop();
         }
 
@@ -157,6 +159,9 @@ void DMA::update(uint64_t target)
 
         clock.addCycles(1);
     }
+
+    curReadChannel = readChannel;
+    curWriteChannel = writeChannel;
 }
 
 uint64_t DMA::getNextInterruptTime(uint64_t target)
