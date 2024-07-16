@@ -121,6 +121,26 @@ uint32_t PIO::regRead(uint32_t addr)
             return hw.fdebug;
         }
 
+        case PIO_RXF0_OFFSET:
+        case PIO_RXF1_OFFSET:
+        case PIO_RXF2_OFFSET:
+        case PIO_RXF3_OFFSET:
+        {
+            int index = (addr - PIO_RXF0_OFFSET) / 4;
+            if(rxFifo[index].empty())
+                hw.fdebug |= 1 << (PIO_FDEBUG_RXUNDER_LSB + index);
+            else
+            {
+                auto data = rxFifo[index].pop();
+
+                if(rxFifo[index].empty())
+                    updateFifoStatus(index);
+
+                return data;
+            }
+            return ~0;
+        }
+
         case PIO_SM0_CLKDIV_OFFSET:
         case PIO_SM1_CLKDIV_OFFSET:
         case PIO_SM2_CLKDIV_OFFSET:
@@ -309,8 +329,18 @@ void PIO::regWrite(uint32_t addr, uint32_t data)
 
 void PIO::updateFifoStatus(int sm)
 {
-    hw.fstat |= 1 << (PIO_FSTAT_RXEMPTY_LSB + sm); // TODO
+    // RX
+    if(rxFifo[sm].full())
+        hw.fstat |= 1 << (PIO_FSTAT_RXFULL_LSB + sm);
+    else
+        hw.fstat &= ~(1 << (PIO_FSTAT_RXFULL_LSB + sm));
 
+    if(rxFifo[sm].empty())
+        hw.fstat |= 1 << (PIO_FSTAT_RXEMPTY_LSB + sm);
+    else
+        hw.fstat &= ~(1 << (PIO_FSTAT_RXEMPTY_LSB + sm));
+
+    // TX
     if(txFifo[sm].full())
         hw.fstat |= 1 << (PIO_FSTAT_TXFULL_LSB + sm);
     else

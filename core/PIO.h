@@ -36,6 +36,7 @@ public:
     ClockTarget &getClock() {return clock;}
 
     const pio_hw_t &getHW(){return hw;}
+    FIFO<uint32_t, 4> &getRXFIFO(int i) {return rxFifo[i];}
     FIFO<uint32_t, 4> &getTXFIFO(int i) {return txFifo[i];}
 
     void updateFifoStatus(int sm);
@@ -50,6 +51,7 @@ private:
 
     UpdateCallback updateCallback;
 
-    // TODO: rx, joined
+    // TODO: joined
+    FIFO<uint32_t, 4> rxFifo[NUM_PIO_STATE_MACHINES];
     FIFO<uint32_t, 4> txFifo[NUM_PIO_STATE_MACHINES];
 };
