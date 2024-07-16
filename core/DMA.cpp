@@ -117,8 +117,11 @@ void DMA::update(uint64_t target)
         }
 
         // address generation
-        if(!readAddressFifo.full() && !writeAddressFifo.full())
+        if(!writeAddressFifo.full())
         {
+            // read/write addr are generated at the same time and write happens last, so read should also have room
+            assert(!readAddressFifo.full());
+
             for(int i = 0; i < numChannels; i++, curChannel++)
             {
                 if(curChannel == numChannels)
