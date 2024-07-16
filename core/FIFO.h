@@ -1,4 +1,6 @@
 #pragma once
+#include <cassert>
+
 // FIFO helper using circular buffer
 
 template<class T, int size>
@@ -7,8 +9,7 @@ class FIFO final
 public:
     void push(T val)
     {
-        if(fullFlag)
-            return;
+        assert(!fullFlag);
 
         data[writeOff++] = val;
 
@@ -18,10 +19,17 @@ public:
         fullFlag = readOff == writeOff;
     }
 
+    void pushIfNotFull(T val)
+    {
+        if(fullFlag)
+            return;
+
+        push(val);
+    }
+
     T pop()
     {
-        if(empty())
-            return T(0);
+        assert(!empty());
 
         auto ret = data[readOff++];
 
@@ -31,6 +39,14 @@ public:
         fullFlag = false;
 
         return ret;
+    }
+
+    T popOrDefault()
+    {
+        if(empty())
+            return T{};
+
+        return pop();
     }
 
     bool empty() const
