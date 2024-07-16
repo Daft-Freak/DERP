@@ -271,11 +271,15 @@ void PicoVisionBoard::onPIOUpdate(uint64_t time, PIO &pio)
     {
         // if just changed bank and last bank not finished by one word overwrite bank
         // this is definitely not another sync hack
-        if(ramCmdOffset[lastRamBank] && ramCmdOffset[lastRamBank] == ramCmdLenWords[lastRamBank])
+        if(ramCmdOffset[lastRamBank] && ramCmdOffset[lastRamBank] == ramCmdLenWords[lastRamBank] - 1)
             std::swap(ramBank, lastRamBank);
         else
             lastRamBank = ramBank;
     }
+
+    auto cmdLenWords = ramCmdLenWords[ramBank];
+    auto cmdOffset = ramCmdOffset[ramBank];
+    auto dataLenBytes = ramDataLenBytes[ramBank];
 
     while(!txFifo.empty())
     {
@@ -283,16 +287,18 @@ void PicoVisionBoard::onPIOUpdate(uint64_t time, PIO &pio)
 
         bool isResetProg = !ramQuadEnabled[ramBank]; // assume reset program until quad enabled
 
-        if(ramCmdOffset[ramBank] == 0)
+        if(cmdOffset == cmdLenWords)
         {
-            if(isResetProg)
-                ramCmdLenWords[ramBank] = data / 32 + 1;
-            else
-                ramCmdLenWords[ramBank] = (data + 1) * (ramQuadEnabled[ramBank] ? 4 : 1) / 32 + 3;
+            cmdOffset = 0;
 
-            ramDataLenBytes[ramBank] = (data + 1) * (ramQuadEnabled[ramBank] ? 4 : 1) / 8;
+            if(isResetProg)
+                ramCmdLenWords[ramBank] = cmdLenWords = data / 32 + 2;
+            else
+                ramCmdLenWords[ramBank] = cmdLenWords = (data + 1) * (ramQuadEnabled[ramBank] ? 4 : 1) / 32 + 4;
+
+            ramDataLenBytes[ramBank] = dataLenBytes = (data + 1) * (ramQuadEnabled[ramBank] ? 4 : 1) / 8;
         }
-        else if(ramCmdOffset[ramBank] == 1)
+        else if(cmdOffset == 1)
         {
             auto cmd = ramCommand[ramBank] = data >> 24;
 
@@ -304,9 +310,9 @@ void PicoVisionBoard::onPIOUpdate(uint64_t time, PIO &pio)
             else if(cmd == 0x38) // write
                 ramCmdAddr[ramBank] = data & 0xFFFFFF;
             else
-                logf(LogLevel::Debug, logComponent, "psram %i cmd %02X %06X len %i", ramBank, cmd, data & 0xFFFFFF, ramDataLenBytes[ramBank]);
+                logf(LogLevel::Debug, logComponent, "psram %i cmd %02X %06X len %i", ramBank, cmd, data & 0xFFFFFF, dataLenBytes);
         }
-        else if(ramCmdOffset[ramBank] == 2 && !isResetProg)
+        else if(cmdOffset == 2 && !isResetProg)
         {
             // pio addr
         }
@@ -314,24 +320,25 @@ void PicoVisionBoard::onPIOUpdate(uint64_t time, PIO &pio)
         {
             if(ramCommand[ramBank] == 0x38) // write
             {
-                auto offset = (ramCmdOffset[ramBank] - 3) * 4;
+                auto offset = (cmdOffset - 3) * 4;
 
-                for(int i = 0; i < std::min(4, ramDataLenBytes[ramBank] - offset); i++)
+                int len = std::min(4, dataLenBytes - offset);
+
+                auto ptr = psramData[ramBank] + ramCmdAddr[ramBank] + offset;
+
+                for(int i = 0; i < len; i++)
                 {
-                    uint32_t addr = ramCmdAddr[ramBank] + offset + i;
-
-                    psramData[ramBank][addr] = data >> 24;
+                    *ptr++ = data >> 24;
 
                     data <<= 8;
                 }
             }
         }
 
-        if(ramCmdOffset[ramBank] == ramCmdLenWords[ramBank])
-            ramCmdOffset[ramBank] = 0;
-        else
-            ramCmdOffset[ramBank]++;
+        cmdOffset++;
     }
+
+    ramCmdOffset[ramBank] = cmdOffset;
 }
 
 void PicoVisionBoard::onI2CWrite(uint64_t time, I2C &i2c, uint8_t data, bool stop)
