@@ -1245,7 +1245,7 @@ uint32_t MemoryBus::doIOPORTRead(ClockTarget &masterClock, int core, uint32_t ad
             return (vld ? SIO_FIFO_ST_VLD_BITS : 0) | (rdy ? SIO_FIFO_ST_RDY_BITS : 0); // TODO: error flags
         }
         case SIO_FIFO_RD_OFFSET:
-            return coreFIFO[1 - core].pop();
+            return coreFIFO[1 - core].popOrDefault();
 
         case SIO_DIV_UDIVIDEND_OFFSET:
         case SIO_DIV_SDIVIDEND_OFFSET:
@@ -1438,7 +1438,7 @@ void MemoryBus::doIOPORTWrite(ClockTarget &masterClock, int core, uint32_t addr,
             return;
 
         case SIO_FIFO_WR_OFFSET:
-            coreFIFO[core].push(data);
+            coreFIFO[core].pushIfNotFull(data);
             // at least one status flag got set here...
             setPendingIRQ(SIO_IRQ_PROC0 + core);
             return;
