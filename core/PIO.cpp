@@ -54,7 +54,7 @@ void PIO::update(uint64_t target)
     auto cycles = clock.getCyclesToTime(target);
 
     // this is almost certainly a hack to work around timing issues
-    if(!cycles && updateCallback)
+    if(!cycles && updateCallback && ~(hw.fstat & PIO_FSTAT_TXEMPTY_BITS))
         updateCallback(clock.getTime(), *this);
 
     while(cycles)
