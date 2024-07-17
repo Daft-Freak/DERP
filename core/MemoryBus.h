@@ -5,6 +5,8 @@
 #include <queue>
 #include <variant>
 
+#include "hardware/structs/interp.h"
+
 #include "Clocks.h"
 #include "DMA.h"
 #include "GPIO.h"
@@ -140,6 +142,9 @@ private:
     template<class T>
     T doOpenRead(uint32_t addr) const;
 
+    void updateInterpolatorResult(interp_hw_t &interp);
+    void popInterpolator(interp_hw_t &interp);
+
     bool pcInCachedXIP = false;
 
     const uint8_t *bootROM = nullptr;
@@ -200,6 +205,9 @@ private:
     uint32_t dividend[2], divisor[2];
     uint32_t divQuot[2], divRem[2];
     bool dividerSigned[2], dividerDirty[2];
+
+    // 2 per core
+    interp_hw_t interpolator[2][2];
 
     uint32_t spinlocks = 0;
 };

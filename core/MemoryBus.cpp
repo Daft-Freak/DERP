@@ -481,6 +481,54 @@ void MemoryBus::sendEvent(ARMv6MCore *coreFrom)
     cpuCores[1 - coreIndex].setEvent();
 }
 
+void MemoryBus::updateInterpolatorResult(interp_hw_t &interp)
+{
+    // lane 0/1
+    for(int lane = 0; lane < 2; lane++)
+    {
+        auto ctrl = interp.ctrl[lane];
+
+        auto base = interp.base[lane];
+        auto accum = (ctrl & SIO_INTERP0_CTRL_LANE0_CROSS_INPUT_BITS) ? interp.accum[lane ^ 1] : interp.accum[lane];
+
+        uint32_t shifted = accum;
+
+        // shift
+        shifted >>= (ctrl & SIO_INTERP0_CTRL_LANE0_SHIFT_BITS);
+
+        // mask
+        auto lsb = (ctrl & SIO_INTERP0_CTRL_LANE0_MASK_LSB_BITS) >> SIO_INTERP0_CTRL_LANE0_MASK_LSB_LSB;
+        auto msb = (ctrl & SIO_INTERP0_CTRL_LANE0_MASK_MSB_BITS) >> SIO_INTERP0_CTRL_LANE0_MASK_MSB_LSB;
+        uint32_t mask = (msb == 31 ? 0xFFFFFFFF : (1 << (msb - lsb + 1)) - 1) << lsb;
+        shifted &= mask;
+
+        // sign extend
+        if((ctrl & SIO_INTERP0_CTRL_LANE0_SIGNED_BITS) && (shifted & (1 << msb)))
+            shifted |= 0xFFFFFFFF << msb;
+        
+        uint32_t result = (ctrl & SIO_INTERP0_CTRL_LANE0_ADD_RAW_BITS) ? accum : shifted;
+
+        interp.peek[lane] = result + base;
+
+        // "raw" value is always shifted
+        interp.add_raw[lane] = shifted;
+    }
+
+    interp.peek[2] = interp.base[2] + interp.add_raw[0] + interp.add_raw[1];
+}
+
+void MemoryBus::popInterpolator(interp_hw_t &interp)
+{
+    for(int lane = 0; lane < 2; lane++)
+    {
+        int outAccumIndex = (interp.ctrl[lane] & SIO_INTERP0_CTRL_LANE0_CROSS_RESULT_BITS) ? lane ^ 1 : lane;
+        interp.accum[outAccumIndex] = interp.peek[lane];
+    }
+
+    // calculate next values
+    updateInterpolatorResult(interp);
+}
+
 template<class T, size_t size>
 T MemoryBus::doRead(const uint8_t (&mem)[size], uint32_t addr) const
 {
@@ -1221,6 +1269,65 @@ uint32_t MemoryBus::doIOPORTRead(ClockTarget &masterClock, int core, uint32_t ad
         case SIO_DIV_CSR_OFFSET:
             return (dividerDirty[core] ? SIO_DIV_CSR_DIRTY_BITS : 0) | SIO_DIV_CSR_READY_BITS;
 
+        case SIO_INTERP0_ACCUM0_OFFSET:
+        case SIO_INTERP0_ACCUM1_OFFSET:
+            return interpolator[core][0].accum[((addr & 0xFFF) - SIO_INTERP0_ACCUM0_OFFSET) / 4];
+
+        case SIO_INTERP0_POP_LANE0_OFFSET:
+        case SIO_INTERP0_POP_LANE1_OFFSET:
+        case SIO_INTERP0_POP_FULL_OFFSET:
+        {
+            int lane = ((addr & 0xFFF) - SIO_INTERP0_POP_LANE0_OFFSET) / 4;
+            auto result = interpolator[core][0].peek[lane];
+            popInterpolator(interpolator[core][0]);
+            return result;
+        }
+
+        case SIO_INTERP0_PEEK_LANE0_OFFSET:
+        case SIO_INTERP0_PEEK_LANE1_OFFSET:
+        case SIO_INTERP0_PEEK_FULL_OFFSET:
+        {
+            int lane = ((addr & 0xFFF) - SIO_INTERP0_PEEK_LANE0_OFFSET) / 4;
+            return interpolator[core][0].peek[lane];
+        }
+
+        case SIO_INTERP0_ACCUM0_ADD_OFFSET:
+        case SIO_INTERP0_ACCUM1_ADD_OFFSET:
+        {
+            int lane = ((addr & 0xFFF) - SIO_INTERP0_ACCUM0_ADD_OFFSET) / 4;
+            return interpolator[core][0].add_raw[lane];
+        }
+
+        case SIO_INTERP1_ACCUM0_OFFSET:
+        case SIO_INTERP1_ACCUM1_OFFSET:
+            return interpolator[core][1].accum[((addr & 0xFFF) - SIO_INTERP1_ACCUM0_OFFSET) / 4];
+
+        case SIO_INTERP1_POP_LANE0_OFFSET:
+        case SIO_INTERP1_POP_LANE1_OFFSET:
+        case SIO_INTERP1_POP_FULL_OFFSET:
+        {
+            int lane = ((addr & 0xFFF) - SIO_INTERP1_POP_LANE0_OFFSET) / 4;
+            auto result = interpolator[core][1].peek[lane];
+
+            popInterpolator(interpolator[core][1]);
+            return result;
+        }
+
+        case SIO_INTERP1_PEEK_LANE0_OFFSET:
+        case SIO_INTERP1_PEEK_LANE1_OFFSET:
+        case SIO_INTERP1_PEEK_FULL_OFFSET:
+        {
+            int lane = ((addr & 0xFFF) - SIO_INTERP1_PEEK_LANE0_OFFSET) / 4;
+            return interpolator[core][1].peek[lane];
+        }
+
+        case SIO_INTERP1_ACCUM0_ADD_OFFSET:
+        case SIO_INTERP1_ACCUM1_ADD_OFFSET:
+        {
+            int lane = ((addr & 0xFFF) - SIO_INTERP1_ACCUM0_ADD_OFFSET) / 4;
+            return interpolator[core][1].add_raw[lane];
+        }
+
         case SIO_SPINLOCK0_OFFSET:
         case SIO_SPINLOCK1_OFFSET:
         case SIO_SPINLOCK2_OFFSET:
@@ -1376,6 +1483,56 @@ void MemoryBus::doIOPORTWrite(ClockTarget &masterClock, int core, uint32_t addr,
             divRem[core] = data;
             dividerDirty[core] = true;
             return;
+
+        case SIO_INTERP0_ACCUM0_OFFSET:
+        case SIO_INTERP0_ACCUM1_OFFSET:
+            interpolator[core][0].accum[((addr & 0xFFF) - SIO_INTERP0_ACCUM0_OFFSET) / 4] = data;
+            updateInterpolatorResult(interpolator[core][0]);
+            return;
+
+        case SIO_INTERP0_BASE0_OFFSET:
+        case SIO_INTERP0_BASE1_OFFSET:
+        case SIO_INTERP0_BASE2_OFFSET:
+            interpolator[core][0].base[((addr & 0xFFF) - SIO_INTERP0_BASE0_OFFSET) / 4] = data;
+            updateInterpolatorResult(interpolator[core][0]);
+            return;
+
+        case SIO_INTERP0_CTRL_LANE0_OFFSET:
+        case SIO_INTERP0_CTRL_LANE1_OFFSET:
+        {
+            int lane = ((addr & 0xFFF) - SIO_INTERP0_CTRL_LANE0_OFFSET) / 4;
+            if(data & SIO_INTERP0_CTRL_LANE0_BLEND_BITS)
+                logf(LogLevel::NotImplemented, logComponent, "Interp 0 lane %i blend mode", lane);
+    
+            interpolator[core][0].ctrl[lane] = data;
+            updateInterpolatorResult(interpolator[core][0]);
+            return;
+        }
+
+        // TODO: ACCUMx_ADD
+        // TODO: BASE_1AND0
+
+        case SIO_INTERP1_ACCUM0_OFFSET:
+        case SIO_INTERP1_ACCUM1_OFFSET:
+            interpolator[core][1].accum[((addr & 0xFFF) - SIO_INTERP1_ACCUM0_OFFSET) / 4] = data;
+            updateInterpolatorResult(interpolator[core][1]);
+            return;
+
+        case SIO_INTERP1_BASE0_OFFSET:
+        case SIO_INTERP1_BASE1_OFFSET:
+        case SIO_INTERP1_BASE2_OFFSET:
+            interpolator[core][1].base[((addr & 0xFFF) - SIO_INTERP1_BASE0_OFFSET) / 4] = data;
+            updateInterpolatorResult(interpolator[core][1]);
+            return;
+
+        case SIO_INTERP1_CTRL_LANE0_OFFSET:
+        case SIO_INTERP1_CTRL_LANE1_OFFSET:
+            interpolator[core][1].ctrl[((addr & 0xFFF) - SIO_INTERP1_CTRL_LANE0_OFFSET) / 4] = data;
+            updateInterpolatorResult(interpolator[core][1]);
+            return;
+
+        // TODO: ACCUMx_ADD
+        // TODO: BASE_1AND0
 
         case SIO_SPINLOCK0_OFFSET:
         case SIO_SPINLOCK1_OFFSET:
