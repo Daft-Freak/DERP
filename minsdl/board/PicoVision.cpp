@@ -259,6 +259,18 @@ uint64_t PicoVisionBoard::onGetNextInterruptTime(uint64_t time)
 
 void PicoVisionBoard::onPIOUpdate(uint64_t time, PIO &pio)
 {
+    // 32blit-sdk SD card
+    auto &sdRx = pio.getRXFIFO(1);
+    auto &sdTx = pio.getTXFIFO(1);
+
+    while(!sdTx.empty() && !sdRx.full())
+    {
+        sdTx.pop();
+
+        sdRx.push(0xFFFFFFFF);
+    }
+
+    // PSRAM
     auto &txFifo = pio.getTXFIFO(0);
     //auto &smHW = pio.getHW().sm[0];
 
