@@ -102,8 +102,10 @@ uint64_t Watchdog::getTickTarget(uint32_t numTicks)
     return clock.getTimeToCycles(cycles);
 }
 
-uint32_t Watchdog::regRead(uint32_t addr)
+uint32_t Watchdog::regRead(uint32_t addr, uint64_t time)
 {
+    update(time);
+
     switch(addr)
     {
         case WATCHDOG_CTRL_OFFSET:
@@ -127,8 +129,10 @@ uint32_t Watchdog::regRead(uint32_t addr)
     return 0;
 }
 
-void Watchdog::regWrite(uint32_t addr, uint32_t data)
+void Watchdog::regWrite(uint32_t addr, uint32_t data, uint64_t time)
 {
+    update(time);
+
     int atomic = addr >> 12;
     addr &= 0xFFF;
 
