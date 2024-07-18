@@ -203,7 +203,7 @@ void PicoVisionBoard::updateScreenData()
             for(int r = 0; r < hRepeat; r++)
             {
                 auto outOff = (x + r + line * vRepeat * hLen) * 3;
-                if(format == 0/*?*/ || format == 1) // RGB555
+                if(format == 1) // RGB555
                 {
                     uint16_t rgb555 = psram[addr] | psram[addr + 1] << 8;
                     auto b =  rgb555        & 0x1F;
