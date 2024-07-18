@@ -19,8 +19,8 @@ public:
 
     uint64_t getTickTarget(uint32_t numTicks);
 
-    uint32_t regRead(uint32_t addr);
-    void regWrite(uint32_t addr, uint32_t data);
+    uint32_t regRead(uint32_t addr, uint64_t time);
+    void regWrite(uint32_t addr, uint32_t data, uint64_t time);
 
     ClockTarget &getClock() {return clock;}
 

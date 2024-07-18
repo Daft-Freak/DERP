@@ -141,8 +141,10 @@ uint64_t USB::getNextInterruptTime(uint64_t target)
     return target;
 }
 
-uint32_t USB::regRead(uint32_t addr)
+uint32_t USB::regRead(uint32_t addr, uint64_t time)
 {
+    update(time);
+
     switch(addr)
     {
         case USB_MAIN_CTRL_OFFSET:
@@ -175,8 +177,10 @@ uint32_t USB::regRead(uint32_t addr)
     return 0xBADADD55;
 }
 
-void USB::regWrite(uint32_t addr, uint32_t data)
+void USB::regWrite(uint32_t addr, uint32_t data, uint64_t time)
 {
+    update(time);
+
     int atomic = addr >> 12;
     addr &= 0xFFF;
 

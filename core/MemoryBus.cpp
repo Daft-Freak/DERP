@@ -912,16 +912,13 @@ uint32_t MemoryBus::doAPBPeriphRead(ClockTarget &masterClock, uint32_t addr)
             return i2c[1].regRead(periphAddr);
 
         case APBPeripheral::PWM:
-            pwm.update(masterClock.getTime());
-            return pwm.regRead(periphAddr);
+            return pwm.regRead(periphAddr, masterClock.getTime());
 
         case APBPeripheral::Timer:
-            timer.update(masterClock.getTime());
-            return timer.regRead(periphAddr);
+            return timer.regRead(periphAddr, masterClock.getTime());
 
         case APBPeripheral::Watchdog:
-            watchdog.update(masterClock.getTime());
-            return watchdog.regRead(periphAddr);
+            return watchdog.regRead(periphAddr, masterClock.getTime());
 
         case APBPeripheral::RTC:
             if(periphAddr == RTC_CTRL_OFFSET)
@@ -1039,19 +1036,16 @@ void MemoryBus::doAPBPeriphWrite(ClockTarget &masterClock, uint32_t addr, T data
             return;
 
         case APBPeripheral::PWM:
-            pwm.update(masterClock.getTime());
-            pwm.regWrite(periphAddr, data);
+            pwm.regWrite(periphAddr, data, masterClock.getTime());
             return;
 
         case APBPeripheral::Timer:
-            timer.update(masterClock.getTime());
-            timer.regWrite(periphAddr, data);
+            timer.regWrite(periphAddr, data, masterClock.getTime());
             calcNextInterruptTime();
             return;
 
         case APBPeripheral::Watchdog:
-            watchdog.update(masterClock.getTime());
-            watchdog.regWrite(periphAddr, data);
+            watchdog.regWrite(periphAddr, data, masterClock.getTime());
             return;
 
         case APBPeripheral::RTC:
@@ -1097,8 +1091,7 @@ uint32_t MemoryBus::doAHBPeriphRead(ClockTarget &masterClock, uint32_t addr)
     switch(peripheral)
     {
         case AHBPeripheral::DMA:
-            //dma.update(masterClock.getTime());
-            return dma.regRead(periphAddr);
+            return dma.regRead(periphAddr, masterClock.getTime());
 
         case AHBPeripheral::USB:
         {
@@ -1108,20 +1101,16 @@ uint32_t MemoryBus::doAHBPeriphRead(ClockTarget &masterClock, uint32_t addr)
                 return *reinterpret_cast<const uint32_t *>(usb.getRAM() + (addr & 0xFFF));
             }
             else if(addr >= USBCTRL_REGS_BASE)
-            {
-                usb.update(masterClock.getTime());
-                return usb.regRead(periphAddr);
-            }
+                return usb.regRead(periphAddr, masterClock.getTime());
+
             break;
         }
         
         case AHBPeripheral::PIO0:
-            pio[0].update(masterClock.getTime());
-            return pio[0].regRead(periphAddr);
+            return pio[0].regRead(periphAddr, masterClock.getTime());
 
         case AHBPeripheral::PIO1:
-            pio[1].update(masterClock.getTime());
-            return pio[1].regRead(periphAddr);
+            return pio[1].regRead(periphAddr, masterClock.getTime());
 
         case AHBPeripheral::XIPAux:
             logf(LogLevel::NotImplemented, logComponent, "AHBP XIP_AUX R %08X", addr);
@@ -1169,8 +1158,7 @@ void MemoryBus::doAHBPeriphWrite(ClockTarget &masterClock, uint32_t addr, T data
     switch(peripheral)
     {
         case AHBPeripheral::DMA:
-            dma.update(masterClock.getTime());
-            dma.regWrite(periphAddr, data);
+            dma.regWrite(periphAddr, data, masterClock.getTime());
             calcNextInterruptTime();
             return;
 
@@ -1185,8 +1173,7 @@ void MemoryBus::doAHBPeriphWrite(ClockTarget &masterClock, uint32_t addr, T data
             }
             else if(addr >= USBCTRL_REGS_BASE)
             {
-                usb.update(masterClock.getTime());
-                usb.regWrite(periphAddr, data);
+                usb.regWrite(periphAddr, data, masterClock.getTime());
                 return;
             }
             break;
@@ -1194,14 +1181,12 @@ void MemoryBus::doAHBPeriphWrite(ClockTarget &masterClock, uint32_t addr, T data
         
         case AHBPeripheral::PIO0:
         {
-            pio[0].update(masterClock.getTime());
-            pio[0].regWrite(periphAddr, data);
+            pio[0].regWrite(periphAddr, data, masterClock.getTime());
             return;
         }
         case AHBPeripheral::PIO1:
         {
-            pio[1].update(masterClock.getTime());
-            pio[1].regWrite(periphAddr, data);
+            pio[1].regWrite(periphAddr, data, masterClock.getTime());
             return;
         }
 

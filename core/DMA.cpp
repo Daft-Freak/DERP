@@ -190,8 +190,10 @@ uint64_t DMA::getNextInterruptTime(uint64_t target)
     return target;
 }
 
-uint32_t DMA::regRead(uint32_t addr)
+uint32_t DMA::regRead(uint32_t addr, uint64_t time)
 {
+    update(time);
+
     if(addr < DMA_INTR_OFFSET)
     {
         int ch = addr / 0x40;
@@ -241,8 +243,10 @@ uint32_t DMA::regRead(uint32_t addr)
     return 0xBADADD55;
 }
 
-void DMA::regWrite(uint32_t addr, uint32_t data)
+void DMA::regWrite(uint32_t addr, uint32_t data, uint64_t time)
 {
+    update(time);
+
     int atomic = addr >> 12;
     addr &= 0xFFF;
 
@@ -310,7 +314,7 @@ void DMA::regWrite(uint32_t addr, uint32_t data)
                     // anything using this is probably buggy
                     // https://github.com/raspberrypi/pico-sdk/issues/974
 
-                    auto oldVal = regRead(addr);
+                    auto oldVal = regRead(addr, time);
                     updateReg(oldVal, data, atomic);
                     interrupts &= ~oldVal;
                     return;
