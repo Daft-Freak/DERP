@@ -73,7 +73,7 @@ void PIO::update(uint64_t target)
                     if(!txFifo[i].empty())
                     {
                         txFifo[i].pop();
-                        if(!txFifo[i].empty())
+                        if(txFifo[i].empty())
                             updateFifoStatus(i);
                     }
                 }
