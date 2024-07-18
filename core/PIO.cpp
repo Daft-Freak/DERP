@@ -102,8 +102,10 @@ uint64_t PIO::getNextInterruptTime(uint64_t target)
     return target; // TODO
 }
 
-uint32_t PIO::regRead(uint32_t addr)
+uint32_t PIO::regRead(uint32_t addr, uint64_t time)
 {
+    update(time);
+
     switch(addr)
     {
         case PIO_CTRL_OFFSET:
@@ -195,8 +197,10 @@ uint32_t PIO::regRead(uint32_t addr)
     return 0;
 }
 
-void PIO::regWrite(uint32_t addr, uint32_t data)
+void PIO::regWrite(uint32_t addr, uint32_t data, uint64_t time)
 {
+    update(time);
+
     int atomic = addr >> 12;
     addr &= 0xFFF;
 
