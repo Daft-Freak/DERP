@@ -105,7 +105,7 @@ uint32_t PIO::regRead(uint64_t time, uint32_t addr)
         case PIO_FSTAT_OFFSET:
             update(time);
 
-            for(int i = 0; i < 4; i++)
+            for(unsigned i = 0; i < NUM_PIO_STATE_MACHINES; i++)
                 updateFifoStatus(i);
 
             return hw.fstat;
