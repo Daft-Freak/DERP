@@ -71,14 +71,7 @@ void PIO::update(uint64_t target)
                 if(hw.ctrl & (1 << (PIO_CTRL_SM_ENABLE_LSB + i)))
                 {
                     if(!txFifo[i].empty())
-                    {
                         txFifo[i].pop();
-
-                        if(txFifo[index].empty())
-                            hw.fstat |= 1 << (PIO_FSTAT_TXEMPTY_LSB + i);
-
-                        hw.fstat &= ~(1 << (PIO_FSTAT_TXFULL_LSB + i));
-                    }
                 }
             }
         }
@@ -111,6 +104,10 @@ uint32_t PIO::regRead(uint64_t time, uint32_t addr)
 
         case PIO_FSTAT_OFFSET:
             update(time);
+
+            for(int i = 0; i < 4; i++)
+                updateFifoStatus(i);
+
             return hw.fstat;
         case PIO_FDEBUG_OFFSET:
         {
@@ -138,16 +135,8 @@ uint32_t PIO::regRead(uint64_t time, uint32_t addr)
             if(rxFifo[index].empty())
                 hw.fdebug |= 1 << (PIO_FDEBUG_RXUNDER_LSB + index);
             else
-            {
-                auto data = rxFifo[index].pop();
+                return rxFifo[index].pop();
 
-                if(rxFifo[index].empty())
-                    hw.fstat |= 1 << (PIO_FSTAT_RXEMPTY_LSB + index);
-
-                hw.fstat &= ~(1 << (PIO_FSTAT_RXFULL_LSB + index));
-
-                return data;
-            }
             return ~0;
         }
 
@@ -260,10 +249,7 @@ void PIO::regWrite(uint64_t time, uint32_t addr, uint32_t data)
                 }
             }
 
-            if(txFifo[index].push(data))
-                hw.fstat |= 1 << (PIO_FSTAT_TXFULL_LSB + index);
-
-            hw.fstat &= ~(1 << (PIO_FSTAT_TXEMPTY_LSB + index));
+            txFifo[index].push(data);
 
             return;
         }
