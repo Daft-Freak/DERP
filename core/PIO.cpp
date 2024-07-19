@@ -73,7 +73,11 @@ void PIO::update(uint64_t target)
                     if(!txFifo[i].empty())
                     {
                         txFifo[i].pop();
-                        updateFifoStatus(i);
+
+                        if(txFifo[index].empty())
+                            hw.fstat |= 1 << (PIO_FSTAT_TXEMPTY_LSB + i);
+
+                        hw.fstat &= ~(1 << (PIO_FSTAT_TXFULL_LSB + i));
                     }
                 }
             }
@@ -132,7 +136,10 @@ uint32_t PIO::regRead(uint32_t addr)
             {
                 auto data = rxFifo[index].pop();
 
-                updateFifoStatus(index);
+                if(rxFifo[index].empty())
+                    hw.fstat |= 1 << (PIO_FSTAT_RXEMPTY_LSB + index);
+
+                hw.fstat &= ~(1 << (PIO_FSTAT_RXFULL_LSB + index));
 
                 return data;
             }
@@ -235,7 +242,10 @@ void PIO::regWrite(uint32_t addr, uint32_t data)
             {
                 txFifo[index].push(data);
 
-                updateFifoStatus(index);
+                if(txFifo[index].full())
+                    hw.fstat |= 1 << (PIO_FSTAT_TXFULL_LSB + index);
+
+                hw.fstat &= ~(1 << (PIO_FSTAT_TXEMPTY_LSB + index));
             }
             return;
         }
