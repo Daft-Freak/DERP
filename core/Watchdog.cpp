@@ -102,7 +102,7 @@ uint64_t Watchdog::getTickTarget(uint32_t numTicks)
     return clock.getTimeToCycles(cycles);
 }
 
-uint32_t Watchdog::regRead(uint32_t addr, uint64_t time)
+uint32_t Watchdog::regRead(uint64_t time, uint32_t addr)
 {
     update(time);
 
@@ -129,7 +129,7 @@ uint32_t Watchdog::regRead(uint32_t addr, uint64_t time)
     return 0;
 }
 
-void Watchdog::regWrite(uint32_t addr, uint32_t data, uint64_t time)
+void Watchdog::regWrite(uint64_t time, uint32_t addr, uint32_t data)
 {
     update(time);
 
