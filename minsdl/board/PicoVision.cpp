@@ -269,7 +269,6 @@ void PicoVisionBoard::onPIOUpdate(uint64_t time, PIO &pio)
 
         sdRx.push(0xFFFFFFFF);
     }
-    pio.updateFifoStatus(1);
 
     // PSRAM
     auto &txFifo = pio.getTXFIFO(0);
@@ -352,8 +351,6 @@ void PicoVisionBoard::onPIOUpdate(uint64_t time, PIO &pio)
     }
 
     ramCmdOffset[ramBank] = cmdOffset;
-
-    pio.updateFifoStatus(0);
 }
 
 void PicoVisionBoard::onI2CWrite(uint64_t time, I2C &i2c, uint8_t data, bool stop)
