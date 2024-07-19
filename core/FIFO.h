@@ -7,7 +7,7 @@ template<class T, int size>
 class FIFO final
 {
 public:
-    void push(T val)
+    bool push(T val)
     {
         assert(!fullFlag);
 
@@ -16,6 +16,7 @@ public:
         writeOff = (writeOff + 1) % size;
 
         fullFlag = readOff == writeOff;
+        return fullFlag;
     }
 
     void pushIfNotFull(T val)

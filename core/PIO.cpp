@@ -260,9 +260,7 @@ void PIO::regWrite(uint64_t time, uint32_t addr, uint32_t data)
                 }
             }
 
-            txFifo[index].push(data);
-
-            if(txFifo[index].full())
+            if(txFifo[index].push(data))
                 hw.fstat |= 1 << (PIO_FSTAT_TXFULL_LSB + index);
 
             hw.fstat &= ~(1 << (PIO_FSTAT_TXEMPTY_LSB + index));
