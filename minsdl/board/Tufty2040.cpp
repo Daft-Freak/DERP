@@ -65,6 +65,4 @@ void Tufty2040Board::onPIOUpdate(uint64_t time, PIO &pio)
                 screenDataOff = 0;
         }
     }
-
-    pio.updateFifoStatus(0);
 }

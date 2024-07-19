@@ -286,8 +286,6 @@ void PicoSystemBoard::onPIOUpdate(uint64_t time, PIO &pio)
             }
         }
     }
-
-    pio.updateFifoStatus(0);
 }
 
 void PicoSystemBoard::handleDisplayCommandData(uint8_t data)
