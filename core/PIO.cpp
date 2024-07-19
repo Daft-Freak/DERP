@@ -99,7 +99,7 @@ uint64_t PIO::getNextInterruptTime(uint64_t target)
     return target; // TODO
 }
 
-uint32_t PIO::regRead(uint32_t addr, uint64_t time)
+uint32_t PIO::regRead(uint64_t time, uint32_t addr)
 {
     update(time);
 
@@ -196,7 +196,7 @@ uint32_t PIO::regRead(uint32_t addr, uint64_t time)
     return 0;
 }
 
-void PIO::regWrite(uint32_t addr, uint32_t data, uint64_t time)
+void PIO::regWrite(uint64_t time, uint32_t addr, uint32_t data)
 {
     update(time);
 

@@ -141,7 +141,7 @@ uint64_t USB::getNextInterruptTime(uint64_t target)
     return target;
 }
 
-uint32_t USB::regRead(uint32_t addr, uint64_t time)
+uint32_t USB::regRead(uint64_t time, uint32_t addr)
 {
     update(time);
 
@@ -177,7 +177,7 @@ uint32_t USB::regRead(uint32_t addr, uint64_t time)
     return 0xBADADD55;
 }
 
-void USB::regWrite(uint32_t addr, uint32_t data, uint64_t time)
+void USB::regWrite(uint64_t time, uint32_t addr, uint32_t data)
 {
     update(time);
 

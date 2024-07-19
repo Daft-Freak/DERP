@@ -912,13 +912,13 @@ uint32_t MemoryBus::doAPBPeriphRead(ClockTarget &masterClock, uint32_t addr)
             return i2c[1].regRead(periphAddr);
 
         case APBPeripheral::PWM:
-            return pwm.regRead(periphAddr, masterClock.getTime());
+            return pwm.regRead(masterClock.getTime(), periphAddr);
 
         case APBPeripheral::Timer:
-            return timer.regRead(periphAddr, masterClock.getTime());
+            return timer.regRead(masterClock.getTime(), periphAddr);
 
         case APBPeripheral::Watchdog:
-            return watchdog.regRead(periphAddr, masterClock.getTime());
+            return watchdog.regRead(masterClock.getTime(), periphAddr);
 
         case APBPeripheral::RTC:
             if(periphAddr == RTC_CTRL_OFFSET)
@@ -1036,16 +1036,16 @@ void MemoryBus::doAPBPeriphWrite(ClockTarget &masterClock, uint32_t addr, T data
             return;
 
         case APBPeripheral::PWM:
-            pwm.regWrite(periphAddr, data, masterClock.getTime());
+            pwm.regWrite(masterClock.getTime(), periphAddr, data);
             return;
 
         case APBPeripheral::Timer:
-            timer.regWrite(periphAddr, data, masterClock.getTime());
+            timer.regWrite(masterClock.getTime(), periphAddr, data);
             calcNextInterruptTime();
             return;
 
         case APBPeripheral::Watchdog:
-            watchdog.regWrite(periphAddr, data, masterClock.getTime());
+            watchdog.regWrite(masterClock.getTime(), periphAddr, data);
             return;
 
         case APBPeripheral::RTC:
@@ -1091,7 +1091,7 @@ uint32_t MemoryBus::doAHBPeriphRead(ClockTarget &masterClock, uint32_t addr)
     switch(peripheral)
     {
         case AHBPeripheral::DMA:
-            return dma.regRead(periphAddr, masterClock.getTime());
+            return dma.regRead(masterClock.getTime(), periphAddr);
 
         case AHBPeripheral::USB:
         {
@@ -1101,16 +1101,16 @@ uint32_t MemoryBus::doAHBPeriphRead(ClockTarget &masterClock, uint32_t addr)
                 return *reinterpret_cast<const uint32_t *>(usb.getRAM() + (addr & 0xFFF));
             }
             else if(addr >= USBCTRL_REGS_BASE)
-                return usb.regRead(periphAddr, masterClock.getTime());
+                return usb.regRead(masterClock.getTime(), periphAddr);
 
             break;
         }
         
         case AHBPeripheral::PIO0:
-            return pio[0].regRead(periphAddr, masterClock.getTime());
+            return pio[0].regRead(masterClock.getTime(), periphAddr);
 
         case AHBPeripheral::PIO1:
-            return pio[1].regRead(periphAddr, masterClock.getTime());
+            return pio[1].regRead(masterClock.getTime(), periphAddr);
 
         case AHBPeripheral::XIPAux:
             logf(LogLevel::NotImplemented, logComponent, "AHBP XIP_AUX R %08X", addr);
@@ -1158,7 +1158,7 @@ void MemoryBus::doAHBPeriphWrite(ClockTarget &masterClock, uint32_t addr, T data
     switch(peripheral)
     {
         case AHBPeripheral::DMA:
-            dma.regWrite(periphAddr, data, masterClock.getTime());
+            dma.regWrite(masterClock.getTime(), periphAddr, data);
             calcNextInterruptTime();
             return;
 
@@ -1173,7 +1173,7 @@ void MemoryBus::doAHBPeriphWrite(ClockTarget &masterClock, uint32_t addr, T data
             }
             else if(addr >= USBCTRL_REGS_BASE)
             {
-                usb.regWrite(periphAddr, data, masterClock.getTime());
+                usb.regWrite(masterClock.getTime(), periphAddr, data);
                 return;
             }
             break;
@@ -1181,12 +1181,12 @@ void MemoryBus::doAHBPeriphWrite(ClockTarget &masterClock, uint32_t addr, T data
         
         case AHBPeripheral::PIO0:
         {
-            pio[0].regWrite(periphAddr, data, masterClock.getTime());
+            pio[0].regWrite(masterClock.getTime(), periphAddr, data);
             return;
         }
         case AHBPeripheral::PIO1:
         {
-            pio[1].regWrite(periphAddr, data, masterClock.getTime());
+            pio[1].regWrite(masterClock.getTime(), periphAddr, data);
             return;
         }
 
