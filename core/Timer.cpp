@@ -105,7 +105,7 @@ uint64_t Timer::getNextInterruptTime(uint64_t target)
     return target;
 }
 
-uint32_t Timer::regRead(uint32_t addr, uint64_t time)
+uint32_t Timer::regRead(uint64_t time, uint32_t addr)
 {
     update(time);
 
@@ -135,7 +135,7 @@ uint32_t Timer::regRead(uint32_t addr, uint64_t time)
     return 0;
 }
 
-void Timer::regWrite(uint32_t addr, uint32_t data, uint64_t time)
+void Timer::regWrite(uint64_t time, uint32_t addr, uint32_t data)
 {
     update(time);
 
