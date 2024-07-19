@@ -101,17 +101,18 @@ uint64_t PIO::getNextInterruptTime(uint64_t target)
 
 uint32_t PIO::regRead(uint64_t time, uint32_t addr)
 {
-    update(time);
-
     switch(addr)
     {
         case PIO_CTRL_OFFSET:
             return hw.ctrl;
 
         case PIO_FSTAT_OFFSET:
+            update(time);
             return hw.fstat;
         case PIO_FDEBUG_OFFSET:
         {
+            update(time);
+
             // HACK: set txstall if FIFO empty
             // FIXME: this is wrong but we're not running the program
             for(unsigned i = 0; i < NUM_PIO_STATE_MACHINES; i++)
@@ -128,6 +129,8 @@ uint32_t PIO::regRead(uint64_t time, uint32_t addr)
         case PIO_RXF2_OFFSET:
         case PIO_RXF3_OFFSET:
         {
+            update(time);
+
             int index = (addr - PIO_RXF0_OFFSET) / 4;
             if(rxFifo[index].empty())
                 hw.fdebug |= 1 << (PIO_FDEBUG_RXUNDER_LSB + index);
@@ -176,6 +179,8 @@ uint32_t PIO::regRead(uint64_t time, uint32_t addr)
 
         case PIO_SM0_ADDR_OFFSET:
         {
+            update(time);
+
             static int counter = 0;
             return counter++ & PIO_SM0_ADDR_BITS;
         }
@@ -198,8 +203,6 @@ uint32_t PIO::regRead(uint64_t time, uint32_t addr)
 
 void PIO::regWrite(uint64_t time, uint32_t addr, uint32_t data)
 {
-    update(time);
-
     int atomic = addr >> 12;
     addr &= 0xFFF;
 
@@ -209,6 +212,8 @@ void PIO::regWrite(uint64_t time, uint32_t addr, uint32_t data)
     {
         case PIO_CTRL_OFFSET:
         {
+            update(time);
+
             auto oldVal = hw.ctrl;
             if(updateReg(hw.ctrl, data, atomic))
             {
@@ -224,6 +229,8 @@ void PIO::regWrite(uint64_t time, uint32_t addr, uint32_t data)
         
         case PIO_FDEBUG_OFFSET:
         {
+            update(time);
+
             if(atomic == 0)
             {
                 hw.fdebug &= ~data;
@@ -239,15 +246,24 @@ void PIO::regWrite(uint64_t time, uint32_t addr, uint32_t data)
         case PIO_TXF3_OFFSET:
         {
             int index = (addr - PIO_TXF0_OFFSET) / 4;
-            if(txFifo[index].full())
-                hw.fdebug |= 1 << (PIO_FDEBUG_TXOVER_LSB + index);
-            else
-            {
-                txFifo[index].push(data);
 
+            if(txFifo[index].full())
+            {
+                update(time);
+
+                // still full after syncing, so REALLY full
                 if(txFifo[index].full())
-                    updateFifoStatus(index);
+                {
+                    hw.fdebug |= 1 << (PIO_FDEBUG_TXOVER_LSB + index);
+                    return;
+                }
             }
+
+            txFifo[index].push(data);
+
+            if(txFifo[index].full())
+                updateFifoStatus(index);
+
             return;
         }
 
@@ -284,6 +300,7 @@ void PIO::regWrite(uint64_t time, uint32_t addr, uint32_t data)
         case PIO_INSTR_MEM30_OFFSET:
         case PIO_INSTR_MEM31_OFFSET:
         {
+            update(time);
             int off = (addr - PIO_INSTR_MEM0_OFFSET) / 4;
             updateReg(hw.instr_mem[off], data, atomic);
             return;
@@ -294,6 +311,8 @@ void PIO::regWrite(uint64_t time, uint32_t addr, uint32_t data)
         case PIO_SM2_CLKDIV_OFFSET:
         case PIO_SM3_CLKDIV_OFFSET:
         {
+            update(time);
+
             int sm = (addr - PIO_SM0_CLKDIV_OFFSET) / (PIO_SM1_CLKDIV_OFFSET - PIO_SM0_CLKDIV_OFFSET);
             updateReg(hw.sm[sm].clkdiv, data, atomic);
             return;
@@ -304,6 +323,8 @@ void PIO::regWrite(uint64_t time, uint32_t addr, uint32_t data)
         case PIO_SM2_EXECCTRL_OFFSET:
         case PIO_SM3_EXECCTRL_OFFSET:
         {
+            update(time);
+
             int sm = (addr - PIO_SM0_CLKDIV_OFFSET) / (PIO_SM1_CLKDIV_OFFSET - PIO_SM0_CLKDIV_OFFSET);
             updateReg(hw.sm[sm].execctrl, data, atomic);
             return;
@@ -314,6 +335,8 @@ void PIO::regWrite(uint64_t time, uint32_t addr, uint32_t data)
         case PIO_SM2_SHIFTCTRL_OFFSET:
         case PIO_SM3_SHIFTCTRL_OFFSET:
         {
+            update(time);
+
             int sm = (addr - PIO_SM0_CLKDIV_OFFSET) / (PIO_SM1_CLKDIV_OFFSET - PIO_SM0_CLKDIV_OFFSET);
             updateReg(hw.sm[sm].shiftctrl, data, atomic);
             return;
@@ -326,6 +349,8 @@ void PIO::regWrite(uint64_t time, uint32_t addr, uint32_t data)
         case PIO_SM2_PINCTRL_OFFSET:
         case PIO_SM3_PINCTRL_OFFSET:
         {
+            update(time);
+
             int sm = (addr - PIO_SM0_CLKDIV_OFFSET) / (PIO_SM1_CLKDIV_OFFSET - PIO_SM0_CLKDIV_OFFSET);
             updateReg(hw.sm[sm].pinctrl, data, atomic);
             return;
