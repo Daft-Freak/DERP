@@ -321,6 +321,11 @@ void PicoVisionBoard::onPIOUpdate(uint64_t time, PIO &pio)
             }
             else if(cmd == 0x38) // write
                 ramCmdAddr[ramBank] = data & 0xFFFFFF;
+            else if(cmd == 0xEB) // read
+            {
+                ramCmdAddr[ramBank] = data & 0xFFFFFF;
+                ramCmdLenWords[ramBank] = 3; // the "data" part is read, not written
+            }
             else
                 logf(LogLevel::Debug, logComponent, "psram %i cmd %02X %06X len %i", ramBank, cmd, data & 0xFFFFFF, dataLenBytes);
         }
