@@ -212,7 +212,13 @@ void PIO::regWrite(uint64_t time, uint32_t addr, uint32_t data)
                 {
                     if(enabled & (1 << (PIO_CTRL_SM_ENABLE_LSB + i)))
                         logf(LogLevel::Debug, logComponent, "%i SM%i enabled CLKDIV %08X EXECCTRL %08X SHIFTCTRL %08X PINCTRL %08X", index, i, hw.sm[i].clkdiv, hw.sm[i].execctrl, hw.sm[i].shiftctrl, hw.sm[i].pinctrl);
+
+                    if(hw.ctrl & (1 << (PIO_CTRL_SM_RESTART_LSB + i)))
+                        logf(LogLevel::Debug, logComponent, "%i SM%i restarted", index, i);
                 }
+
+                // only the enable bits are written
+                hw.ctrl &= PIO_CTRL_SM_ENABLE_BITS;
             }
             return;
         }
