@@ -67,7 +67,7 @@ public:
     bool verifyPointer(ARMv6MCore &cpu, const T *ptr, uint32_t addr)
     {
         int tmp;
-        bool ret = read<T>(&cpu, addr, tmp, false) == *ptr;
+        bool ret = read<T>(&cpu, addr, tmp) == *ptr;
         return ret;
     }
 
