@@ -173,8 +173,10 @@ static void runGDBServer()
 {
     gdbServer.setCPUs(cpuCores, 2);
 
-    if(!gdbServer.start())
+    if(!gdbServer.start()) {
         logf(LogLevel::Error, logComponent, "Failed to start GDB server!");
+        return;
+    }
 
     while(!quit)
     {
