@@ -181,7 +181,18 @@ void Timer::regWrite(uint32_t addr, uint32_t data)
         case TIMER_INTF_OFFSET:
             updateReg(interruptForce, data, atomic);
             if(interruptForce)
+            {
                 logf(LogLevel::NotImplemented, logComponent, "Forced timer intr %x", interruptForce); // TODO
+
+                // set any forced irqs pending now (still wrong as it shouldn't clear, but better than nothing)
+                auto mask = interruptForce & interruptEnables;
+
+                for(unsigned i = 0; i < NUM_TIMERS; i++)
+                {
+                    if(mask & (1 << i))
+                        mem.setPendingIRQ(TIMER_IRQ_0 + i);
+                }
+            }
             return;
     }
 
