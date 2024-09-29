@@ -39,10 +39,16 @@ GDBServer::GDBServer(uint16_t port) : port(port)
 bool GDBServer::start()
 {
     if(listenFd != -1)
+    {
+        logf(LogLevel::Error, logComponent, "Failed to start: already started!");
         return false;
+    }
 
     if((listenFd = socket(AF_INET6, SOCK_STREAM, 0)) == -1)
+    {
+        logf(LogLevel::Error, logComponent, "Failed to start: couldn't create socket!");
         return false;
+    }
     
     int yes = 1;
 
@@ -70,12 +76,14 @@ bool GDBServer::start()
 
     if(bind(listenFd, (struct sockaddr *)&addr, sizeof(addr)) == -1)
     {
+        logf(LogLevel::Error, logComponent, "Failed to start: couldn't bind socket!");
         close(listenFd);
         return false;
     }
 
     if(listen(listenFd, 1) == -1)
     {
+        logf(LogLevel::Error, logComponent, "Failed to start: couldn't listen on socket!");
         close(listenFd);
         return false;
     }
