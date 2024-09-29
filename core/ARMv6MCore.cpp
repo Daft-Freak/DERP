@@ -1217,17 +1217,21 @@ int ARMv6MCore::doTHUMB15MultiLoadStore(uint16_t opcode, uint32_t pc)
 
     auto addr = loReg(baseReg);
 
+    if(addr & 3)
+        fault("Misaligned address in LDM/STM");
+
     int cycles = 0;
 
     if(!regList)
     {
         // empty list loads/stores PC... even though it isn't usually possible here
         if(isLoad)
-            updateTHUMBPC(readMem32(addr & ~3, cycles));
+            updateTHUMBPC(readMem32(addr, cycles) & ~1);
         else
-            writeMem32(addr & ~3, pc + 2, cycles);
-
-        reg(baseReg) = addr + 0x40;
+        {
+            writeMem32(addr, reg(Reg::LR), cycles);
+            reg(baseReg) = addr + 4;
+        }
 
         return cycles;
     }
@@ -1239,17 +1243,10 @@ int ARMv6MCore::doTHUMB15MultiLoadStore(uint16_t opcode, uint32_t pc)
             endAddr += 4;
     }
 
-    // force alingment for everything but SRAM...
-    if(addr < 0xE000000)
-        addr &= ~3;
-
     int i = 0;
-    bool first = true, seq = false;
+    bool seq = false;
 
-    // prevent overriding base for loads
-    // "A LDM will always overwrite the updated base if the base is in the list."
-    if(isLoad && (regList & (1 << static_cast<int>(baseReg))))
-        first = false;
+    bool baseInList = regList & (1 << static_cast<int>(baseReg));
 
     for(; regList; regList >>= 1, i++)
     {
@@ -1261,16 +1258,14 @@ int ARMv6MCore::doTHUMB15MultiLoadStore(uint16_t opcode, uint32_t pc)
         else
             writeMem32(addr, regs[i], cycles, seq);
 
-        // base write-back is on the second cycle of the instruction
-        // which is when the first reg is written
-        if(first)
-            reg(baseReg) = endAddr;
-
-        first = false;
         seq = true;
 
         addr += 4;
     }
+
+    // prevent overriding base for loads
+    if(!isLoad || !baseInList)
+        reg(baseReg) = endAddr;
 
     if(isLoad)
         cycles += mem.fetchTiming(pc, pcSCycles);
