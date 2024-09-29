@@ -730,6 +730,9 @@ int ARMv6MCore::doTHUMB05HiReg(uint16_t opcode, uint32_t pc)
 
     auto src = reg(srcReg);
 
+    if(srcReg == Reg::SP)
+        src &= ~3;
+
     switch(op)
     {
         case 0: // ADD
@@ -738,6 +741,8 @@ int ARMv6MCore::doTHUMB05HiReg(uint16_t opcode, uint32_t pc)
                 updateTHUMBPC((loReg(Reg::PC) + src) & ~1);
                 return pcSCycles * 2 + pcNCycles;
             }
+            else if(dstReg == Reg::SP)
+                reg(dstReg) = (reg(dstReg) + src) & ~3; // low bits of SP should be zero
             else
                 reg(dstReg) += src;
 
@@ -763,6 +768,8 @@ int ARMv6MCore::doTHUMB05HiReg(uint16_t opcode, uint32_t pc)
                 updateTHUMBPC(src & ~1);
                 return pcSCycles * 2 + pcNCycles;
             }
+            else if(dstReg == Reg::SP)
+                reg(dstReg) = src & ~3; // low bits of SP should be zero
             else
                 reg(dstReg) = src;
 
