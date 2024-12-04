@@ -100,6 +100,16 @@ const uint8_t *Interstate75Board::getScreenData()
     return reinterpret_cast<uint8_t *>(screenData);
 }
 
+void Interstate75Board::update(uint64_t time)
+{
+    // prevent row clock getting massively behind
+    if(rowClock.getCyclesToTime(time) >= rowCycles)
+    {
+        rowClock.addCycles(rowClock.getCyclesToTime(time));
+        rowCycles = 0;
+    }
+}
+
 void Interstate75Board::onPIOUpdate(uint64_t time, PIO &pio)
 {
     // data is PIO0 SM0

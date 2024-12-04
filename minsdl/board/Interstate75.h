@@ -17,7 +17,7 @@ public:
     bool hasAudio() override {return false;}
 
     void handleEvent(SDL_Event &event) override {}
-    void update(uint64_t time) override {}
+    void update(uint64_t time) override;
 
 private:
     MemoryBus &mem;
