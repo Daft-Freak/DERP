@@ -385,6 +385,7 @@ int main(int argc, char *argv[])
     }
 
     bool boardHasScreen = screenWidth && screenHeight;
+    int boardPixelStride = 2;
     SDL_Window *window = nullptr;
 
     if(boardHasScreen)
@@ -398,6 +399,14 @@ int main(int argc, char *argv[])
         SDL_RenderSetIntegerScale(renderer, SDL_TRUE);
 
         texture = SDL_CreateTexture(renderer, board->getScreenFormat(), SDL_TEXTUREACCESS_STREAMING, screenWidth, screenHeight);
+
+        // get format info
+        auto format = SDL_AllocFormat(board->getScreenFormat());
+        if(format)
+        {
+            boardPixelStride = format->BitsPerPixel / 8;
+            SDL_FreeFormat(format);
+        }
     }
 
     if(board->hasAudio())
@@ -491,7 +500,7 @@ int main(int argc, char *argv[])
         if(renderer)
         {
             // TODO: sync
-            SDL_UpdateTexture(texture, nullptr, board->getScreenData(), screenWidth * 2);
+            SDL_UpdateTexture(texture, nullptr, board->getScreenData(), screenWidth * boardPixelStride);
             SDL_RenderClear(renderer);
             SDL_RenderCopy(renderer, texture, nullptr, nullptr);
             SDL_RenderPresent(renderer);
