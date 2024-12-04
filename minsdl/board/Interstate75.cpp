@@ -80,6 +80,8 @@ static const uint8_t invGamma[1024]
 Interstate75Board::Interstate75Board(MemoryBus &mem) : mem(mem)
 {
     mem.getPIO(0).setUpdateCallback([this](auto time, auto &pio){onPIOUpdate(time, pio);});
+    
+    mem.getClocks().addClockTarget(clk_sys, rowClock);
 }
 
 void Interstate75Board::getScreenSize(int &w, int &h)
@@ -110,11 +112,20 @@ void Interstate75Board::onPIOUpdate(uint64_t time, PIO &pio)
 
     int halfPanelHeight = panelHeight / 2;
 
+    // slow this down to simulate the delay from the pulse
+    // (mostly for perf)
+    if(rowClock.getCyclesToTime(time) < rowCycles)
+        return;
+
     if(!rowTXFifo.empty())
     {
         auto data = rowTXFifo.pop();
         row = data & 0x1F;
         row = (row + 1) % halfPanelHeight;
+
+        rowClock.addCycles(rowCycles);
+        rowCycles = (data >> 5) + 1 + 10;
+
         column = 0;
         bottom = false;
     }
@@ -122,6 +133,10 @@ void Interstate75Board::onPIOUpdate(uint64_t time, PIO &pio)
     while(!dataTXFifo.empty())
     {
         auto data = dataTXFifo.pop();
+
+        // grab the data on the first pass
+        if(rowCycles > 20)
+            continue;
 
         int r = data & 0x3FF;
         int g = (data >> 10) & 0x3FF;

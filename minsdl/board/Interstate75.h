@@ -1,6 +1,8 @@
 #pragma once
 #include "Board.h"
 
+#include "ClockTarget.h"
+
 class PIO;
 
 class Interstate75Board final : public Board
@@ -28,6 +30,10 @@ private:
     int row = 0;
     int column = 0;
     bool bottom = false; // bottom/top half
+
+    // workaround for missing PIO timing
+    ClockTarget rowClock;
+    uint32_t rowCycles = 0;
 
     void onPIOUpdate(uint64_t time, PIO &pio);
 };
