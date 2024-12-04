@@ -22,10 +22,11 @@ public:
 private:
     MemoryBus &mem;
 
-    uint32_t screenData[32 * 32];
+    uint32_t screenData[32 * 32 * 4];
 
     int panelWidth = 32;
     int panelHeight = 32;
+    int numPanels = 1;
     
     int row = 0;
     int column = 0;

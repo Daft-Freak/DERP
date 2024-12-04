@@ -86,7 +86,7 @@ Interstate75Board::Interstate75Board(MemoryBus &mem) : mem(mem)
 
 void Interstate75Board::getScreenSize(int &w, int &h)
 {
-    w = panelWidth;
+    w = panelWidth * numPanels;
     h = panelHeight;
 }
 
@@ -152,10 +152,10 @@ void Interstate75Board::onPIOUpdate(uint64_t time, PIO &pio)
         int g = (data >> 10) & 0x3FF;
         int b = (data >> 20) & 0x3FF;
 
-        if(column < panelWidth)
+        if(column < panelWidth * numPanels)
         {
             int y = bottom ? row + halfPanelHeight : row;
-            screenData[column + y * panelWidth] = invGamma[r] | invGamma[g] << 8 | invGamma[b] << 16;
+            screenData[column + y * panelWidth * numPanels] = invGamma[r] | invGamma[g] << 8 | invGamma[b] << 16;
         }
 
         // flip between top/bottom half, increment column
