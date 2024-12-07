@@ -13,6 +13,7 @@ target_sources(DERPCore INTERFACE
     MemoryBus.cpp
     PIO.cpp
     PWM.cpp
+    SUMPServer.cpp
     Timer.cpp
     UART.cpp
     USB.cpp

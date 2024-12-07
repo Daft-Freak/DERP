@@ -36,6 +36,7 @@ namespace Logging
         MemoryBus,
         PIO,
         PWM,
+        SUMP,
         Timer,
         UART,
         USB,

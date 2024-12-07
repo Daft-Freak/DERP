@@ -62,6 +62,8 @@ namespace Logging
                 return "pio";
             case Component::PWM:
                 return "pwm";
+            case Component::SUMP:
+                return "sump";
             case Component::Timer:
                 return "timer";
             case Component::UART:
@@ -119,6 +121,8 @@ namespace Logging
             return Component::PIO;
         if(str == "pwm")
             return Component::PWM;
+        if(str == "sump")
+            return Component::SUMP;
         if(str == "timer")
             return Component::Timer;
         if(str == "uart")
