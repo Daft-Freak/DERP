@@ -61,6 +61,9 @@ void GPIO::update(uint64_t target)
         logFile.write(reinterpret_cast<char *>(data), sizeof(data));
     }
 
+    if(updateCallback)
+        updateCallback(target, *this, passed);
+
     clock.addCycles(passed);
 }
 
@@ -132,6 +135,11 @@ bool GPIO::interruptsEnabledOnPin(int pin)
 void GPIO::setReadCallback(ReadCallback cb)
 {
     readCallback = cb;
+}
+
+void GPIO::setUpdateCallback(UpdateCallback cb)
+{
+    updateCallback = cb;
 }
 
 void GPIO::openLogFile(const char *filename)

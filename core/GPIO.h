@@ -14,6 +14,7 @@ class GPIO final
 {
 public:
     using ReadCallback = std::function<void(uint64_t, GPIO &)>;
+    using UpdateCallback = std::function<void(uint64_t, GPIO &, uint32_t)>;
 
     enum class Function
     {
@@ -72,6 +73,7 @@ public:
     bool interruptsEnabledOnPin(int pin);
 
     void setReadCallback(ReadCallback cb);
+    void setUpdateCallback(UpdateCallback cb);
 
     uint32_t getPadState() const {return padState;}
 
@@ -117,6 +119,7 @@ private:
     uint32_t oeFromPeriph, oeToPad;
 
     ReadCallback readCallback;
+    UpdateCallback updateCallback;
 
     std::ofstream logFile;
 };
