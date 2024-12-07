@@ -22,6 +22,27 @@ using Logging::logf;
 using LogLevel = Logging::Level;
 constexpr auto logComponent = Logging::Component::SUMP;
 
+enum class SUMPCommand
+{
+    // short (one byte)
+    Reset             = 0x00,
+    Run               = 0x01,
+    ID                = 0x02,
+    XON               = 0x11,
+    XOFF              = 0x13,
+
+    // long (5 bytes)
+    SetDivider        = 0x80,
+    SetReadDelayCount = 0x81,
+    SetFlags          = 0x82,
+    SetTriggerMask    = 0xC0,
+    SetTriggerValues  = 0xC1,
+    SetTriggerConfig  = 0xC2,
+
+    // extended (OLS)
+    GetMetadata       = 0x04,
+};
+
 SUMPServer::SUMPServer(uint16_t port) : port(port)
 {
 }
@@ -152,8 +173,38 @@ bool SUMPServer::update(bool block)
 
             if(received > 0)
             {
-                switch(cmd)
+                switch(static_cast<SUMPCommand>(cmd))
                 {
+                    case SUMPCommand::Reset:
+                        break;
+
+                    case SUMPCommand::ID:
+                    {
+                        size_t len = 4;
+                        if(!sendAll(clientFd, "1ALS", len, 0) || len != 4)
+                            logf(LogLevel::Error, logComponent, "failed to send id!");
+                        break;
+                    }
+
+                    case SUMPCommand::GetMetadata:
+                    {
+                        uint32_t freq = 125 * 1000 * 1000; // TODO: this should be sysclk
+
+                        static const uint8_t metadata[]
+                        {
+                            0x01, 'D', 'E', 'R', 'P', ' ', 'G', 'P', 'I', 'O', 0, // name
+                            0x23, uint8_t(freq >> 24), uint8_t(freq >> 16), uint8_t(freq >> 8), uint8_t(freq), // max sample rate
+                            0x40, 30, // num probes
+                            0x41, 2, // protocol version
+                            0x00,
+                        };
+
+                        size_t len = sizeof(metadata);
+                        if(!sendAll(clientFd, metadata, len, 0) || len != sizeof(metadata))
+                            logf(LogLevel::Error, logComponent, "failed to send metadata!");
+                        break;
+                    }
+
                     default:
                         logf(LogLevel::NotImplemented, logComponent, "cmd %02X", cmd);
                 }
