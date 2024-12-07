@@ -475,7 +475,7 @@ int main(int argc, char *argv[])
 
         // lock cpu access around updates
         if(gdbEnabled)
-            gdbServer.getCPUMutex().unlock();
+            gdbServer.getCPUMutex().lock();
 
         cpuCycles += cpuCores[0].run(elapsed);
 
