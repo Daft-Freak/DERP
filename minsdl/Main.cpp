@@ -9,6 +9,7 @@
 #include "ARMv6MCore.h"
 #include "GDBServer.h"
 #include "Logging.h"
+#include "SUMPServer.h"
 
 #include "board/Pico.h"
 #include "board/Interstate75.h"
@@ -35,6 +36,7 @@ static MemoryBus mem;
 static ARMv6MCore cpuCores[2]{mem, mem};
 
 static GDBServer gdbServer;
+static SUMPServer sumpServer;
 
 static uint8_t bootROM[0x4000];
 
@@ -191,6 +193,22 @@ static void runGDBServer()
     }
 }
 
+static void runSUMPServer()
+{
+    sumpServer.setGPIO(&mem.getGPIO());
+
+    if(!sumpServer.start()) {
+        logf(LogLevel::Error, logComponent, "Failed to start SUMP server!");
+        return;
+    }
+
+    while(!quit)
+    {
+        if(!sumpServer.update(true))
+           logf(LogLevel::Error, logComponent, "Failed to update SUMP server!");
+    }
+}
+
 static void pollEvents()
 {
     SDL_Event event;
@@ -264,10 +282,11 @@ int main(int argc, char *argv[])
 {
     int screenScale = 5;
 
-    std::thread gdbServerThread;
+    std::thread gdbServerThread, sumpServerThread;
 
     bool usbEnabled = false;
     bool gdbEnabled = false;
+    bool sumpEnabled = false;
 
     std::string romFilename;
 
@@ -302,6 +321,8 @@ int main(int argc, char *argv[])
             handleLogArg(argv[++i]);
         else if(arg == "--gdb")
             gdbEnabled = true;
+        else if(arg == "--sump")
+            sumpEnabled = true;
         else if(arg == "--iolog" && i + 1 < argc)
             mem.getGPIO().openLogFile(argv[++i]);
         else
@@ -386,6 +407,9 @@ int main(int argc, char *argv[])
 
     if(gdbEnabled)
         gdbServerThread = std::thread(runGDBServer);
+
+    if(sumpEnabled)
+        sumpServerThread = std::thread(runSUMPServer);
 
     // SDL init
     if(SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) != 0)
@@ -531,5 +555,9 @@ int main(int argc, char *argv[])
 
     if(gdbEnabled)
         gdbServerThread.join();
+
+    if(sumpEnabled)
+        sumpServerThread.join();
+
     return 0;
 }
