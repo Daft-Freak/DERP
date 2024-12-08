@@ -178,7 +178,7 @@ bool SUMPServer::update(bool block)
 
             // read
             uint8_t cmd;
-            auto received = recv(clientFd, &cmd, 1, 0);
+            auto received = recv(clientFd, reinterpret_cast<char *>(&cmd), 1, 0);
 
             if(received > 0)
             {
