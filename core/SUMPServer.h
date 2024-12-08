@@ -35,8 +35,12 @@ private:
     uint32_t delayCount = 0; // samples to wait before sending data
     uint32_t divider = 0;
 
+    uint32_t triggerMask = 0, triggerValues = 0;
+
     bool running = false;
+    bool triggered = false;
     uint32_t divCounter = 0;
     uint32_t *sampleBuffer = nullptr;
     uint32_t sampleOffset = 0;
+    uint32_t sampleCount = 0;
 };

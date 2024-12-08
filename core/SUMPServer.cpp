@@ -200,11 +200,15 @@ bool SUMPServer::update(bool block)
                 {
                     case SUMPCommand::Reset:
                         running = false;
+                        triggered = false;
+                        triggerMask = triggerValues = 0;
                         sampleOffset = 0;
+                        sampleCount = 0;
                         break;
 
                     case SUMPCommand::Run:
                         logf(LogLevel::Debug, logComponent, "run!");
+                        triggered = false;
                         running = true;
                         // should sync IO, but this is on a thread
                         break;
@@ -281,9 +285,27 @@ bool SUMPServer::update(bool block)
                         break;
                     }
 
-                    case SUMPCommand::SetFlags:
+
                     case SUMPCommand::SetTriggerMask:
+                    {
+                        if(recvCmdData(data, "set trigger mask"))
+                        {
+                            triggerMask = data;
+                            logf(LogLevel::Debug, logComponent, "set trigger mask = %08X", readCount);
+                        }
+                        break;
+                    }
                     case SUMPCommand::SetTriggerValues:
+                    {
+                        if(recvCmdData(data, "set trigger values"))
+                        {
+                            triggerValues = data;
+                            logf(LogLevel::Debug, logComponent, "set trigger values = %08X", readCount);
+                        }
+                        break;
+                    }
+
+                    case SUMPCommand::SetFlags:
                     case SUMPCommand::SetTriggerConfig:
                     {
                         uint32_t data;
@@ -357,8 +379,15 @@ void SUMPServer::onGPIOUpdate(uint64_t time, GPIO &gpio, uint32_t elapsedCycles)
     if(!running || sampleOffset >= readCount)
         return;
 
-    // TODO: triggers, delay
-    
+    const auto bufferSize = readCount;
+
+    // check trigger if needed
+    if(!triggered)
+    {
+        if((gpio.getPadState() & triggerMask) == triggerValues)
+            triggered = true;
+    }
+
     while(elapsedCycles)
     {
         auto step = std::min(divCounter, elapsedCycles);
@@ -371,14 +400,34 @@ void SUMPServer::onGPIOUpdate(uint64_t time, GPIO &gpio, uint32_t elapsedCycles)
         if(divCounter == 0)
             divCounter = divider;
 
-        if(sampleOffset == readCount)
+        if(triggered)
+            sampleCount++;
+
+        // wrap
+        if(sampleOffset == bufferSize)
+            sampleOffset = 0;
+
+        // if we've read enough samples after a trigger, send the data
+        if(sampleCount == delayCount)
         {
             std::lock_guard lock(clientMutex);
 
             // filled buffer, send data
-            size_t len = readCount * 4;
-            sendAll(clientFd, sampleBuffer, len, 0);
-            logf(LogLevel::Debug, logComponent, "sent %zu/%u\n", len, readCount * 4);
+            // if delayCount == readCount the offset should've wrapped around to where we started
+            // otherwise it'll be a bit before and we'll get the pre-trigger data
+            auto start = sampleOffset;
+
+            size_t len = (bufferSize - start) * 4;
+            size_t len2 = bufferSize * 4 - len;
+            sendAll(clientFd, sampleBuffer + start, len, 0);
+            logf(LogLevel::Debug, logComponent, "sent %zu/%u", len, readCount * 4);
+
+            // wrap back to start and send the rest
+            if(len2)
+            {
+                sendAll(clientFd, sampleBuffer, len2, 0);
+                logf(LogLevel::Debug, logComponent, "sent %zu/%u", len2, readCount * 4);
+            }
             break;
         }
     }
