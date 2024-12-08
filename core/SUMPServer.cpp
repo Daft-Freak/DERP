@@ -227,7 +227,7 @@ bool SUMPServer::update(bool block)
                     case SUMPCommand::SetDivider:
                     {
                         uint32_t data;
-                        if(recv(clientFd, &data, 4, 0) != 4)
+                        if(recv(clientFd, reinterpret_cast<char *>(&data), 4, 0) != 4)
                             logf(LogLevel::Error, logComponent, "failed to recv data for set divider!");
                         else
                         {
@@ -239,7 +239,7 @@ bool SUMPServer::update(bool block)
                     case SUMPCommand::SetReadDelayCount:
                     {
                         uint32_t data;
-                        if(recv(clientFd, &data, 4, 0) != 4)
+                        if(recv(clientFd, reinterpret_cast<char *>(&data), 4, 0) != 4)
                             logf(LogLevel::Error, logComponent, "failed to recv data for set read/delay count!");
                         else
                         {
@@ -255,7 +255,7 @@ bool SUMPServer::update(bool block)
                     case SUMPCommand::SetDelayCount:
                     {
                         uint32_t data;
-                        if(recv(clientFd, &data, 4, 0) != 4)
+                        if(recv(clientFd, reinterpret_cast<char *>(&data), 4, 0) != 4)
                             logf(LogLevel::Error, logComponent, "failed to recv data for set delay count!");
                         else
                         {
@@ -267,7 +267,7 @@ bool SUMPServer::update(bool block)
                     case SUMPCommand::SetReadCount:
                     {
                         uint32_t data;
-                        if(recv(clientFd, &data, 4, 0) != 4)
+                        if(recv(clientFd, reinterpret_cast<char *>(&data), 4, 0) != 4)
                             logf(LogLevel::Error, logComponent, "failed to recv data for set read count!");
                         else
                         {
@@ -285,7 +285,7 @@ bool SUMPServer::update(bool block)
                     case SUMPCommand::SetTriggerConfig:
                     {
                         uint32_t data;
-                        if(recv(clientFd, &data, 4, 0) != 4)
+                        if(recv(clientFd, reinterpret_cast<char *>(&data), 4, 0) != 4)
                             logf(LogLevel::Error, logComponent, "failed to recv data for cmd %02X!", cmd);
                         else
                         {
