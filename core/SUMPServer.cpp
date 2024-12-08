@@ -35,6 +35,8 @@ enum class SUMPCommand
     SetDivider        = 0x80,
     SetReadDelayCount = 0x81,
     SetFlags          = 0x82,
+    SetDelayCount     = 0x83,
+    SetReadCount      = 0x84,
     SetTriggerMask    = 0xC0,
     SetTriggerValues  = 0xC1,
     SetTriggerConfig  = 0xC2,
@@ -203,11 +205,13 @@ bool SUMPServer::update(bool block)
 
                     case SUMPCommand::GetMetadata:
                     {
+                        uint32_t sampleMem = 1 * 1024 * 1024 * 1024; // 200M samples is probably enough
                         uint32_t freq = 125 * 1000 * 1000; // TODO: this should be sysclk
 
                         static const uint8_t metadata[]
                         {
                             0x01, 'D', 'E', 'R', 'P', ' ', 'G', 'P', 'I', 'O', 0, // name
+                            0x21, uint8_t(sampleMem >> 24), uint8_t(sampleMem >> 16), uint8_t(sampleMem >> 8), uint8_t(sampleMem), // sample memory
                             0x23, uint8_t(freq >> 24), uint8_t(freq >> 16), uint8_t(freq >> 8), uint8_t(freq), // max sample rate
                             0x40, 30, // num probes
                             0x41, 2, // protocol version
@@ -247,6 +251,34 @@ bool SUMPServer::update(bool block)
                         }
                         break;
                     }
+
+                    case SUMPCommand::SetDelayCount:
+                    {
+                        uint32_t data;
+                        if(recv(clientFd, &data, 4, 0) != 4)
+                            logf(LogLevel::Error, logComponent, "failed to recv data for set delay count!");
+                        else
+                        {
+                            delayCount = (data + 1) * 4;
+                            logf(LogLevel::Debug, logComponent, "set delay count = %u", delayCount);
+                        }
+                        break;
+                    }
+                    case SUMPCommand::SetReadCount:
+                    {
+                        uint32_t data;
+                        if(recv(clientFd, &data, 4, 0) != 4)
+                            logf(LogLevel::Error, logComponent, "failed to recv data for set read count!");
+                        else
+                        {
+                            readCount = (data + 1) * 4;
+                            delete[] sampleBuffer;
+                            sampleBuffer = new uint32_t[readCount];
+                            logf(LogLevel::Debug, logComponent, "set read count = %u", readCount);
+                        }
+                        break;
+                    }
+
                     case SUMPCommand::SetFlags:
                     case SUMPCommand::SetTriggerMask:
                     case SUMPCommand::SetTriggerValues:
@@ -344,6 +376,7 @@ void SUMPServer::onGPIOUpdate(uint64_t time, GPIO &gpio, uint32_t elapsedCycles)
             // filled buffer, send data
             size_t len = readCount * 4;
             sendAll(clientFd, sampleBuffer, len, 0);
+            logf(LogLevel::Debug, logComponent, "sent %zu/%u\n", len, readCount * 4);
             break;
         }
     }
