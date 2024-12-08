@@ -179,7 +179,20 @@ bool SUMPServer::update(bool block)
 
             // read
             uint8_t cmd;
+            uint32_t data;
+
             auto received = recv(clientFd, reinterpret_cast<char *>(&cmd), 1, 0);
+
+            auto recvCmdData = [this](uint32_t &data, const char *name)
+            {
+                if(recv(clientFd, reinterpret_cast<char *>(&data), 4, 0) != 4)
+                {
+                    logf(LogLevel::Error, logComponent, "failed to recv data for %s!", name);
+                    return false;
+                }
+
+                return true;       
+            };
 
             if(received > 0)
             {
@@ -227,10 +240,7 @@ bool SUMPServer::update(bool block)
 
                     case SUMPCommand::SetDivider:
                     {
-                        uint32_t data;
-                        if(recv(clientFd, reinterpret_cast<char *>(&data), 4, 0) != 4)
-                            logf(LogLevel::Error, logComponent, "failed to recv data for set divider!");
-                        else
+                        if(recvCmdData(data, "set divider"))
                         {
                             divider = (data & 0xFFFFFF) + 1;
                             logf(LogLevel::Debug, logComponent, "set divider = %u", divider);
@@ -239,10 +249,7 @@ bool SUMPServer::update(bool block)
                     }
                     case SUMPCommand::SetReadDelayCount:
                     {
-                        uint32_t data;
-                        if(recv(clientFd, reinterpret_cast<char *>(&data), 4, 0) != 4)
-                            logf(LogLevel::Error, logComponent, "failed to recv data for set read/delay count!");
-                        else
+                        if(recvCmdData(data, "set read/delay count"))
                         {
                             readCount = ((data & 0xFFFF) + 1) * 4;
                             delayCount = ((data >> 16) + 1) * 4;
@@ -255,10 +262,7 @@ bool SUMPServer::update(bool block)
 
                     case SUMPCommand::SetDelayCount:
                     {
-                        uint32_t data;
-                        if(recv(clientFd, reinterpret_cast<char *>(&data), 4, 0) != 4)
-                            logf(LogLevel::Error, logComponent, "failed to recv data for set delay count!");
-                        else
+                        if(recvCmdData(data, "set delay count"))
                         {
                             delayCount = (data + 1) * 4;
                             logf(LogLevel::Debug, logComponent, "set delay count = %u", delayCount);
@@ -267,10 +271,7 @@ bool SUMPServer::update(bool block)
                     }
                     case SUMPCommand::SetReadCount:
                     {
-                        uint32_t data;
-                        if(recv(clientFd, reinterpret_cast<char *>(&data), 4, 0) != 4)
-                            logf(LogLevel::Error, logComponent, "failed to recv data for set read count!");
-                        else
+                        if(recvCmdData(data, "set read count"))
                         {
                             readCount = (data + 1) * 4;
                             delete[] sampleBuffer;
