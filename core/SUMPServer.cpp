@@ -47,6 +47,11 @@ SUMPServer::SUMPServer(uint16_t port) : port(port)
 {
 }
 
+SUMPServer::~SUMPServer()
+{
+    delete[] sampleBuffer;
+}
+
 bool SUMPServer::start()
 {
     if(listenFd != -1)
@@ -167,6 +172,8 @@ bool SUMPServer::update(bool block)
         
         if(FD_ISSET(clientFd, &set))
         {
+            std::lock_guard lock(clientMutex);
+
             // read
             uint8_t cmd;
             auto received = recv(clientFd, &cmd, 1, 0);
@@ -176,10 +183,14 @@ bool SUMPServer::update(bool block)
                 switch(static_cast<SUMPCommand>(cmd))
                 {
                     case SUMPCommand::Reset:
+                        running = false;
+                        sampleOffset = 0;
                         break;
 
                     case SUMPCommand::Run:
-                        logf(LogLevel::NotImplemented, logComponent, "run!");
+                        logf(LogLevel::Debug, logComponent, "run!");
+                        running = true;
+                        // should sync IO, but this is on a thread
                         break;
 
                     case SUMPCommand::ID:
@@ -230,6 +241,8 @@ bool SUMPServer::update(bool block)
                         {
                             readCount = ((data & 0xFFFF) + 1) * 4;
                             delayCount = ((data >> 16) + 1) * 4;
+                            delete[] sampleBuffer;
+                            sampleBuffer = new uint32_t[readCount];
                             logf(LogLevel::Debug, logComponent, "set read count = %u, delay count = %u", readCount, delayCount);
                         }
                         break;
@@ -274,6 +287,7 @@ bool SUMPServer::update(bool block)
 void SUMPServer::setGPIO(GPIO *gpio)
 {
     this->gpio = gpio;
+    gpio->setUpdateCallback([this](auto time, auto &gpio, auto elapsed){onGPIOUpdate(time, gpio, elapsed);});
 }
 
 bool SUMPServer::sendAll(int fd, const void *data, size_t &len, int flags)
@@ -304,3 +318,33 @@ int SUMPServer::close(int fd)
 #endif
 }
 
+void SUMPServer::onGPIOUpdate(uint64_t time, GPIO &gpio, uint32_t elapsedCycles)
+{
+    if(!running || sampleOffset >= readCount)
+        return;
+
+    // TODO: triggers, delay
+    
+    while(elapsedCycles)
+    {
+        auto step = std::min(divCounter, elapsedCycles);
+
+        sampleBuffer[sampleOffset++] = gpio.getPadState();
+
+        elapsedCycles -= step;
+
+        divCounter -= step;
+        if(divCounter == 0)
+            divCounter = divider;
+
+        if(sampleOffset == readCount)
+        {
+            std::lock_guard lock(clientMutex);
+
+            // filled buffer, send data
+            size_t len = readCount * 4;
+            sendAll(clientFd, sampleBuffer, len, 0);
+            break;
+        }
+    }
+}
