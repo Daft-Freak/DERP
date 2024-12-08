@@ -22,33 +22,54 @@ picotool save -r 0 4000 bootrom.bin
 ## PicoSystem status
 | Feature | Status | Details 
 |---------|--------|---------
-| Display | Hack   | No PIO/SPI, hack in DMA code. (Assumes 32blit-sdk setup)
+| Display | Hack   | No SPI, hook in PIO code. Enough display regs implemented to guess 32blit vs picosystem SDK
 | Buttons | Works  |
 | Sound   | Works  |
 | LED     | TODO   |       
 
 ## RP2040 status
 
-| Feature | Status | Details 
-|---------|--------|---------
-| Cortex-M0+ | Partial   | Copied from GBA emu, so some details are still an ARM7
-| DMA | Minimal | Implemented just enough for PicoSystem display updates
-| Clocks | Partial |
-| XOSC | Minimal | Fixed 12MHz
-| ROSC | Minimal | Fixed 6MHz
-| PLL | Partial |
-| GPIO | Partial | Missing overrides, partial interrupt handling
-| PIO | Minimal | PIO0 always returns all FIFOs empty + TXSTALL
-| USB | Partial | Optional device enumeration and USBIP server
-| UART | Minimal | Prints TX data
-| I2C | None |
-| SPI | Minimal | SPI0 TNF always set
-| PWM | Partial | Enough for PicoSystem beeps
-| Timer | Partial |
-| Watchdog | Partial | Tick generation and reset timer
-| RTC | Minimal | Enough to get through init
-| ADC | None |
-| SSI | Minimal | Just enough to boot
+|  Feature   | Status  | Details 
+|------------|---------|---------
+| Cortex-M0+ | Partial | Copied from GBA emu, so some details are still an ARM7
+| DMA        | Minimal | Implemented just enough for PicoSystem display updates
+| Clocks     | Partial |
+| XOSC       | Minimal | Fixed 12MHz
+| ROSC       | Minimal | Fixed 6MHz
+| PLL        | Partial |
+| GPIO       | Partial | Missing overrides, partial interrupt handling
+| PIO        | Minimal | Some status flags, fakes TX progress
+| USB        | Partial | Optional device enumeration and USBIP server
+| UART       | Minimal | Prints TX data
+| I2C        | Minimal | Some registers stubbed
+| SPI        | Minimal | SPI0 TNF always set
+| PWM        | Partial | Enough for PicoSystem beeps
+| Timer      | Partial |
+| Watchdog   | Partial | Tick generation and reset timer
+| RTC        | Minimal | Enough to get through init
+| ADC        | None    |
+| SSI        | Minimal | Just enough to boot
+
+## Other Boards
+Additional boards with some support:
+
+|     Name     |         --board         | Details
+|--------------|-------------------------|--------
+| Pico         | `pico` or default       | No extra peripherals, so no output
+| Interstate75 | `pimoroni_interstate75` | Emulates a single 32x32 panel.
+| Tufty2040    | `pimoroni_tufty2040`    | Similar display hacks to PicoSystem
+
+## GDB Server
+A GDB server can be enabled on port 3333 with:
+```
+./DERP_SDL --gdb --board [board name]
+```
+
+To use this with Cortex-Debug, replace `"servertype": "openocd"` with
+```json
+"servertype": "external",
+"gdbTarget": "localhost:3333",
+```
 
 ## USB
 
