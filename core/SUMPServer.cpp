@@ -208,6 +208,7 @@ bool SUMPServer::update(bool block)
 
                     case SUMPCommand::Run:
                         logf(LogLevel::Debug, logComponent, "run!");
+                        sampleOffset = readCount - 1;
                         triggered = false;
                         running = true;
                         // should sync IO, but this is on a thread
@@ -392,7 +393,7 @@ void SUMPServer::onGPIOUpdate(uint64_t time, GPIO &gpio, uint32_t elapsedCycles)
     {
         auto step = std::min(divCounter, elapsedCycles);
 
-        sampleBuffer[sampleOffset++] = gpio.getPadState();
+        sampleBuffer[sampleOffset] = gpio.getPadState();
 
         elapsedCycles -= step;
 
@@ -403,9 +404,12 @@ void SUMPServer::onGPIOUpdate(uint64_t time, GPIO &gpio, uint32_t elapsedCycles)
         if(triggered)
             sampleCount++;
 
-        // wrap
-        if(sampleOffset == bufferSize)
-            sampleOffset = 0;
+        // decrement/wrap
+        // we're writing samples backwards so we can read out in the right order
+        if(sampleOffset == 0)
+            sampleOffset = bufferSize - 1;
+        else
+            sampleOffset--;
 
         // if we've read enough samples after a trigger, send the data
         if(sampleCount == delayCount)
@@ -415,7 +419,7 @@ void SUMPServer::onGPIOUpdate(uint64_t time, GPIO &gpio, uint32_t elapsedCycles)
             // filled buffer, send data
             // if delayCount == readCount the offset should've wrapped around to where we started
             // otherwise it'll be a bit before and we'll get the pre-trigger data
-            auto start = sampleOffset;
+            auto start = (sampleOffset + 1) % bufferSize;
 
             size_t len = (bufferSize - start) * 4;
             size_t len2 = bufferSize * 4 - len;
