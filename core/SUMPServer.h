@@ -25,4 +25,8 @@ private:
     int listenFd = -1, clientFd = -1;
 
     GPIO *gpio = nullptr;
+
+    uint32_t readCount = 0; // samples to read after trigger
+    uint32_t delayCount = 0; // samples to wait before sending data
+    uint32_t divider = 0;
 };

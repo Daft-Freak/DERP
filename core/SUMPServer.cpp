@@ -178,6 +178,10 @@ bool SUMPServer::update(bool block)
                     case SUMPCommand::Reset:
                         break;
 
+                    case SUMPCommand::Run:
+                        logf(LogLevel::NotImplemented, logComponent, "run!");
+                        break;
+
                     case SUMPCommand::ID:
                     {
                         size_t len = 4;
@@ -202,6 +206,46 @@ bool SUMPServer::update(bool block)
                         size_t len = sizeof(metadata);
                         if(!sendAll(clientFd, metadata, len, 0) || len != sizeof(metadata))
                             logf(LogLevel::Error, logComponent, "failed to send metadata!");
+                        break;
+                    }
+
+                    case SUMPCommand::SetDivider:
+                    {
+                        uint32_t data;
+                        if(recv(clientFd, &data, 4, 0) != 4)
+                            logf(LogLevel::Error, logComponent, "failed to recv data for set divider!");
+                        else
+                        {
+                            divider = (data & 0xFFFFFF) + 1;
+                            logf(LogLevel::Debug, logComponent, "set divider = %u", divider);
+                        }
+                        break;
+                    }
+                    case SUMPCommand::SetReadDelayCount:
+                    {
+                        uint32_t data;
+                        if(recv(clientFd, &data, 4, 0) != 4)
+                            logf(LogLevel::Error, logComponent, "failed to recv data for set read/delay count!");
+                        else
+                        {
+                            readCount = ((data & 0xFFFF) + 1) * 4;
+                            delayCount = ((data >> 16) + 1) * 4;
+                            logf(LogLevel::Debug, logComponent, "set read count = %u, delay count = %u", readCount, delayCount);
+                        }
+                        break;
+                    }
+                    case SUMPCommand::SetFlags:
+                    case SUMPCommand::SetTriggerMask:
+                    case SUMPCommand::SetTriggerValues:
+                    case SUMPCommand::SetTriggerConfig:
+                    {
+                        uint32_t data;
+                        if(recv(clientFd, &data, 4, 0) != 4)
+                            logf(LogLevel::Error, logComponent, "failed to recv data for cmd %02X!", cmd);
+                        else
+                        {
+                            logf(LogLevel::NotImplemented, logComponent, "cmd %02X data %08X", cmd, data);
+                        }
                         break;
                     }
 
