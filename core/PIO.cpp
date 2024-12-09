@@ -180,7 +180,6 @@ uint32_t PIO::regRead(uint64_t time, uint32_t addr)
             else
             {
                 auto ret = rxFifo[index].pop();
-                mem.getDMA().triggerDREQ(getDREQNum(index, false));
                 return ret;
             }
 
@@ -314,9 +313,6 @@ void PIO::regWrite(uint64_t time, uint32_t addr, uint32_t data)
             }
 
             txFifo[index].push(data);
-
-            if(!txFifo[index].full())
-                mem.getDMA().triggerDREQ(getDREQNum(index, true));
 
             return;
         }
@@ -465,8 +461,16 @@ void PIO::dreqHandshake(int dreq)
     
     sm -= isRX ? DREQ_PIO0_RX0 : DREQ_PIO0_TX0;
 
-    if((isRX && !rxFifo[dreq].empty()) || (!isRX && !txFifo[dreq].full()))
-        mem.getDMA().triggerDREQ(dreq);
+    if(isRX)
+    {
+        for(int i = 0; i < rxFifo->getCount(); i++)
+            mem.getDMA().triggerDREQ(dreq);
+    }
+    else
+    {
+        for(int i = 0; i < 4 - txFifo->getCount(); i++)
+            mem.getDMA().triggerDREQ(dreq);
+    }
 }
 
 int PIO::getDREQNum(int sm, bool isTx) const
