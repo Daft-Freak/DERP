@@ -554,9 +554,12 @@ bool PIO::executeSMInstruction(int sm, uint16_t op)
             }
 
             if(condVal)
+            {
                 regs.pc = addr;
+                return false;
+            }
 
-            return false;
+            return true;
         }
 
         case 3: // OUT
