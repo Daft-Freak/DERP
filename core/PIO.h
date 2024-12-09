@@ -55,6 +55,8 @@ private:
 
     UpdateCallback updateCallback;
 
+    uint8_t clockFrac[NUM_PIO_STATE_MACHINES];
+
     // TODO: joined
     FIFO<uint32_t, 4> rxFifo[NUM_PIO_STATE_MACHINES];
     FIFO<uint32_t, 4> txFifo[NUM_PIO_STATE_MACHINES];

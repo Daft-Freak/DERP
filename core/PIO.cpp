@@ -48,6 +48,9 @@ void PIO::reset()
     hw.intf0 = PIO_IRQ0_INTF_RESET;
     hw.inte1 = PIO_IRQ1_INTE_RESET;
     hw.intf1 = PIO_IRQ1_INTF_RESET;
+
+    for(auto &c : clockFrac)
+        c = 0;
 }
 
 void PIO::update(uint64_t target)
@@ -61,6 +64,36 @@ void PIO::update(uint64_t target)
     while(cycles)
     {
         auto step = cycles;
+
+        // find next SM to update
+        for(unsigned i = 0; i < NUM_PIO_STATE_MACHINES; i++)
+        {
+            if(!(hw.ctrl & (1 << (PIO_CTRL_SM_ENABLE_LSB + i))))
+                continue;
+
+            auto clkdiv = hw.sm[i].clkdiv >> PIO_SM0_CLKDIV_FRAC_LSB;
+
+            auto toUpdate = (clkdiv - clockFrac[i] + 255) >> 8;
+
+            if(toUpdate < step)
+                step = toUpdate;
+        }
+
+        // step each SM
+        for(unsigned i = 0; i < NUM_PIO_STATE_MACHINES; i++)
+        {
+            auto smCycles = (step << 8) + clockFrac[i];
+
+            auto clkdiv = hw.sm[i].clkdiv >> PIO_SM0_CLKDIV_FRAC_LSB;
+            if(smCycles > clkdiv)
+            {
+                smCycles -= clkdiv;
+                clockFrac[i] = smCycles & 0xFF;
+
+                if(hw.ctrl & (1 << (PIO_CTRL_SM_ENABLE_LSB + i)))
+                {} // run
+            }
+        }
 
         if(updateCallback)
             updateCallback(clock.getTime(), *this);
@@ -224,6 +257,9 @@ void PIO::regWrite(uint64_t time, uint32_t addr, uint32_t data)
 
                     if(hw.ctrl & (1 << (PIO_CTRL_SM_RESTART_LSB + i)))
                         logf(LogLevel::Debug, logComponent, "%i SM%i restarted", index, i);
+
+                    if(hw.ctrl & (1 << (PIO_CTRL_CLKDIV_RESTART_LSB + 1)))
+                        clockFrac[i] = 0;
                 }
 
                 // only the enable bits are written
