@@ -412,6 +412,9 @@ void DMA::updateWriteFunc(int channel)
 void DMA::dreqHandshake(int channel)
 {
     int treq = (ctrl[channel] & DMA_CH0_CTRL_TRIG_TREQ_SEL_BITS) >> DMA_CH0_CTRL_TRIG_TREQ_SEL_LSB;
+    
+    dreqCounter[channel] = 0;
+
     switch(treq)
     {
         case DREQ_PIO0_TX0:
