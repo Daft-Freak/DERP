@@ -163,7 +163,7 @@ uint32_t PIO::regRead(uint64_t time, uint32_t addr)
         case PIO_SM2_EXECCTRL_OFFSET:
         case PIO_SM3_EXECCTRL_OFFSET:
         {
-            int sm = (addr - PIO_SM0_CLKDIV_OFFSET) / (PIO_SM1_CLKDIV_OFFSET - PIO_SM0_CLKDIV_OFFSET);
+            int sm = (addr - PIO_SM0_EXECCTRL_OFFSET) / (PIO_SM1_EXECCTRL_OFFSET - PIO_SM0_EXECCTRL_OFFSET);
             return hw.sm[sm].execctrl;
         }
 
@@ -172,7 +172,7 @@ uint32_t PIO::regRead(uint64_t time, uint32_t addr)
         case PIO_SM2_SHIFTCTRL_OFFSET:
         case PIO_SM3_SHIFTCTRL_OFFSET:
         {
-            int sm = (addr - PIO_SM0_CLKDIV_OFFSET) / (PIO_SM1_CLKDIV_OFFSET - PIO_SM0_CLKDIV_OFFSET);
+            int sm = (addr - PIO_SM0_SHIFTCTRL_OFFSET) / (PIO_SM1_SHIFTCTRL_OFFSET - PIO_SM0_SHIFTCTRL_OFFSET);
             return hw.sm[sm].shiftctrl;
         }
 
@@ -191,7 +191,7 @@ uint32_t PIO::regRead(uint64_t time, uint32_t addr)
         case PIO_SM2_PINCTRL_OFFSET:
         case PIO_SM3_PINCTRL_OFFSET:
         {
-            int sm = (addr - PIO_SM0_CLKDIV_OFFSET) / (PIO_SM1_CLKDIV_OFFSET - PIO_SM0_CLKDIV_OFFSET);
+            int sm = (addr - PIO_SM0_PINCTRL_OFFSET) / (PIO_SM1_PINCTRL_OFFSET - PIO_SM0_PINCTRL_OFFSET);
             return hw.sm[sm].pinctrl;
         }
     }
@@ -330,7 +330,7 @@ void PIO::regWrite(uint64_t time, uint32_t addr, uint32_t data)
         {
             update(time);
 
-            int sm = (addr - PIO_SM0_CLKDIV_OFFSET) / (PIO_SM1_CLKDIV_OFFSET - PIO_SM0_CLKDIV_OFFSET);
+            int sm = (addr - PIO_SM0_EXECCTRL_OFFSET) / (PIO_SM1_EXECCTRL_OFFSET - PIO_SM0_EXECCTRL_OFFSET);
             updateReg(hw.sm[sm].execctrl, data, atomic);
             return;
         }
@@ -342,7 +342,7 @@ void PIO::regWrite(uint64_t time, uint32_t addr, uint32_t data)
         {
             update(time);
 
-            int sm = (addr - PIO_SM0_CLKDIV_OFFSET) / (PIO_SM1_CLKDIV_OFFSET - PIO_SM0_CLKDIV_OFFSET);
+            int sm = (addr - PIO_SM0_SHIFTCTRL_OFFSET) / (PIO_SM1_SHIFTCTRL_OFFSET - PIO_SM0_SHIFTCTRL_OFFSET);
             updateReg(hw.sm[sm].shiftctrl, data, atomic);
             return;
         }
@@ -356,7 +356,7 @@ void PIO::regWrite(uint64_t time, uint32_t addr, uint32_t data)
         {
             update(time);
 
-            int sm = (addr - PIO_SM0_CLKDIV_OFFSET) / (PIO_SM1_CLKDIV_OFFSET - PIO_SM0_CLKDIV_OFFSET);
+            int sm = (addr - PIO_SM0_PINCTRL_OFFSET) / (PIO_SM1_PINCTRL_OFFSET - PIO_SM0_PINCTRL_OFFSET);
             updateReg(hw.sm[sm].pinctrl, data, atomic);
             return;
         }
