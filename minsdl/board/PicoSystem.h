@@ -58,5 +58,6 @@ private:
     uint64_t onGetNextInterruptTime(uint64_t time);
 
     void onPWMUpdate(uint64_t time, uint16_t pwm);
-    void onPIOUpdate(uint64_t time, PIO &pio);
+
+    void onPIOTX(uint64_t time, PIO &pio, int sm, uint32_t data);
 };

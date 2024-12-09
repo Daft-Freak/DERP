@@ -37,7 +37,7 @@ PicoSystemBoard::PicoSystemBoard(MemoryBus &mem) : mem(mem)
     mem.getGPIO().setReadCallback([this](auto time, auto &gpio){onGPIORead(time, gpio);});
     mem.getGPIO().clearInputFloatingMask(1 << 8/*TE*/ | buttonMask); // buttons pulled high on board
 
-    mem.getPIO(0).setUpdateCallback([this](auto time, auto &pio){onPIOUpdate(time, pio);});
+    mem.getPIO(0).setTXCallback([this](auto time, auto &pio, auto sm, auto data){onPIOTX(time, pio, sm, data);});
 
     mem.getPWM().setOutputCallback([this](auto time, auto pwm){onPWMUpdate(time, pwm);}, 1 << 11); // audio
 
@@ -188,97 +188,43 @@ void PicoSystemBoard::onPWMUpdate(uint64_t time, uint16_t pwm)
     lastAudioVal = pwm & (1 << 11);
 }
 
-void PicoSystemBoard::onPIOUpdate(uint64_t time, PIO &pio)
+void PicoSystemBoard::onPIOTX(uint64_t time, PIO &pio, int sm, uint32_t data)
 {
-    // display is usually PIO0 SM0
-    auto &txFifo = pio.getTXFIFO(0);
-    auto &smHW = pio.getHW().sm[0];
-
-    if(txFifo.empty())
+    if(sm != 0)
         return;
 
-    // avoid entirely emptying FIFO while DMA is active
-    // (workaround for PIO brokenness)
-    int minLevel = mem.getDMA().isChannelActive(0) ? 1 : 0;
+    auto &smHW = pio.getHW().sm[0];
 
-    while(txFifo.getCount() > minLevel)
+    if(smHW.shiftctrl & PIO_SM0_SHIFTCTRL_AUTOPULL_BITS)
     {
-        auto data = txFifo.pop();
-
-        // this is nasty, but someone needs to generate the request...
-        mem.getDMA().triggerDREQ(0 /*DREQ_PIO0_TX0*/);
-
-        if(smHW.shiftctrl & PIO_SM0_SHIFTCTRL_AUTOPULL_BITS)
+        // 32blit-sdk hires or command
+        auto pullThresh = (smHW.shiftctrl & PIO_SM0_SHIFTCTRL_PULL_THRESH_BITS) >> PIO_SM0_SHIFTCTRL_PULL_THRESH_LSB;
+        if(pullThresh == 8)
         {
-            // 32blit-sdk hires or command
-            auto pullThresh = (smHW.shiftctrl & PIO_SM0_SHIFTCTRL_PULL_THRESH_BITS) >> PIO_SM0_SHIFTCTRL_PULL_THRESH_LSB;
-            if(pullThresh == 8)
+            // commands
+            bool dc = mem.getGPIO().getPadState() & (1 << 9);
+
+            if(!dc)
             {
-                // commands
-                bool dc = mem.getGPIO().getPadState() & (1 << 9);
+                displayCommand = data & 0xFF;
+                displayCommandOff = 0;
 
-                if(!dc)
+                if(displayCommand == 0x2C)
                 {
-                    displayCommand = data & 0xFF;
-                    displayCommandOff = 0;
-
-                    if(displayCommand == 0x2C)
-                    {
-                        screenDataOffX = windowMinX;
-                        screenDataOffY = windowMinY;
-                    }
-                }
-                else
-                {
-                    handleDisplayCommandData(data & 0xFF);
-                    displayCommandOff++;
+                    screenDataOffX = windowMinX;
+                    screenDataOffY = windowMinY;
                 }
             }
             else
             {
-                // hires data
-                screenData[screenDataOffX + screenDataOffY * 240] = data & 0xFFFF;
-
-                if(screenDataOffX++ == windowMaxX)
-                {
-                    screenDataOffX = windowMinX;
-
-                    if(screenDataOffY++ == windowMaxY)
-                        screenDataOffY = windowMinY;
-                }
+                handleDisplayCommandData(data & 0xFF);
+                displayCommandOff++;
             }
         }
         else
         {
-            // 32blit-sdk lores or picosystem-sdk
-            bool lores = true;
-
-            // assume ARGB4444 == picosystem-sdk
-            if(displayFormat == SDL_PIXELFORMAT_ARGB4444)
-            {
-                // picosystem sdk un-swaps in the pio program
-                data = data >> 16 | data << 16;
-
-                // try to work out if this is hires mode
-                int top = (smHW.execctrl & PIO_SM0_EXECCTRL_WRAP_TOP_BITS) >> PIO_SM0_EXECCTRL_WRAP_TOP_LSB;
-                int bottom = (smHW.execctrl & PIO_SM0_EXECCTRL_WRAP_BOTTOM_BITS) >> PIO_SM0_EXECCTRL_WRAP_BOTTOM_LSB;
-            
-                if(top - bottom < 12) // hires program is shorter (8 vs 18 instrs)
-                    lores = false;
-            }
-
-            auto offset = screenDataOffX + screenDataOffY * 240;
-
-            screenData[offset++] = data & 0xFFFF;
-            if(lores)
-                screenData[offset++] = data & 0xFFFF;
-            screenData[offset++] = data >> 16;
-            if(lores)
-                screenData[offset++] = data >> 16;
-        
-            // update offset
-            screenDataOffX += lores ? 3 : 1;
-            assert(screenDataOffX <= windowMaxX);
+            // hires data
+            screenData[screenDataOffX + screenDataOffY * 240] = data & 0xFFFF;
 
             if(screenDataOffX++ == windowMaxX)
             {
@@ -287,6 +233,46 @@ void PicoSystemBoard::onPIOUpdate(uint64_t time, PIO &pio)
                 if(screenDataOffY++ == windowMaxY)
                     screenDataOffY = windowMinY;
             }
+        }
+    }
+    else
+    {
+        // 32blit-sdk lores or picosystem-sdk
+        bool lores = true;
+
+        // assume ARGB4444 == picosystem-sdk
+        if(displayFormat == SDL_PIXELFORMAT_ARGB4444)
+        {
+            // picosystem sdk un-swaps in the pio program
+            data = data >> 16 | data << 16;
+
+            // try to work out if this is hires mode
+            int top = (smHW.execctrl & PIO_SM0_EXECCTRL_WRAP_TOP_BITS) >> PIO_SM0_EXECCTRL_WRAP_TOP_LSB;
+            int bottom = (smHW.execctrl & PIO_SM0_EXECCTRL_WRAP_BOTTOM_BITS) >> PIO_SM0_EXECCTRL_WRAP_BOTTOM_LSB;
+        
+            if(top - bottom < 12) // hires program is shorter (8 vs 18 instrs)
+                lores = false;
+        }
+
+        auto offset = screenDataOffX + screenDataOffY * 240;
+
+        screenData[offset++] = data & 0xFFFF;
+        if(lores)
+            screenData[offset++] = data & 0xFFFF;
+        screenData[offset++] = data >> 16;
+        if(lores)
+            screenData[offset++] = data >> 16;
+    
+        // update offset
+        screenDataOffX += lores ? 3 : 1;
+        assert(screenDataOffX <= windowMaxX);
+
+        if(screenDataOffX++ == windowMaxX)
+        {
+            screenDataOffX = windowMinX;
+
+            if(screenDataOffY++ == windowMaxY)
+                screenDataOffY = windowMinY;
         }
     }
 }
