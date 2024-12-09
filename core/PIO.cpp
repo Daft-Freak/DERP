@@ -58,8 +58,8 @@ void PIO::update(uint64_t target)
     auto cycles = clock.getCyclesToTime(target);
 
     // this is almost certainly a hack to work around timing issues
-    if(!cycles && updateCallback && ~(hw.fstat & PIO_FSTAT_TXEMPTY_BITS))
-        updateCallback(clock.getTime(), *this);
+    //if(updateCallback && ~(hw.fstat & PIO_FSTAT_TXEMPTY_BITS))
+    //    updateCallback(clock.getTime(), *this);
 
     while(cycles)
     {
@@ -85,17 +85,21 @@ void PIO::update(uint64_t target)
             auto smCycles = (step << 8) + clockFrac[i];
 
             auto clkdiv = hw.sm[i].clkdiv >> PIO_SM0_CLKDIV_FRAC_LSB;
-            if(smCycles > clkdiv)
+
+            if(smCycles >= clkdiv)
             {
                 smCycles -= clkdiv;
-                clockFrac[i] = smCycles & 0xFF;
 
                 if(hw.ctrl & (1 << (PIO_CTRL_SM_ENABLE_LSB + i)))
-                {} // run
+                    stepSM(i);
+                else // if it's not enabled we might have skipped steps
+                    smCycles %= clkdiv;
+
+                clockFrac[i] = smCycles & 0xFF;
             }
         }
 
-        if(updateCallback)
+        /*if(updateCallback)
             updateCallback(clock.getTime(), *this);
         else
         {
@@ -108,7 +112,7 @@ void PIO::update(uint64_t target)
                         txFifo[i].pop();
                 }
             }
-        }
+        }*/
 
         clock.addCycles(step);
 
@@ -149,11 +153,11 @@ uint32_t PIO::regRead(uint64_t time, uint32_t addr)
 
             // HACK: set txstall if FIFO empty
             // FIXME: this is wrong but we're not running the program
-            for(unsigned i = 0; i < NUM_PIO_STATE_MACHINES; i++)
+            /*for(unsigned i = 0; i < NUM_PIO_STATE_MACHINES; i++)
             {
                 if(txFifo[i].empty())
                     hw.fdebug |= 1 << (PIO_FDEBUG_TXSTALL_LSB + i);
-            }
+            }*/
 
             return hw.fdebug;
         }
@@ -256,7 +260,11 @@ void PIO::regWrite(uint64_t time, uint32_t addr, uint32_t data)
                         logf(LogLevel::Debug, logComponent, "%i SM%i enabled CLKDIV %08X EXECCTRL %08X SHIFTCTRL %08X PINCTRL %08X", index, i, hw.sm[i].clkdiv, hw.sm[i].execctrl, hw.sm[i].shiftctrl, hw.sm[i].pinctrl);
 
                     if(hw.ctrl & (1 << (PIO_CTRL_SM_RESTART_LSB + i)))
+                    {
                         logf(LogLevel::Debug, logComponent, "%i SM%i restarted", index, i);
+                        regs[i].isr = 0;
+                        regs[i].osc = regs[i].isc = 0;
+                    }
 
                     if(hw.ctrl & (1 << (PIO_CTRL_CLKDIV_RESTART_LSB + 1)))
                         clockFrac[i] = 0;
@@ -383,7 +391,22 @@ void PIO::regWrite(uint64_t time, uint32_t addr, uint32_t data)
             return;
         }
 
-        // ADDR, INSTR
+        case PIO_SM0_INSTR_OFFSET:
+        case PIO_SM1_INSTR_OFFSET:
+        case PIO_SM2_INSTR_OFFSET:
+        case PIO_SM3_INSTR_OFFSET:
+        {
+            update(time);
+
+            int sm = (addr - PIO_SM0_INSTR_OFFSET) / (PIO_SM1_INSTR_OFFSET - PIO_SM0_INSTR_OFFSET);
+            updateReg(hw.sm[sm].instr, data, atomic);
+
+            logf(LogLevel::Debug, logComponent, "%i SM%i instr %04X", index, sm, hw.sm[sm].instr);
+
+            // TODO: this does ignore the clkdiv, but this is sill maybe the wrong place...
+            executeSMInstruction(sm, hw.sm[sm].instr);
+            return;
+        }
 
         case PIO_SM0_PINCTRL_OFFSET:
         case PIO_SM1_PINCTRL_OFFSET:
@@ -444,4 +467,351 @@ void PIO::dreqHandshake(int dreq)
 int PIO::getDREQNum(int sm, bool isTx) const
 {
     return index * (DREQ_PIO1_TX0 - DREQ_PIO0_TX0) + (isTx ? 0 : DREQ_PIO0_RX0 - DREQ_PIO0_TX0) + sm;
+}
+
+void PIO::stepSM(int sm)
+{
+    // TODO: EXEC latch, delays
+    auto &pc = regs[sm].pc;
+
+    if(executeSMInstruction(sm, hw.instr_mem[pc]))
+    {
+        // advance pc/wrap if we didn't jump or stall
+        int wrapTop = (hw.sm[sm].execctrl & PIO_SM0_EXECCTRL_WRAP_TOP_BITS) >> PIO_SM0_EXECCTRL_WRAP_TOP_LSB;
+        if(pc == wrapTop)
+            pc = (hw.sm[sm].execctrl & PIO_SM0_EXECCTRL_WRAP_BOTTOM_BITS) >> PIO_SM0_EXECCTRL_WRAP_BOTTOM_LSB;
+        else
+            pc++;
+    }
+}
+
+bool PIO::executeSMInstruction(int sm, uint16_t op)
+{
+    // delay/side-set are common
+    auto delaySide = (op >> 8) & 0x1F;
+
+    int delay = 0;
+    int sideSet = 0;
+
+    if(delaySide)
+    {
+        auto sidesetCount = (hw.sm[sm].pinctrl & PIO_SM0_PINCTRL_SIDESET_COUNT_BITS) >> PIO_SM0_PINCTRL_SIDESET_COUNT_LSB;
+        int delayBits = 5 - sidesetCount;
+
+        delay = delaySide & ((1 << delayBits) - 1);
+        sideSet = delaySide >> delayBits;
+
+        static bool logDS = false;
+        if(!logDS)
+        {
+            logf(LogLevel::NotImplemented, logComponent, "%i SM%i op %04X delay %i side-set %i", index, sm, op, delay, sideSet);
+            logDS = true;
+        }
+    }
+
+    auto &regs = this->regs[sm];
+
+    switch(op >> 13)
+    {
+        case 0: // JMP
+        {
+            auto cond = (op >> 5) & 0x7;
+            auto addr = op & 0x1F;
+
+            bool condVal = false;
+
+            switch(cond)
+            {
+                case 0: // always
+                    condVal = true;
+                    break;
+                case 1: // !X
+                    condVal = regs.x == 0;
+                    break;
+                case 2: // X--
+                    condVal = regs.x != 0;
+                    regs.x--;
+                    break;
+                case 3: // !Y
+                    condVal = regs.y == 0;
+                    break;
+                case 4: // Y--
+                    condVal = regs.y != 0;
+                    regs.y--;
+                    break;
+                case 5: // X != Y
+                    condVal = regs.x != regs.y;
+                    break;
+                case 6: // PIN
+                    logf(LogLevel::NotImplemented, logComponent, "%i SM%i JMP PIN", index, sm);
+                    break;
+                case 7: // !OSRE
+                {
+                    int thresh = (hw.sm[sm].shiftctrl & PIO_SM0_SHIFTCTRL_PULL_THRESH_BITS) >> PIO_SM0_SHIFTCTRL_PULL_THRESH_LSB;
+                    condVal = regs.osc >= thresh;
+                    break;
+                }
+            }
+
+            if(condVal)
+                regs.pc = addr;
+
+            return false;
+        }
+
+        case 3: // OUT
+        {
+            auto dest = (op >> 5) & 0x7;
+            auto count = op & 0x1F;
+
+            bool autopull = hw.sm[sm].shiftctrl & PIO_SM0_SHIFTCTRL_AUTOPULL_BITS;
+            if(autopull)
+            {
+                int thresh = (hw.sm[sm].shiftctrl & PIO_SM0_SHIFTCTRL_PULL_THRESH_BITS) >> PIO_SM0_SHIFTCTRL_PULL_THRESH_LSB;
+                if(regs.osc >= thresh)
+                {
+                    // stall if empty
+                    if(txFifo[sm].empty())
+                    {
+                        hw.fdebug |= 1 << (PIO_FDEBUG_TXSTALL_LSB + sm);
+                        return false;
+                    }
+
+                    // pull
+                    regs.osr = txFifo[sm].pop();
+                    regs.osc = 0;
+                    mem.getDMA().triggerDREQ(getDREQNum(sm, true));
+                }
+            }
+
+            // get and shift
+            bool shiftRight = hw.sm[sm].shiftctrl & PIO_SM0_SHIFTCTRL_OUT_SHIFTDIR_BITS;
+
+            uint32_t data = 0;
+
+            if(shiftRight)
+            {
+                data = regs.osr & ((1 << count) - 1);
+                regs.osr >>= count;
+            }
+            else
+            {
+                data = (regs.osr >> (31 - count)) & ((1 << count) - 1);
+                regs.osr <<= count;
+            }
+
+            regs.osc += count;
+
+            switch(dest)
+            {
+                case 0: // PINS
+                    break;
+                case 1: // X
+                    regs.x = data;
+                    break;
+                case 2: // Y
+                    regs.y = data;
+                    break;
+                case 3: // NULL
+                    break;
+                case 4: // PINDIRS
+                    break;
+                case 5: // PC
+                    regs.pc = data;
+                    return false;
+                case 6: // ISR
+                    regs.isr = data;
+                    regs.osc = count;
+                    break;
+                case 7: // EXEC
+                    return false; // stall, we didn't do it
+
+            }
+
+            return true;
+        }
+
+        case 4: // PUSH/PULL
+        {
+            bool pull = op & (1 << 7);
+            bool block = op & (1 << 5);
+
+            if(!pull) // PUSH
+            {
+                bool ifFull = op & (1 << 6);
+
+                if(ifFull)
+                {
+                    // ignore if below threshold
+                    int thresh = (hw.sm[sm].shiftctrl & PIO_SM0_SHIFTCTRL_PUSH_THRESH_BITS) >> PIO_SM0_SHIFTCTRL_PUSH_THRESH_LSB;
+                    if(regs.isc < thresh)
+                        return true;
+                }
+
+                // stall if FIFO full
+                if(rxFifo[sm].full())
+                {
+                    hw.fdebug |= 1 << (PIO_FDEBUG_RXSTALL_LSB + sm);
+
+                    if(!block)
+                    {
+                        // non-blocking drops the data
+                        regs.isc = 0;
+                        regs.isr = 0;
+                    }
+
+                    return !block; // stall SM if block is set, otherwise ignore push
+                }
+
+                // FIFO not full, push
+                rxFifo[sm].push(regs.isr);
+                regs.isc = 0;
+                regs.isr = 0;
+                mem.getDMA().triggerDREQ(getDREQNum(sm, false));
+            }
+            else // PULL
+            {
+                bool ifEmpty = op & (1 << 6);
+
+                if(ifEmpty)
+                {
+                    // ignore if below threshold
+                    int thresh = (hw.sm[sm].shiftctrl & PIO_SM0_SHIFTCTRL_PULL_THRESH_BITS) >> PIO_SM0_SHIFTCTRL_PULL_THRESH_LSB;
+                    if(regs.osc < thresh)
+                        return true;
+                }
+
+                // stall if FIFO empty
+                if(txFifo[sm].empty())
+                {
+                    if(block)
+                    {
+                        hw.fdebug |= 1 << (PIO_FDEBUG_TXSTALL_LSB + sm);
+                        return false; // stall SM
+                    }
+                    else
+                    {
+                        // move X to OSR for non-blocking
+                        regs.osc = 0;
+                        regs.osr = regs.x;
+                        return true;
+                    }
+                }
+
+                // FIFO not empty, pop
+                regs.osr = txFifo[sm].pop();
+                regs.osc = 0;
+                mem.getDMA().triggerDREQ(getDREQNum(sm, true));
+            }
+            return true;
+        }
+
+        case 5: // MOV
+        {
+            auto src = op & 0x7;
+            auto movOp = (op >> 3) & 0x3;
+            auto dest = (op >> 5) & 0x7;
+
+            uint32_t val = 0;
+
+            switch(src)
+            {
+                case 0: // PINS
+                    logf(LogLevel::NotImplemented, logComponent, "%i SM%i MOV x, PINS", index, sm);
+                    break;
+                case 1: // X
+                    val = regs.x;
+                    break;
+                case 2: // Y
+                    val = regs.y;
+                    break;
+                case 3: // NULL
+                    val = 0;
+                    break;
+                case 5: // STATUS
+                    logf(LogLevel::NotImplemented, logComponent, "%i SM%i MOV x, STATUS", index, sm);
+                    break;
+                case 6: // ISR
+                    val = regs.isr;
+                    break;
+                case 7: // OSR
+                    val = regs.osr;
+                    break;
+            }
+
+            if(movOp == 1) // invert
+                val = ~val;
+            else if(movOp == 2) // reverse
+                logf(LogLevel::NotImplemented, logComponent, "%i SM%i MOV reverse", index, sm);
+
+            switch(dest)
+            {
+                case 0: // PINS
+                    logf(LogLevel::NotImplemented, logComponent, "%i SM%i MOV PINS, x", index, sm);
+                    break;
+                case 1: // X
+                    regs.x = val;
+                    break;
+                case 2: // Y
+                    regs.y = val;
+                    break;
+                case 4: // EXEC
+                    //delay ignored
+                    logf(LogLevel::NotImplemented, logComponent, "%i SM%i MOV EXEC, x", index, sm);
+                    break;
+                case 5: // PC
+                    regs.pc = val;
+                    return false;
+                case 6: // ISR
+                    regs.isr = val;
+                    regs.isc = 0;
+                    break;
+                case 7: // OSR
+                    regs.osr = val;
+                    regs.osc = 0;
+                    break;
+            }
+
+            return true;
+        }
+
+        case 7: // SET
+        {
+            auto dest = (op >> 5) & 0x7;
+            auto data = op & 0x1F;
+
+            switch(dest)
+            {
+                case 0: // PINS
+                    logf(LogLevel::NotImplemented, logComponent, "%i SM%i SET PINS", index, sm);
+                    break;
+                case 1: // X
+                    regs.x = data;
+                    break;
+                case 2: // Y
+                    regs.y = data;
+                    break;
+                case 4: // PINDIRS
+                    logf(LogLevel::NotImplemented, logComponent, "%i SM%i SET PINDIRS", index, sm);
+                    break;
+                
+                // the rest are reserved
+            }
+
+            return true;
+        }
+
+        default:
+        {
+            static uint8_t logMask = 0;
+            auto maskBit = 1 << (op >> 13);
+            if(!(logMask & maskBit))
+            {
+                logf(LogLevel::NotImplemented, logComponent, "%i SM%i op %04X", index, sm, op);
+                logMask |= maskBit;
+            }
+        }
+    }
+
+    return true;
 }

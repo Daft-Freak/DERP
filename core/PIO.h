@@ -46,6 +46,9 @@ public:
 private:
     int getDREQNum(int sm, bool isTx) const;
 
+    void stepSM(int sm);
+    bool executeSMInstruction(int sm, uint16_t op);
+
     MemoryBus &mem;
     int index;
 
@@ -56,6 +59,18 @@ private:
     UpdateCallback updateCallback;
 
     uint8_t clockFrac[NUM_PIO_STATE_MACHINES];
+
+    struct {
+        uint32_t osr;
+        uint32_t isr;
+
+        uint32_t x;
+        uint32_t y;
+
+        uint8_t pc;
+
+        uint8_t osc, isc; // counters
+    } regs[NUM_PIO_STATE_MACHINES];
 
     // TODO: joined
     FIFO<uint32_t, 4> rxFifo[NUM_PIO_STATE_MACHINES];
