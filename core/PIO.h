@@ -61,7 +61,7 @@ private:
     UpdateCallback updateCallback;
     TXCallback txCallback;
 
-    uint8_t clockFrac[NUM_PIO_STATE_MACHINES];
+    uint32_t clockFrac[NUM_PIO_STATE_MACHINES];
 
     struct {
         uint32_t osr;

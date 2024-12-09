@@ -94,9 +94,9 @@ void PIO::update(uint64_t target)
                     stepSM(i);
                 else // if it's not enabled we might have skipped steps
                     smCycles %= clkdiv;
-
-                clockFrac[i] = smCycles & 0xFF;
             }
+
+            clockFrac[i] = smCycles;
         }
 
         /*if(updateCallback)
