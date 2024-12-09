@@ -125,6 +125,11 @@ void PIO::setUpdateCallback(UpdateCallback cb)
     updateCallback = cb;
 }
 
+void PIO::setTXCallback(TXCallback cb)
+{
+    txCallback = cb;
+}
+
 uint64_t PIO::getNextInterruptTime(uint64_t target)
 {
     if(!hw.inte0 || !hw.inte1)
@@ -596,6 +601,8 @@ bool PIO::executeSMInstruction(int sm, uint16_t op)
                     regs.osr = txFifo[sm].pop();
                     regs.osc = 0;
                     mem.getDMA().triggerDREQ(getDREQNum(sm, true));
+                    if(txCallback)
+                        txCallback(clock.getTime(), *this, sm, regs.osr);
                 }
             }
 
@@ -715,6 +722,8 @@ bool PIO::executeSMInstruction(int sm, uint16_t op)
                 regs.osr = txFifo[sm].pop();
                 regs.osc = 0;
                 mem.getDMA().triggerDREQ(getDREQNum(sm, true));
+                if(txCallback)
+                    txCallback(clock.getTime(), *this, sm, regs.osr);
             }
             return true;
         }

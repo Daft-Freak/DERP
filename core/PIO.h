@@ -14,6 +14,7 @@ class PIO final
 {
 public:
     using UpdateCallback = std::function<void(uint64_t, PIO &pio)>;
+    using TXCallback = std::function<void(uint64_t, PIO &pio, int, uint32_t)>;
 
     PIO(MemoryBus &mem, int index);
 
@@ -27,6 +28,7 @@ public:
     }
 
     void setUpdateCallback(UpdateCallback cb);
+    void setTXCallback(TXCallback cb);
 
     uint64_t getNextInterruptTime(uint64_t target);
 
@@ -57,6 +59,7 @@ private:
     pio_hw_t hw;
 
     UpdateCallback updateCallback;
+    TXCallback txCallback;
 
     uint8_t clockFrac[NUM_PIO_STATE_MACHINES];
 
