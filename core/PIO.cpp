@@ -511,6 +511,20 @@ bool PIO::executeSMInstruction(int sm, uint16_t op)
 
     auto &regs = this->regs[sm];
 
+    auto getPushThreshold = [this](int sm)
+    {
+        int thresh = (hw.sm[sm].shiftctrl & PIO_SM0_SHIFTCTRL_PUSH_THRESH_BITS) >> PIO_SM0_SHIFTCTRL_PUSH_THRESH_LSB;
+
+        return thresh == 0 ? 32 : thresh;
+    };
+
+    auto getPullThreshold = [this](int sm)
+    {
+        int thresh = (hw.sm[sm].shiftctrl & PIO_SM0_SHIFTCTRL_PULL_THRESH_BITS) >> PIO_SM0_SHIFTCTRL_PULL_THRESH_LSB;
+
+        return thresh == 0 ? 32 : thresh;
+    };
+
     switch(op >> 13)
     {
         case 0: // JMP
@@ -547,8 +561,7 @@ bool PIO::executeSMInstruction(int sm, uint16_t op)
                     break;
                 case 7: // !OSRE
                 {
-                    int thresh = (hw.sm[sm].shiftctrl & PIO_SM0_SHIFTCTRL_PULL_THRESH_BITS) >> PIO_SM0_SHIFTCTRL_PULL_THRESH_LSB;
-                    condVal = regs.osc >= thresh;
+                    condVal = regs.osc < getPullThreshold(sm);
                     break;
                 }
             }
@@ -570,8 +583,7 @@ bool PIO::executeSMInstruction(int sm, uint16_t op)
             bool autopull = hw.sm[sm].shiftctrl & PIO_SM0_SHIFTCTRL_AUTOPULL_BITS;
             if(autopull)
             {
-                int thresh = (hw.sm[sm].shiftctrl & PIO_SM0_SHIFTCTRL_PULL_THRESH_BITS) >> PIO_SM0_SHIFTCTRL_PULL_THRESH_LSB;
-                if(regs.osc >= thresh)
+                if(regs.osc >= getPullThreshold(sm))
                 {
                     // stall if empty
                     if(txFifo[sm].empty())
@@ -646,8 +658,7 @@ bool PIO::executeSMInstruction(int sm, uint16_t op)
                 if(ifFull)
                 {
                     // ignore if below threshold
-                    int thresh = (hw.sm[sm].shiftctrl & PIO_SM0_SHIFTCTRL_PUSH_THRESH_BITS) >> PIO_SM0_SHIFTCTRL_PUSH_THRESH_LSB;
-                    if(regs.isc < thresh)
+                    if(regs.isc < getPushThreshold(sm))
                         return true;
                 }
 
@@ -679,8 +690,7 @@ bool PIO::executeSMInstruction(int sm, uint16_t op)
                 if(ifEmpty)
                 {
                     // ignore if below threshold
-                    int thresh = (hw.sm[sm].shiftctrl & PIO_SM0_SHIFTCTRL_PULL_THRESH_BITS) >> PIO_SM0_SHIFTCTRL_PULL_THRESH_LSB;
-                    if(regs.osc < thresh)
+                    if(regs.osc < getPullThreshold(sm))
                         return true;
                 }
 
