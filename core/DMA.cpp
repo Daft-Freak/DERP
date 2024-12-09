@@ -3,6 +3,7 @@
 
 #include "hardware/platform_defs.h"
 #include "hardware/regs/dma.h"
+#include "hardware/regs/dreq.h"
 #include "hardware/regs/intctrl.h"
 
 #include "DMA.h"
@@ -42,6 +43,9 @@ void DMA::reset()
     for(auto &t : transfersInProgress)
         t = 0;
 
+    for(auto &d : dreqCounter)
+        d = 0;
+
     interrupts = 0;
     interruptEnables[0] = interruptEnables[1] = 0;
 
@@ -55,7 +59,7 @@ void DMA::update(uint64_t target)
     auto readChannel = curReadChannel;
     auto writeChannel = curWriteChannel;
 
-    // TODO: DREQ, priority, ring, chaining, sniff...
+    // TODO: priority, ring, chaining, sniff...
 
     for(uint32_t cycle = 0; cycle < passed; cycle++)
     {
@@ -132,11 +136,19 @@ void DMA::update(uint64_t target)
                 if(!(channelTriggered & (1 << curChannel)) || !(ctrl[curChannel] & DMA_CH0_CTRL_TRIG_EN_BITS))
                     continue;
 
+                // check DREQ
+                if(!dreqCounter[curChannel])
+                    continue;
+
                 // don't queue any more if enough transfers in progress to complete
                 if(transferCount[curChannel] <= transfersInProgress[curChannel])
                     continue;
 
                 transfersInProgress[curChannel]++;
+
+                // decrement DREQs if not permanent
+                if(dreqCounter[curChannel] != 0xFF)
+                    dreqCounter[curChannel]--;
 
                 readAddressFifo.push(readAddr[curChannel]);
                 writeAddressFifo.push(writeAddr[curChannel]);
@@ -291,6 +303,7 @@ void DMA::regWrite(uint64_t time, uint32_t addr, uint32_t data)
         {
             transferCount[ch] = transferCountReload[ch];
             channelTriggered |= 1 << ch;
+            dreqHandshake(ch);
         }
     }
     else
@@ -333,6 +346,20 @@ void DMA::regWrite(uint64_t time, uint32_t addr, uint32_t data)
 bool DMA::isChannelActive(int ch) const
 {
     return channelTriggered & (1 << ch);
+}
+
+void DMA::triggerDREQ(int dreq)
+{
+    // TODO: pass time and sync other periphs?
+
+    // TODO: faster lookup
+    for(int i = 0; i < numChannels; i++)
+    {
+        int treq = (ctrl[i] & DMA_CH0_CTRL_TRIG_TREQ_SEL_BITS) >> DMA_CH0_CTRL_TRIG_TREQ_SEL_LSB;
+
+        if(treq == dreq)
+            dreqCounter[i] = dreqCounter[i] == 0x3F ? 0x3F : (dreqCounter[i] + 1);
+    }
 }
 
 template<class T, bool bswap>
@@ -380,4 +407,40 @@ void DMA::updateWriteFunc(int channel)
         writeFuncs[channel] = &DMA::doWrite<uint16_t>;
     else
         writeFuncs[channel] = &DMA::doWrite<uint32_t>;
+}
+
+void DMA::dreqHandshake(int channel)
+{
+    int treq = (ctrl[channel] & DMA_CH0_CTRL_TRIG_TREQ_SEL_BITS) >> DMA_CH0_CTRL_TRIG_TREQ_SEL_LSB;
+    switch(treq)
+    {
+        case DREQ_PIO0_TX0:
+        case DREQ_PIO0_TX1:
+        case DREQ_PIO0_TX2:
+        case DREQ_PIO0_TX3:
+        case DREQ_PIO0_RX0:
+        case DREQ_PIO0_RX1:
+        case DREQ_PIO0_RX2:
+        case DREQ_PIO0_RX3:
+            mem.getPIO(0).dreqHandshake(treq);
+            break;
+
+        case DREQ_PIO1_TX0:
+        case DREQ_PIO1_TX1:
+        case DREQ_PIO1_TX2:
+        case DREQ_PIO1_TX3:
+        case DREQ_PIO1_RX0:
+        case DREQ_PIO1_RX1:
+        case DREQ_PIO1_RX2:
+        case DREQ_PIO1_RX3:
+            mem.getPIO(1).dreqHandshake(treq);
+            break;
+
+        case DMA_CH0_CTRL_TRIG_TREQ_SEL_VALUE_PERMANENT:
+            dreqCounter[channel] = 0xFF; // special value
+            break;
+
+        default:
+            logf(LogLevel::NotImplemented, logComponent, "dma ch %i TREQ %i", channel, treq);
+    }
 }

@@ -205,6 +205,9 @@ void PicoSystemBoard::onPIOUpdate(uint64_t time, PIO &pio)
     {
         auto data = txFifo.pop();
 
+        // this is nasty, but someone needs to generate the request...
+        mem.getDMA().triggerDREQ(0 /*DREQ_PIO0_TX0*/);
+
         if(smHW.shiftctrl & PIO_SM0_SHIFTCTRL_AUTOPULL_BITS)
         {
             // 32blit-sdk hires or command

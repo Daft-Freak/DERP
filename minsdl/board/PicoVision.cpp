@@ -266,8 +266,10 @@ void PicoVisionBoard::onPIOUpdate(uint64_t time, PIO &pio)
     while(!sdTx.empty() && !sdRx.full())
     {
         sdTx.pop();
+        mem.getDMA().triggerDREQ(9 /*DREQ_PIO1_TX1*/);
 
         sdRx.push(0xFFFFFFFF);
+        mem.getDMA().triggerDREQ(13 /*DREQ_PIO1_RX1*/);
     }
 
     // PSRAM
@@ -296,6 +298,7 @@ void PicoVisionBoard::onPIOUpdate(uint64_t time, PIO &pio)
     while(!txFifo.empty())
     {
         auto data = txFifo.pop();
+        mem.getDMA().triggerDREQ(8 /*DREQ_PIO1_TX0*/);
 
         bool isResetProg = !ramQuadEnabled[ramBank]; // assume reset program until quad enabled
 

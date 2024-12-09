@@ -32,6 +32,8 @@ public:
 
     bool isChannelActive(int ch) const;
 
+    void triggerDREQ(int dreq);
+
     int getDeviceFlags() const {return 0;}
 
 private:
@@ -46,6 +48,8 @@ private:
 
     void updateReadFunc(int channel);
     void updateWriteFunc(int channel);
+
+    void dreqHandshake(int channel);
 
     MemoryBus &mem;
 
@@ -74,6 +78,7 @@ private:
     uint32_t ctrl[numChannels];
 
     uint32_t transfersInProgress[numChannels];
+    uint8_t dreqCounter[numChannels]; // 6 bit?
 
     ReadFunc readFuncs[numChannels];
     WriteFunc writeFuncs[numChannels];

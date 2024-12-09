@@ -41,7 +41,11 @@ public:
 
     void updateFifoStatus(int sm);
 
+    void dreqHandshake(int dreq);
+
 private:
+    int getDREQNum(int sm, bool isTx) const;
+
     MemoryBus &mem;
     int index;
 

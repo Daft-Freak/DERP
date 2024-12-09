@@ -2,6 +2,7 @@
 
 #include "hardware/platform_defs.h"
 #include "hardware/regs/pio.h"
+#include "hardware/regs/dreq.h"
 #include "hardware/regs/intctrl.h"
 
 #include "PIO.h"
@@ -135,7 +136,11 @@ uint32_t PIO::regRead(uint64_t time, uint32_t addr)
             if(rxFifo[index].empty())
                 hw.fdebug |= 1 << (PIO_FDEBUG_RXUNDER_LSB + index);
             else
-                return rxFifo[index].pop();
+            {
+                auto ret = rxFifo[index].pop();
+                mem.getDMA().triggerDREQ(getDREQNum(index, false));
+                return ret;
+            }
 
             return ~0;
         }
@@ -261,6 +266,9 @@ void PIO::regWrite(uint64_t time, uint32_t addr, uint32_t data)
 
             txFifo[index].push(data);
 
+            if(!txFifo[index].full())
+                mem.getDMA().triggerDREQ(getDREQNum(index, true));
+
             return;
         }
 
@@ -380,4 +388,24 @@ void PIO::updateFifoStatus(int sm)
         hw.fstat |= 1 << (PIO_FSTAT_TXEMPTY_LSB + sm);
     else
         hw.fstat &= ~(1 << (PIO_FSTAT_TXEMPTY_LSB + sm));
+}
+
+void PIO::dreqHandshake(int dreq)
+{
+    // map DREQ to SM + rx/tx
+    int sm = dreq;
+    if(index == 1)
+        sm -= (DREQ_PIO1_TX0 - DREQ_PIO0_TX0);
+
+    bool isRX = sm >= DREQ_PIO0_RX0;
+    
+    sm -= isRX ? DREQ_PIO0_RX0 : DREQ_PIO0_TX0;
+
+    if((isRX && !rxFifo[dreq].empty()) || (!isRX && !txFifo[dreq].full()))
+        mem.getDMA().triggerDREQ(dreq);
+}
+
+int PIO::getDREQNum(int sm, bool isTx) const
+{
+    return index * (DREQ_PIO1_TX0 - DREQ_PIO0_TX0) + (isTx ? 0 : DREQ_PIO0_RX0 - DREQ_PIO0_TX0) + sm;
 }
