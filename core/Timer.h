@@ -2,9 +2,11 @@
 
 #include <cstdint>
 
+#include "ClockTarget.h"
+
 class MemoryBus;
 
-class Timer final
+class Timer final : public ClockedDevice
 {
 public:
     Timer(MemoryBus &mem);
@@ -21,6 +23,10 @@ public:
 
     uint32_t regRead(uint64_t time, uint32_t addr);
     void regWrite(uint64_t time, uint32_t addr, uint32_t data);
+
+    ClockTarget &getClock();
+
+    int getDeviceFlags() const {return 0;}
 
 private:
     MemoryBus &mem;

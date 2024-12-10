@@ -202,3 +202,9 @@ void Timer::regWrite(uint64_t time, uint32_t addr, uint32_t data)
 
     logf(LogLevel::NotImplemented, logComponent, "W %04X = %08X", addr, data);
 }
+
+ClockTarget &Timer::getClock()
+{
+    // bit hacky, but should work as our update always calls watchdog update first
+    return mem.getWatchdog().getClock();
+}
