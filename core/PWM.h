@@ -9,7 +9,7 @@
 
 class MemoryBus;
 
-class PWM final
+class PWM final : public ClockedDevice
 {
 public:
     using OutputCallback = std::function<void(uint64_t, uint16_t)>;
@@ -32,6 +32,8 @@ public:
     void regWrite(uint64_t time, uint32_t addr, uint32_t data);
 
     ClockTarget &getClock() {return clock;}
+
+    int getDeviceFlags() const {return 0;}
 
 private:
     MemoryBus &mem;

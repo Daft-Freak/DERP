@@ -10,7 +10,7 @@
 
 class MemoryBus;
 
-class PIO final
+class PIO final : public ClockedDevice
 {
 public:
     using UpdateCallback = std::function<void(uint64_t, PIO &pio)>;
@@ -35,6 +35,8 @@ public:
     void regWrite(uint64_t time, uint32_t addr, uint32_t data);
 
     ClockTarget &getClock() {return clock;}
+
+    int getDeviceFlags() const {return 0;}
 
     const pio_hw_t &getHW(){return hw;}
     FIFO<uint32_t, 4> &getRXFIFO(int i) {return rxFifo[i];}
