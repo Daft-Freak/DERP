@@ -131,6 +131,7 @@ MemoryBus::MemoryBus() : gpio(*this), uart{{*this, 0}, {*this, 1}}, i2c{{*this, 
     clocks.addClockTarget(clk_sys, pwm.getClock());
     
     clocks.addClockTarget(clk_sys, dma.getClock());
+    clocks.addClockTarget(clk_usb, usb.getClock());
     clocks.addClockTarget(clk_sys, pio[0].getClock());
     clocks.addClockTarget(clk_sys, pio[1].getClock());
 }

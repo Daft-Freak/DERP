@@ -115,6 +115,8 @@ void USB::reset()
 
 void USB::update(uint64_t target)
 {
+    clock.addCycles(clock.getCyclesToTime(target));
+
     if(shouldCheckBuffers)
     {
         usbipUpdate();
@@ -129,14 +131,12 @@ void USB::update(uint64_t target)
 
         shouldCheckBuffers = 0;
     }
-
-    lastUpdate = target;
 }
 
 uint64_t USB::getNextInterruptTime(uint64_t target)
 {
     if(interruptEnables && shouldCheckBuffers)
-        return lastUpdate + 1; // "now"
+        return clock.getTimeToCycles(1); // "now"
 
     return target;
 }

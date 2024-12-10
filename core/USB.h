@@ -4,9 +4,11 @@
 
 #include "usbip.h"
 
+#include "ClockTarget.h"
+
 class MemoryBus;
 
-class USB final
+class USB final : public ClockedDevice
 {
 public:
     USB(MemoryBus &mem);
@@ -25,6 +27,10 @@ public:
     void regWrite(uint64_t time, uint32_t addr, uint32_t data);
 
     void ramWrite(uint32_t addr);
+
+    ClockTarget &getClock() {return clock;}
+
+    int getDeviceFlags() const {return 0;}
 
     uint8_t *getRAM() {return dpram;}
 
@@ -64,7 +70,7 @@ private:
 
     MemoryBus &mem;
 
-    uint64_t lastUpdate = 0;
+    ClockTarget clock;
 
     uint8_t dpram[4 * 1024];
 
