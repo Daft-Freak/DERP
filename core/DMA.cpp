@@ -303,7 +303,7 @@ void DMA::regWrite(uint64_t time, uint32_t addr, uint32_t data)
         {
             transferCount[ch] = transferCountReload[ch];
             channelTriggered |= 1 << ch;
-            dreqHandshake(ch);
+            dreqHandshake(time, ch);
         }
     }
     else
@@ -348,7 +348,7 @@ bool DMA::isChannelActive(int ch) const
     return channelTriggered & (1 << ch);
 }
 
-void DMA::triggerDREQ(int dreq)
+void DMA::triggerDREQ(uint64_t time, int dreq)
 {
     // TODO: pass time and sync other periphs?
 
@@ -409,7 +409,7 @@ void DMA::updateWriteFunc(int channel)
         writeFuncs[channel] = &DMA::doWrite<uint32_t>;
 }
 
-void DMA::dreqHandshake(int channel)
+void DMA::dreqHandshake(uint64_t time, int channel)
 {
     int treq = (ctrl[channel] & DMA_CH0_CTRL_TRIG_TREQ_SEL_BITS) >> DMA_CH0_CTRL_TRIG_TREQ_SEL_LSB;
     
@@ -425,7 +425,7 @@ void DMA::dreqHandshake(int channel)
         case DREQ_PIO0_RX1:
         case DREQ_PIO0_RX2:
         case DREQ_PIO0_RX3:
-            mem.getPIO(0).dreqHandshake(treq);
+            mem.getPIO(0).dreqHandshake(time, treq);
             break;
 
         case DREQ_PIO1_TX0:
@@ -436,7 +436,7 @@ void DMA::dreqHandshake(int channel)
         case DREQ_PIO1_RX1:
         case DREQ_PIO1_RX2:
         case DREQ_PIO1_RX3:
-            mem.getPIO(1).dreqHandshake(treq);
+            mem.getPIO(1).dreqHandshake(time, treq);
             break;
 
         case DMA_CH0_CTRL_TRIG_TREQ_SEL_VALUE_PERMANENT:

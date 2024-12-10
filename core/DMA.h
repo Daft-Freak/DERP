@@ -32,7 +32,7 @@ public:
 
     bool isChannelActive(int ch) const;
 
-    void triggerDREQ(int dreq);
+    void triggerDREQ(uint64_t time, int dreq);
 
     int getDeviceFlags() const {return 0;}
 
@@ -49,7 +49,7 @@ private:
     void updateReadFunc(int channel);
     void updateWriteFunc(int channel);
 
-    void dreqHandshake(int channel);
+    void dreqHandshake(uint64_t time, int channel);
 
     MemoryBus &mem;
 

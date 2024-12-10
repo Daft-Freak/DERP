@@ -43,7 +43,7 @@ public:
 
     void updateFifoStatus(int sm);
 
-    void dreqHandshake(int dreq);
+    void dreqHandshake(uint64_t time, int dreq);
 
 private:
     int getDREQNum(int sm, bool isTx) const;

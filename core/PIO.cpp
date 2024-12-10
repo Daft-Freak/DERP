@@ -459,7 +459,7 @@ void PIO::updateFifoStatus(int sm)
         hw.fstat &= ~(1 << (PIO_FSTAT_TXEMPTY_LSB + sm));
 }
 
-void PIO::dreqHandshake(int dreq)
+void PIO::dreqHandshake(uint64_t time, int dreq)
 {
     // map DREQ to SM + rx/tx
     int sm = dreq;
@@ -473,12 +473,12 @@ void PIO::dreqHandshake(int dreq)
     if(isRX)
     {
         for(int i = 0; i < rxFifo->getCount(); i++)
-            mem.getDMA().triggerDREQ(dreq);
+            mem.getDMA().triggerDREQ(time, dreq);
     }
     else
     {
         for(int i = 0; i < 4 - txFifo->getCount(); i++)
-            mem.getDMA().triggerDREQ(dreq);
+            mem.getDMA().triggerDREQ(time, dreq);
     }
 }
 
@@ -631,7 +631,8 @@ bool PIO::executeSMInstruction(int sm, uint16_t op)
                     // pull
                     regs.osr = txFifo[sm].pop();
                     regs.osc = 0;
-                    mem.getDMA().triggerDREQ(getDREQNum(sm, true));
+                    // FIXME: these times are too early (we haven't updated the clock yet)
+                    mem.getDMA().triggerDREQ(clock.getTime(), getDREQNum(sm, true));
                     if(txCallback)
                         txCallback(clock.getTime(), *this, sm, regs.osr);
                 }
@@ -719,7 +720,7 @@ bool PIO::executeSMInstruction(int sm, uint16_t op)
                 rxFifo[sm].push(regs.isr);
                 regs.isc = 0;
                 regs.isr = 0;
-                mem.getDMA().triggerDREQ(getDREQNum(sm, false));
+                mem.getDMA().triggerDREQ(clock.getTime(), getDREQNum(sm, false));
             }
             else // PULL
             {
@@ -752,7 +753,7 @@ bool PIO::executeSMInstruction(int sm, uint16_t op)
                 // FIFO not empty, pop
                 regs.osr = txFifo[sm].pop();
                 regs.osc = 0;
-                mem.getDMA().triggerDREQ(getDREQNum(sm, true));
+                mem.getDMA().triggerDREQ(clock.getTime(), getDREQNum(sm, true));
                 if(txCallback)
                     txCallback(clock.getTime(), *this, sm, regs.osr);
             }
