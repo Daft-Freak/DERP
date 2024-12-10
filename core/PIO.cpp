@@ -61,63 +61,72 @@ void PIO::update(uint64_t target)
     //if(updateCallback && ~(hw.fstat & PIO_FSTAT_TXEMPTY_BITS))
     //    updateCallback(clock.getTime(), *this);
 
-    while(cycles)
+    if(!cycles)
+        return;
+
+    uint32_t clkdiv[NUM_PIO_STATE_MACHINES];
+    uint32_t smCycles[NUM_PIO_STATE_MACHINES];
+
+    for(unsigned i = 0; i < NUM_PIO_STATE_MACHINES; i++)
     {
-        auto step = cycles;
-
-        // find next SM to update
-        for(unsigned i = 0; i < NUM_PIO_STATE_MACHINES; i++)
-        {
-            if(!(hw.ctrl & (1 << (PIO_CTRL_SM_ENABLE_LSB + i))))
-                continue;
-
-            auto clkdiv = hw.sm[i].clkdiv >> PIO_SM0_CLKDIV_FRAC_LSB;
-
-            auto toUpdate = (clkdiv - clockFrac[i] + 255) >> 8;
-
-            if(toUpdate < step)
-                step = toUpdate;
-        }
-
-        // step each SM
-        for(unsigned i = 0; i < NUM_PIO_STATE_MACHINES; i++)
-        {
-            auto smCycles = (step << 8) + clockFrac[i];
-
-            auto clkdiv = hw.sm[i].clkdiv >> PIO_SM0_CLKDIV_FRAC_LSB;
-
-            if(smCycles >= clkdiv)
-            {
-                smCycles -= clkdiv;
-
-                if(hw.ctrl & (1 << (PIO_CTRL_SM_ENABLE_LSB + i)))
-                    stepSM(i);
-                else // if it's not enabled we might have skipped steps
-                    smCycles %= clkdiv;
-            }
-
-            clockFrac[i] = smCycles;
-        }
-
-        /*if(updateCallback)
-            updateCallback(clock.getTime(), *this);
-        else
-        {
-            // fake progress
-            for(unsigned i = 0; i < NUM_PIO_STATE_MACHINES; i++)
-            {
-                if(hw.ctrl & (1 << (PIO_CTRL_SM_ENABLE_LSB + i)))
-                {
-                    if(!txFifo[i].empty())
-                        txFifo[i].pop();
-                }
-            }
-        }*/
-
-        clock.addCycles(step);
-
-        cycles -= step;
+        clkdiv[i] = hw.sm[i].clkdiv >> PIO_SM0_CLKDIV_FRAC_LSB;
+        smCycles[i] = (cycles << 8) + clockFrac[i];
     }
+
+    // start at last SM
+    unsigned curSM = NUM_PIO_STATE_MACHINES - 1;
+    auto fracCycles = smCycles[0];
+
+    while(true)
+    {
+        // sync to next SM or end
+        uint32_t target = curSM == NUM_PIO_STATE_MACHINES - 1 ? 0 : smCycles[curSM + 1];
+
+        // calc max cycles to update
+        auto maxSMCycles = (smCycles[curSM] - target) / clkdiv[curSM];
+
+        // update
+        uint32_t updated = 0;
+
+        // skip if not enabled, otherwise run
+        if(!(hw.ctrl & (1 << (PIO_CTRL_SM_ENABLE_LSB + curSM))))
+            updated = maxSMCycles;
+        else
+            updated = updateSM(curSM, maxSMCycles);
+
+        // subtract executed cycles
+        smCycles[curSM] -= updated * clkdiv[curSM];
+
+        // go up 
+        if(curSM > 0)
+            curSM--;
+        else if(smCycles[0] - target < clkdiv[0])
+        {
+            // first SM has reached target, go back down
+
+            // add cycles
+            // this may be a little off
+            auto cycles = (fracCycles - smCycles[0]) >> 8;
+            fracCycles -= cycles << 8;
+            clock.addCycles(cycles);
+
+            curSM++;
+            auto nextTarget = curSM == NUM_PIO_STATE_MACHINES - 1 ? 0 : smCycles[curSM + 1];
+            while(curSM < NUM_PIO_STATE_MACHINES && smCycles[curSM] - nextTarget < clkdiv[curSM])
+            {
+                curSM++;
+                nextTarget = curSM >= NUM_PIO_STATE_MACHINES - 1 ? 0 : smCycles[curSM + 1];
+            }
+
+            // nothing left to update, done
+            if(curSM == NUM_PIO_STATE_MACHINES)
+                break;
+        }
+    }
+
+    // save remaining fraction cycles
+    for(unsigned i = 0; i < NUM_PIO_STATE_MACHINES; i++)
+        clockFrac[i] = smCycles[i];
 }
 
 void PIO::setUpdateCallback(UpdateCallback cb)
@@ -476,6 +485,24 @@ void PIO::dreqHandshake(int dreq)
 int PIO::getDREQNum(int sm, bool isTx) const
 {
     return index * (DREQ_PIO1_TX0 - DREQ_PIO0_TX0) + (isTx ? 0 : DREQ_PIO0_RX0 - DREQ_PIO0_TX0) + sm;
+}
+
+unsigned PIO::updateSM(int sm, unsigned maxCycles)
+{
+    unsigned cycles = maxCycles;
+    while(cycles)
+    {
+        // run SM until something that might affect external state (PUSH, PULL, any output)
+        // FIXME: output
+        auto nextOp = hw.instr_mem[regs[sm].pc] >> 13;
+        if(cycles != maxCycles && nextOp == 4)
+            break;
+
+        stepSM(sm);
+
+        cycles--;
+    }
+    return maxCycles - cycles;
 }
 
 void PIO::stepSM(int sm)

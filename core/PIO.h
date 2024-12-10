@@ -48,6 +48,7 @@ public:
 private:
     int getDREQNum(int sm, bool isTx) const;
 
+    unsigned updateSM(int sm, unsigned maxCycles);
     void stepSM(int sm);
     bool executeSMInstruction(int sm, uint16_t op);
 
