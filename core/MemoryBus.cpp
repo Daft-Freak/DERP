@@ -413,17 +413,17 @@ void MemoryBus::peripheralUpdate(uint64_t target, uint32_t irqMask, ARMv6MCore *
     // only update things that might cause interrupts
     
     const auto timerIRQs = 1 << TIMER_IRQ_0 | 1 << TIMER_IRQ_1 | 1 << TIMER_IRQ_2 | 1 << TIMER_IRQ_3;
-    if(irqMask & timerIRQs)
-        timer.updateForInterrupts(target);
+    if((irqMask & timerIRQs) && timer.needUpdateForInterrupts())
+        timer.update(target);
 
-    if(irqMask & (1 << PWM_IRQ_WRAP))
-        pwm.updateForInterrupts(target);
+    if((irqMask & (1 << PWM_IRQ_WRAP)) && pwm.needUpdateForInterrupts())
+        pwm.update(target);
 
-    if(irqMask & (1 << DMA_IRQ_0 | 1 << DMA_IRQ_1))
-        dma.updateForInterrupts(target);
+    if((irqMask & (1 << DMA_IRQ_0 | 1 << DMA_IRQ_1)) && dma.needUpdateForInterrupts())
+        dma.update(target);
 
-    if(irqMask & (1 << USBCTRL_IRQ))
-        usb.updateForInterrupts(target);
+    if((irqMask & (1 << USBCTRL_IRQ)) && usb.needUpdateForInterrupts())
+        usb.update(target);
 
     if(irqMask & (1 << PIO0_IRQ_0 | 1 << PIO0_IRQ_1))
         pio[0].update(target);

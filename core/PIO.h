@@ -21,10 +21,9 @@ public:
     void reset();
 
     void update(uint64_t target);
-    void updateForInterrupts(uint64_t target)
+    bool needUpdateForInterrupts()
     {
-        if(hw.inte0 || hw.inte1)
-            update(target);
+        return hw.inte0 || hw.inte1;
     }
 
     void setUpdateCallback(UpdateCallback cb);

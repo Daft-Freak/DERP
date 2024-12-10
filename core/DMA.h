@@ -17,10 +17,9 @@ public:
     void reset();
 
     void update(uint64_t target);
-    void updateForInterrupts(uint64_t target)
+    bool needUpdateForInterrupts()
     {
-        if(channelTriggered & (interruptEnables[0] | interruptEnables[1]))
-            update(target);
+        return channelTriggered & (interruptEnables[0] | interruptEnables[1]);
     }
 
     uint64_t getNextInterruptTime(uint64_t target);

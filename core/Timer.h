@@ -12,10 +12,9 @@ public:
     void reset();
 
     void update(uint64_t target);
-    void updateForInterrupts(uint64_t target)
+    bool needUpdateForInterrupts()
     {
-        if(armed & interruptEnables)
-            update(target);
+        return armed & interruptEnables;
     }
 
     uint64_t getNextInterruptTime(uint64_t target);
