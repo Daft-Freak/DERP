@@ -437,19 +437,23 @@ void MemoryBus::peripheralUpdate(uint64_t target, uint32_t irqMask, ARMv6MCore *
     if((irqMask & timerIRQs) && timer.needUpdateForInterrupts())
         devices[numDevices++] = &timer;
 
-    if(((irqMask & (1 << PWM_IRQ_WRAP)) && pwm.needUpdateForInterrupts()) || (forcedMask & (1 << PWM_IRQ_WRAP)))
+    const auto pwmIRQs = 1 << PWM_IRQ_WRAP;
+    if(((irqMask & pwmIRQs) && pwm.needUpdateForInterrupts()) || (forcedMask & pwmIRQs))
         devices[numDevices++] = &pwm;
 
-    if(((irqMask & (1 << DMA_IRQ_0 | 1 << DMA_IRQ_1)) && dma.needUpdateForInterrupts()) || (forcedMask & (1 << DMA_IRQ_0 | 1 << DMA_IRQ_1)))
+    const auto dmaIRQs = 1 << DMA_IRQ_0 | 1 << DMA_IRQ_1;
+    if(((irqMask & dmaIRQs) && dma.needUpdateForInterrupts()) || (forcedMask & dmaIRQs))
         devices[numDevices++] = &dma;
 
     if((irqMask & (1 << USBCTRL_IRQ)) && usb.needUpdateForInterrupts())
         devices[numDevices++] = &usb;
 
-    if((irqMask & (1 << PIO0_IRQ_0 | 1 << PIO0_IRQ_1)) || (forcedMask & (1 << PIO0_IRQ_0 | 1 << PIO0_IRQ_1)))
+    const auto pio0IRQs = 1 << PIO0_IRQ_0 | 1 << PIO0_IRQ_1;
+    if((irqMask & pio0IRQs) || (forcedMask & pio0IRQs))
         devices[numDevices++] = &pio[0];
 
-    if((irqMask & (1 << PIO1_IRQ_0 | 1 << PIO1_IRQ_1)) || (forcedMask & (1 << PIO1_IRQ_0 | 1 << PIO1_IRQ_1)))
+    const auto pio1IRQs = 1 << PIO1_IRQ_0 | 1 << PIO1_IRQ_1;
+    if((irqMask & pio1IRQs) || (forcedMask & pio1IRQs))
         devices[numDevices++] = &pio[1];
 
     syncDevices(target, devices, numDevices);
