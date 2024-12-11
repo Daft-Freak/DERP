@@ -64,6 +64,18 @@ void PIO::update(uint64_t target)
     if(!cycles)
         return;
 
+    // skip fully disabled instance
+    if(!(hw.ctrl & PIO_CTRL_SM_ENABLE_BITS))
+    {
+        for(unsigned i = 0; i < NUM_PIO_STATE_MACHINES; i++)
+        {
+            auto clkdiv = hw.sm[i].clkdiv >> PIO_SM0_CLKDIV_FRAC_LSB;
+            clockFrac[i] = (clockFrac[i] + (cycles << 8)) % clkdiv;
+        }
+        clock.addCycles(cycles);
+        return;
+    }
+
     uint32_t clkdiv[NUM_PIO_STATE_MACHINES];
     uint32_t smCycles[NUM_PIO_STATE_MACHINES];
 
