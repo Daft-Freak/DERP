@@ -426,29 +426,30 @@ void MemoryBus::peripheralUpdate(uint64_t target, uint32_t irqMask, ARMv6MCore *
     // DMA and anything that can generate a DREQ
     // (incomplete)
     const auto dmaMask = 1 << PWM_IRQ_WRAP | 1 << PIO0_IRQ_0 | 1 << PIO0_IRQ_1 | 1 << PIO1_IRQ_0 | 1 << PIO1_IRQ_1 | 1 << DMA_IRQ_0 | 1 << DMA_IRQ_1;
+    uint32_t forcedMask = 0;
 
     // if there are active DMA transfers with a DREQ and DMA or any periph that might generate a DREQ has an enabled IRQ
     // force syncing all of them
     if(dmaTREQMask && (irqMask & dmaMask))
-        irqMask |= dmaMask;
+        forcedMask = dmaMask;
 
     const auto timerIRQs = 1 << TIMER_IRQ_0 | 1 << TIMER_IRQ_1 | 1 << TIMER_IRQ_2 | 1 << TIMER_IRQ_3;
     if((irqMask & timerIRQs) && timer.needUpdateForInterrupts())
         devices[numDevices++] = &timer;
 
-    if((irqMask & (1 << PWM_IRQ_WRAP)) && pwm.needUpdateForInterrupts())
+    if(((irqMask & (1 << PWM_IRQ_WRAP)) && pwm.needUpdateForInterrupts()) || (forcedMask & (1 << PWM_IRQ_WRAP)))
         devices[numDevices++] = &pwm;
 
-    if((irqMask & (1 << DMA_IRQ_0 | 1 << DMA_IRQ_1)) && dma.needUpdateForInterrupts())
+    if(((irqMask & (1 << DMA_IRQ_0 | 1 << DMA_IRQ_1)) && dma.needUpdateForInterrupts()) || (forcedMask & (1 << DMA_IRQ_0 | 1 << DMA_IRQ_1)))
         devices[numDevices++] = &dma;
 
     if((irqMask & (1 << USBCTRL_IRQ)) && usb.needUpdateForInterrupts())
         devices[numDevices++] = &usb;
 
-    if(irqMask & (1 << PIO0_IRQ_0 | 1 << PIO0_IRQ_1))
+    if((irqMask & (1 << PIO0_IRQ_0 | 1 << PIO0_IRQ_1)) || (forcedMask & (1 << PIO0_IRQ_0 | 1 << PIO0_IRQ_1)))
         devices[numDevices++] = &pio[0];
 
-    if(irqMask & (1 << PIO1_IRQ_0 | 1 << PIO1_IRQ_1))
+    if((irqMask & (1 << PIO1_IRQ_0 | 1 << PIO1_IRQ_1)) || (forcedMask & (1 << PIO1_IRQ_0 | 1 << PIO1_IRQ_1)))
         devices[numDevices++] = &pio[1];
 
     syncDevices(target, devices, numDevices);
