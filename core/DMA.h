@@ -51,6 +51,8 @@ private:
 
     void dreqHandshake(uint64_t time, int channel);
 
+    uint32_t estimateChannelCompletion(int channel) const;
+
     MemoryBus &mem;
 
     ClockTarget clock;

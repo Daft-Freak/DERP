@@ -199,8 +199,9 @@ uint64_t DMA::getNextInterruptTime(uint64_t target)
         if(!(anyInterruptEnable & (1 << i)))
             continue;
 
-        // FIXME: this is very wrong and doesn't even try... but it shouldn't be too late
-        auto cycles = transferCount[i];
+        // this assumes a single channel
+        // but being early is okay (except for perf)
+        auto cycles = estimateChannelCompletion(i);
 
         auto time = clock.getTimeToCycles(cycles);
 
@@ -469,4 +470,55 @@ void DMA::dreqHandshake(uint64_t time, int channel)
         default:
             logf(LogLevel::NotImplemented, logComponent, "dma ch %i TREQ %i", channel, treq);
     }
+}
+
+uint32_t DMA::estimateChannelCompletion(int channel) const
+{
+    auto ret =transferCount[channel];
+
+    int treq = (ctrl[channel] & DMA_CH0_CTRL_TRIG_TREQ_SEL_BITS) >> DMA_CH0_CTRL_TRIG_TREQ_SEL_LSB;
+    
+    // attempt to take into account the peripheral generating the DREQ
+    // being VERY optimistic...
+
+    switch(treq)
+    {
+        case DREQ_PIO0_TX0:
+        case DREQ_PIO0_TX1:
+        case DREQ_PIO0_TX2:
+        case DREQ_PIO0_TX3:
+        case DREQ_PIO0_RX0:
+        case DREQ_PIO0_RX1:
+        case DREQ_PIO0_RX2:
+        case DREQ_PIO0_RX3:
+        {
+            // can't do much better than scaling by clkdiv
+            // unless we try analysing the program...
+            int sm = (treq - DREQ_PIO0_TX0) & 3;
+            auto clkdiv = mem.getPIO(0).getHW().sm[sm].clkdiv >> 8;
+            
+            ret = (ret * clkdiv) >> 8;
+            break;
+        }
+        case DREQ_PIO1_TX0:
+        case DREQ_PIO1_TX1:
+        case DREQ_PIO1_TX2:
+        case DREQ_PIO1_TX3:
+        case DREQ_PIO1_RX0:
+        case DREQ_PIO1_RX1:
+        case DREQ_PIO1_RX2:
+        case DREQ_PIO1_RX3:
+        {
+            int sm = (treq - DREQ_PIO1_TX0) & 3;
+            auto clkdiv = mem.getPIO(1).getHW().sm[sm].clkdiv >> 8;
+            
+            ret = (ret * clkdiv) >> 8;
+            break;
+        }
+
+        case DMA_CH0_CTRL_TRIG_TREQ_SEL_VALUE_PERMANENT:
+            break;
+    }
+
+    return ret;
 }
