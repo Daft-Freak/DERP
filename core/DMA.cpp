@@ -364,7 +364,8 @@ bool DMA::isChannelActive(int ch) const
 
 void DMA::triggerDREQ(uint64_t time, int dreq)
 {
-    // TODO: pass time and sync other periphs?
+    // TODO: sync other periphs?
+    update(time);
 
     // TODO: faster lookup
     for(int i = 0; i < numChannels; i++)
