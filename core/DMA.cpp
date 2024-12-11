@@ -65,7 +65,7 @@ void DMA::update(uint64_t target)
 
     for(uint32_t cycle = 0; cycle < passed; cycle++)
     {
-        if(!channelTriggered && writeAddressFifo.empty())
+        if(!(channelTriggered & treqCounterMask) && writeAddressFifo.empty())
         {
             clock.addCycles(passed - cycle);
             break;
