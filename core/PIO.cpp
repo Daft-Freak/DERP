@@ -491,27 +491,30 @@ unsigned PIO::updateSM(int sm, unsigned maxCycles)
 {
     // TODO: EXEC latch, delays
     auto &pc = regs[sm].pc;
+    int wrapTop = (hw.sm[sm].execctrl & PIO_SM0_EXECCTRL_WRAP_TOP_BITS) >> PIO_SM0_EXECCTRL_WRAP_TOP_LSB;
+    int wrapBottom = (hw.sm[sm].execctrl & PIO_SM0_EXECCTRL_WRAP_BOTTOM_BITS) >> PIO_SM0_EXECCTRL_WRAP_BOTTOM_LSB;
+
+    auto nextOp = hw.instr_mem[pc];
 
     unsigned cycles = maxCycles;
     while(cycles)
     {
-        // run SM until something that might affect external state (PUSH, PULL, any output)
-        // FIXME: output
-        auto nextOp = hw.instr_mem[pc];
-        if(cycles != maxCycles && (nextOp >> 13) == 4)
-            break;
-
         if(executeSMInstruction(sm, nextOp))
         {
             // advance pc/wrap if we didn't jump or stall
-            int wrapTop = (hw.sm[sm].execctrl & PIO_SM0_EXECCTRL_WRAP_TOP_BITS) >> PIO_SM0_EXECCTRL_WRAP_TOP_LSB;
             if(pc == wrapTop)
-                pc = (hw.sm[sm].execctrl & PIO_SM0_EXECCTRL_WRAP_BOTTOM_BITS) >> PIO_SM0_EXECCTRL_WRAP_BOTTOM_LSB;
+                pc = wrapBottom;
             else
                 pc++;
         }
 
         cycles--;
+
+        // run SM until something that might affect external state (PUSH, PULL, any output)
+        // FIXME: output
+        nextOp = hw.instr_mem[pc];
+        if((nextOp >> 13) == 4)
+            break;
     }
     return maxCycles - cycles;
 }
