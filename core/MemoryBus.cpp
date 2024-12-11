@@ -464,7 +464,8 @@ void MemoryBus::peripheralUpdate(uint64_t target, uint32_t irqMask, ARMv6MCore *
     if(((irqMask & pio1IRQs) && pio[1].needUpdateForInterrupts()) || (forcedMask & pio1IRQs))
         devices[numDevices++] = &pio[1];
 
-    syncDevices(target, devices, numDevices);
+    if(numDevices)
+        syncDevices(target, devices, numDevices);
 }
 
 void MemoryBus::calcNextInterruptTime()
