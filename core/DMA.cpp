@@ -50,6 +50,8 @@ void DMA::reset()
     interruptEnables[0] = interruptEnables[1] = 0;
 
     channelTriggered = 0;
+    treqCounterMask = 0;
+    activeTREQMask = 0;
 }
 
 void DMA::update(uint64_t target)
@@ -85,6 +87,10 @@ void DMA::update(uint64_t target)
             if(--transferCount[writeChannel] == 0)
             {
                 channelTriggered &= ~(1 << writeChannel); // done
+
+                int treq = (ctrl[writeChannel] & DMA_CH0_CTRL_TRIG_TREQ_SEL_BITS) >> DMA_CH0_CTRL_TRIG_TREQ_SEL_LSB;
+                if(treq != DMA_CH0_CTRL_TRIG_TREQ_SEL_VALUE_PERMANENT)
+                    activeTREQMask &= ~(1 << treq);
 
                 interrupts |= (1 << writeChannel);
             
@@ -148,7 +154,10 @@ void DMA::update(uint64_t target)
 
                 // decrement DREQs if not permanent
                 if(dreqCounter[curChannel] != 0xFF)
-                    dreqCounter[curChannel]--;
+                {
+                    if(--dreqCounter[curChannel] == 0)
+                        treqCounterMask &= ~(1 << curChannel);
+                }
 
                 readAddressFifo.push(readAddr[curChannel]);
                 writeAddressFifo.push(writeAddr[curChannel]);
@@ -304,6 +313,10 @@ void DMA::regWrite(uint64_t time, uint32_t addr, uint32_t data)
             transferCount[ch] = transferCountReload[ch];
             channelTriggered |= 1 << ch;
             dreqHandshake(time, ch);
+
+            int treq = (ctrl[ch] & DMA_CH0_CTRL_TRIG_TREQ_SEL_BITS) >> DMA_CH0_CTRL_TRIG_TREQ_SEL_LSB;
+            if(treq != DMA_CH0_CTRL_TRIG_TREQ_SEL_VALUE_PERMANENT)
+                activeTREQMask |= 1 << treq;
         }
     }
     else
@@ -358,8 +371,16 @@ void DMA::triggerDREQ(uint64_t time, int dreq)
         int treq = (ctrl[i] & DMA_CH0_CTRL_TRIG_TREQ_SEL_BITS) >> DMA_CH0_CTRL_TRIG_TREQ_SEL_LSB;
 
         if(treq == dreq)
+        {
             dreqCounter[i] = dreqCounter[i] == 0x3F ? 0x3F : (dreqCounter[i] + 1);
+            treqCounterMask |= (1 << i);
+        }
     }
+}
+
+uint64_t DMA::getActiveTREQMask() const
+{
+    return activeTREQMask;
 }
 
 template<class T, bool bswap>
@@ -414,6 +435,7 @@ void DMA::dreqHandshake(uint64_t time, int channel)
     int treq = (ctrl[channel] & DMA_CH0_CTRL_TRIG_TREQ_SEL_BITS) >> DMA_CH0_CTRL_TRIG_TREQ_SEL_LSB;
     
     dreqCounter[channel] = 0;
+    treqCounterMask &= ~(1 << channel);
 
     switch(treq)
     {
@@ -441,6 +463,7 @@ void DMA::dreqHandshake(uint64_t time, int channel)
 
         case DMA_CH0_CTRL_TRIG_TREQ_SEL_VALUE_PERMANENT:
             dreqCounter[channel] = 0xFF; // special value
+            treqCounterMask |= (1 << channel);
             break;
 
         default:

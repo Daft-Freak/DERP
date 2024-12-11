@@ -32,6 +32,7 @@ public:
     bool isChannelActive(int ch) const;
 
     void triggerDREQ(uint64_t time, int dreq);
+    uint64_t getActiveTREQMask() const;
 
     int getDeviceFlags() const {return 0;}
 
@@ -86,4 +87,6 @@ private:
     uint32_t interruptEnables[2];
 
     uint32_t channelTriggered;
+    uint32_t treqCounterMask; // if counter > 0
+    uint64_t activeTREQMask; // TREQs on currently triggered channels
 };
