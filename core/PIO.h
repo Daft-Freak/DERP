@@ -76,6 +76,8 @@ private:
         uint8_t osc, isc; // counters
     } regs[NUM_PIO_STATE_MACHINES];
 
+    uint8_t txStall, rxStall; // internal flags
+
     // TODO: joined
     FIFO<uint32_t, 4> rxFifo[NUM_PIO_STATE_MACHINES];
     FIFO<uint32_t, 4> txFifo[NUM_PIO_STATE_MACHINES];

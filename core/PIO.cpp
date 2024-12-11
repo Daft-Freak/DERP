@@ -51,6 +51,8 @@ void PIO::reset()
 
     for(auto &c : clockFrac)
         c = 0;
+
+    txStall = rxStall = 0;
 }
 
 void PIO::update(uint64_t target)
@@ -501,6 +503,19 @@ int PIO::getDREQNum(int sm, bool isTx) const
 
 unsigned PIO::updateSM(int sm, unsigned maxCycles)
 {
+    if(txStall & (1 << sm))
+    {
+        // if we're stalled and the fifo is still empty, skip
+        if(txFifo[sm].empty())
+        {
+            hw.fdebug |= 1 << (PIO_FDEBUG_TXSTALL_LSB + sm);
+            return maxCycles;
+        }
+
+        // otherwise clear stall
+        txStall &= ~(1 << sm);
+    }
+
     // TODO: EXEC latch, delays
     auto &pc = regs[sm].pc;
     int wrapTop = (hw.sm[sm].execctrl & PIO_SM0_EXECCTRL_WRAP_TOP_BITS) >> PIO_SM0_EXECCTRL_WRAP_TOP_LSB;
@@ -615,6 +630,10 @@ bool PIO::executeSMInstruction(int sm, uint16_t op)
             if(condVal)
             {
                 regs.pc = addr;
+                
+                // clear stall if jump forced
+                rxStall &= ~(1 << sm);
+                txStall &= ~(1 << sm);
                 return false;
             }
 
@@ -635,6 +654,7 @@ bool PIO::executeSMInstruction(int sm, uint16_t op)
                     if(txFifo[sm].empty())
                     {
                         hw.fdebug |= 1 << (PIO_FDEBUG_TXSTALL_LSB + sm);
+                        txStall |= 1 << sm;
                         return false;
                     }
 
@@ -716,7 +736,9 @@ bool PIO::executeSMInstruction(int sm, uint16_t op)
                 {
                     hw.fdebug |= 1 << (PIO_FDEBUG_RXSTALL_LSB + sm);
 
-                    if(!block)
+                    if(block)
+                        rxStall |= 1 << sm;
+                    else
                     {
                         // non-blocking drops the data
                         regs.isc = 0;
@@ -748,6 +770,7 @@ bool PIO::executeSMInstruction(int sm, uint16_t op)
                 {
                     if(block)
                     {
+                        txStall |= 1 << sm;
                         hw.fdebug |= 1 << (PIO_FDEBUG_TXSTALL_LSB + sm);
                         return false; // stall SM
                     }
