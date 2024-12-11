@@ -145,6 +145,8 @@ private:
 
     bool syncDevices(uint64_t target, ClockedDevice **devices, int numDevices);
 
+    void syncDMA(uint64_t target);
+
     bool pcInCachedXIP = false;
 
     const uint8_t *bootROM = nullptr;

@@ -5,6 +5,7 @@
 #include <cstring>
 
 #include "hardware/regs/addressmap.h"
+#include "hardware/regs/dreq.h"
 #include "hardware/regs/intctrl.h"
 #include "hardware/regs/io_qspi.h" // TODO: move
 #include "hardware/regs/pio.h" // TODO
@@ -421,6 +422,16 @@ void MemoryBus::peripheralUpdate(uint64_t target, uint32_t irqMask, ARMv6MCore *
     ClockedDevice *devices[6];
     int numDevices = 0;
 
+    auto dmaTREQMask = dma.getActiveTREQMask();
+    // DMA and anything that can generate a DREQ
+    // (incomplete)
+    const auto dmaMask = 1 << PWM_IRQ_WRAP | 1 << PIO0_IRQ_0 | 1 << PIO0_IRQ_1 | 1 << PIO1_IRQ_0 | 1 << PIO1_IRQ_1 | 1 << DMA_IRQ_0 | 1 << DMA_IRQ_1;
+
+    // if there are active DMA transfers with a DREQ and DMA or any periph that might generate a DREQ has an enabled IRQ
+    // force syncing all of them
+    if(dmaTREQMask && (irqMask & dmaMask))
+        irqMask |= dmaMask;
+
     const auto timerIRQs = 1 << TIMER_IRQ_0 | 1 << TIMER_IRQ_1 | 1 << TIMER_IRQ_2 | 1 << TIMER_IRQ_3;
     if((irqMask & timerIRQs) && timer.needUpdateForInterrupts())
         devices[numDevices++] = &timer;
@@ -570,6 +581,25 @@ bool MemoryBus::syncDevices(uint64_t target, ClockedDevice **devices, int numDev
     }
 
     return true;
+}
+
+void MemoryBus::syncDMA(uint64_t target)
+{
+    ClockedDevice *devices[3];
+    int numDevices = 0;
+
+    devices[numDevices++] = &dma;
+
+    // also sync DREQ-generating periphs
+    auto dmaTREQMask = dma.getActiveTREQMask();
+    
+    if(dmaTREQMask & (0xF << DREQ_PIO0_TX0 | 0xF << DREQ_PIO0_RX0))
+        devices[numDevices++] = &pio[0];
+
+    if(dmaTREQMask & (0xF << DREQ_PIO1_TX0 | 0xF << DREQ_PIO1_RX0))
+        devices[numDevices++] = &pio[1];
+
+    syncDevices(target, devices, numDevices);
 }
 
 template<class T, size_t size>
@@ -1137,7 +1167,7 @@ uint32_t MemoryBus::doAHBPeriphRead(ClockTarget &masterClock, uint32_t addr)
 
     // update DMA for any periph read
     // TODO: any access that DMA could affect, possibly filter by dest addrs
-    dma.update(masterClock.getTime());
+    syncDMA(masterClock.getTime());
 
     switch(peripheral)
     {
