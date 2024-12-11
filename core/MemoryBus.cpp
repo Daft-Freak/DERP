@@ -431,7 +431,15 @@ void MemoryBus::peripheralUpdate(uint64_t target, uint32_t irqMask, ARMv6MCore *
     // if there are active DMA transfers with a DREQ and DMA or any periph that might generate a DREQ has an enabled IRQ
     // force syncing all of them
     if(dmaTREQMask && (irqMask & dmaMask))
-        forcedMask = dmaMask;
+    {
+        forcedMask = 1 << DMA_IRQ_0;
+        if(dmaTREQMask & (0xF << DREQ_PIO0_TX0 | 0xF << DREQ_PIO0_RX0))
+            forcedMask |= 1 << PIO0_IRQ_0;
+        if(dmaTREQMask & (0xF << DREQ_PIO1_TX0 | 0xF << DREQ_PIO1_RX0))
+            forcedMask |= 1 << PIO1_IRQ_0;
+        if(dmaTREQMask & (0xFF << DREQ_PWM_WRAP0))
+            forcedMask |= 1 << PWM_IRQ_WRAP;
+    }
 
     const auto timerIRQs = 1 << TIMER_IRQ_0 | 1 << TIMER_IRQ_1 | 1 << TIMER_IRQ_2 | 1 << TIMER_IRQ_3;
     if((irqMask & timerIRQs) && timer.needUpdateForInterrupts())
