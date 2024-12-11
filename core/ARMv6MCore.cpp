@@ -131,9 +131,14 @@ void ARMv6MCore::update(uint64_t target)
 
             if(sleeping && curTime < target)
             {
-                // skip ahead
-                auto skipTarget = std::min(target, mem.getNextInterruptTime());
-                exec = std::max(UINT32_C(1), clock.getCyclesToTime(skipTarget, true));
+                if(!(primask & 1) && needException)
+                    exec = 1; // wake up for irq
+                else
+                {
+                    // skip ahead
+                    auto skipTarget = std::min(target, mem.getNextInterruptTime());
+                    exec = std::max(UINT32_C(1), clock.getCyclesToTime(skipTarget, true));
+                }
             }
         }
         while(sleeping && curTime < target);
