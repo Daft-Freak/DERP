@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <cassert>
 #include <cstddef>
 #include <cstdio>
@@ -377,27 +378,32 @@ void MemoryBus::updatePC(uint32_t pc)
 
 void MemoryBus::peripheralUpdate(uint64_t target)
 {
-    pwm.update(target);
-    gpio.update(target);
-    watchdog.update(target);
-    timer.update(target);
+    ClockedDevice *devices[]
+    {
+        &pwm,
+        &timer,
+        &dma,
+        &usb,
+        &pio[0],
+        &pio[1],
+    };
+    syncDevices(target, devices, std::size(devices));
 
-    dma.update(target);
-    usb.update(target);
-    pio[0].update(target);
-    pio[1].update(target);
+    gpio.update(target);
 }
 
 void MemoryBus::gpioUpdate(uint64_t target)
 {
     // update anything that might affect outputs before GPIO
-    // TODO: need to ensure correct ordering...
-    pwm.update(target);
-
-    // technically affects IO, but not implemented yet
-    // would also need to sync DMA most of the time
-    //pio[0].update(target);
-    //pio[1].update(target);
+    ClockedDevice *devices[]
+    {
+        &pwm,
+        // technically affects IO, but not implemented yet
+        // would also need to sync DMA most of the time
+        //&pio[0],
+        //&pio[1],
+    };
+    syncDevices(target, devices, std::size(devices));
 
     gpio.update(target);
 }
@@ -412,25 +418,29 @@ void MemoryBus::peripheralUpdate(uint64_t target, uint32_t irqMask, ARMv6MCore *
         cpuCores[1].update(target);
 
     // only update things that might cause interrupts
-    
+    ClockedDevice *devices[6];
+    int numDevices = 0;
+
     const auto timerIRQs = 1 << TIMER_IRQ_0 | 1 << TIMER_IRQ_1 | 1 << TIMER_IRQ_2 | 1 << TIMER_IRQ_3;
     if((irqMask & timerIRQs) && timer.needUpdateForInterrupts())
-        timer.update(target);
+        devices[numDevices++] = &timer;
 
     if((irqMask & (1 << PWM_IRQ_WRAP)) && pwm.needUpdateForInterrupts())
-        pwm.update(target);
+        devices[numDevices++] = &pwm;
 
     if((irqMask & (1 << DMA_IRQ_0 | 1 << DMA_IRQ_1)) && dma.needUpdateForInterrupts())
-        dma.update(target);
+        devices[numDevices++] = &dma;
 
     if((irqMask & (1 << USBCTRL_IRQ)) && usb.needUpdateForInterrupts())
-        usb.update(target);
+        devices[numDevices++] = &usb;
 
     if(irqMask & (1 << PIO0_IRQ_0 | 1 << PIO0_IRQ_1))
-        pio[0].update(target);
+        devices[numDevices++] = &pio[0];
 
     if(irqMask & (1 << PIO1_IRQ_0 | 1 << PIO1_IRQ_1))
-        pio[1].update(target);
+        devices[numDevices++] = &pio[1];
+
+    syncDevices(target, devices, numDevices);
 }
 
 void MemoryBus::calcNextInterruptTime()
@@ -520,6 +530,46 @@ void MemoryBus::popInterpolator(interp_hw_t &interp)
 
     // calculate next values
     updateInterpolatorResult(interp);
+}
+
+bool MemoryBus::syncDevices(uint64_t target, ClockedDevice **devices, int numDevices)
+{
+    // sort devices (most behind first)
+    std::sort(devices, devices + numDevices, [](auto &a, auto &b){return a->getClock().getTime() < b->getClock().getTime();});
+
+    int devIndex = 0;
+
+    bool didUpdate = false;
+
+    while(numDevices)
+    {
+        auto dev = devices[devIndex];
+        auto time = dev->getClock().getTime();
+        auto nextTarget = devIndex == numDevices - 1 ? target : devices[devIndex + 1]->getClock().getTime();
+
+        dev->update(nextTarget);
+
+        if(dev->getClock().getTime() == time)
+        {
+            // no progress
+            if(devIndex == numDevices - 1)
+            {
+                // if this was the last (most up-to-date), we've reached the target, so drop this dev
+                devIndex--;
+                numDevices--;
+            }
+            else if(devIndex > 0 && didUpdate)
+                devIndex--; // walk back up
+            else
+                devIndex++;
+
+            didUpdate = false;
+        }
+        else
+            didUpdate = true;
+    }
+
+    return true;
 }
 
 template<class T, size_t size>

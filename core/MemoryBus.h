@@ -143,6 +143,8 @@ private:
     void updateInterpolatorResult(interp_hw_t &interp);
     void popInterpolator(interp_hw_t &interp);
 
+    bool syncDevices(uint64_t target, ClockedDevice **devices, int numDevices);
+
     bool pcInCachedXIP = false;
 
     const uint8_t *bootROM = nullptr;
