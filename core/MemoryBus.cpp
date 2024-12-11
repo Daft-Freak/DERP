@@ -449,11 +449,11 @@ void MemoryBus::peripheralUpdate(uint64_t target, uint32_t irqMask, ARMv6MCore *
         devices[numDevices++] = &usb;
 
     const auto pio0IRQs = 1 << PIO0_IRQ_0 | 1 << PIO0_IRQ_1;
-    if((irqMask & pio0IRQs) || (forcedMask & pio0IRQs))
+    if(((irqMask & pio0IRQs) && pio[0].needUpdateForInterrupts()) || (forcedMask & pio0IRQs))
         devices[numDevices++] = &pio[0];
 
     const auto pio1IRQs = 1 << PIO1_IRQ_0 | 1 << PIO1_IRQ_1;
-    if((irqMask & pio1IRQs) || (forcedMask & pio1IRQs))
+    if(((irqMask & pio1IRQs) && pio[1].needUpdateForInterrupts()) || (forcedMask & pio1IRQs))
         devices[numDevices++] = &pio[1];
 
     syncDevices(target, devices, numDevices);
