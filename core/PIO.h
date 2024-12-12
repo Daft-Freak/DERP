@@ -49,10 +49,18 @@ public:
     uint32_t getMinCyclesBetweenPulls(int sm) const {return minCyclesBetweenPulls[sm];}
 
 private:
+    struct Instruction
+    {
+        uint8_t op;
+        uint8_t delaySideSet;
+        uint8_t params[3];
+    };
+
+    Instruction decodeInstruction(uint16_t op);
     int getDREQNum(int sm, bool isTx) const;
 
     unsigned updateSM(int sm, unsigned maxCycles);
-    bool executeSMInstruction(int sm, uint16_t op);
+    bool executeSMInstruction(int sm, const Instruction &instr);
 
     MemoryBus &mem;
     int index;
@@ -66,7 +74,8 @@ private:
 
     uint32_t clockFrac[NUM_PIO_STATE_MACHINES];
 
-    struct {
+    struct
+    {
         uint32_t osr;
         uint32_t isr;
 
@@ -77,6 +86,8 @@ private:
 
         uint8_t osc, isc; // counters
     } regs[NUM_PIO_STATE_MACHINES];
+
+    Instruction instrs[PIO_INSTRUCTION_COUNT];
 
     uint8_t txStall, rxStall; // internal flags
 

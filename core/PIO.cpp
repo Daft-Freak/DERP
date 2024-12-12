@@ -389,6 +389,7 @@ void PIO::regWrite(uint64_t time, uint32_t addr, uint32_t data)
             update(time);
             int off = (addr - PIO_INSTR_MEM0_OFFSET) / 4;
             updateReg(hw.instr_mem[off], data, atomic);
+            instrs[off] = decodeInstruction(hw.instr_mem[off]);
             return;
         }
 
@@ -441,7 +442,7 @@ void PIO::regWrite(uint64_t time, uint32_t addr, uint32_t data)
             logf(LogLevel::Debug, logComponent, "%i SM%i instr %04X", index, sm, hw.sm[sm].instr);
 
             // TODO: this does ignore the clkdiv, but this is sill maybe the wrong place...
-            executeSMInstruction(sm, hw.sm[sm].instr);
+            executeSMInstruction(sm, decodeInstruction(hw.sm[sm].instr));
             return;
         }
 
@@ -509,6 +510,50 @@ void PIO::dreqHandshake(uint64_t time, int dreq)
     }
 }
 
+PIO::Instruction PIO::decodeInstruction(uint16_t op)
+{
+    Instruction instr;
+    instr.op = (op >> 8) & 0xE0; // spare bits at the bottom
+
+    // would like to decode this further but it depends on per-sm state...
+    instr.delaySideSet = (op >> 8) & 0x1F;
+
+    switch(op >> 13)
+    {
+        case 0: // JMP
+        case 2: // IN
+        case 3: // OUT
+        case 7: // SET
+            instr.params[0] = (op >> 5) & 7; // condition/source/dest/dest
+            instr.params[1] = op & 0x1F; // addr/count/count/data
+            break;
+
+        case 1: // WAIT
+            // TODO
+            logf(LogLevel::NotImplemented, logComponent, "%i WAIT %04X", index, op);
+            break;
+
+        case 4: // PUSH/PULL
+            instr.params[0] = (op >> 7) & 1; // is pull
+            instr.params[1] = (op >> 6) & 1; // if full/empty
+            instr.params[2] = (op >> 5) & 1; // block
+            break;
+
+        case 5: // MOV
+            instr.params[0] = (op >> 5) & 7; // dest
+            instr.params[1] = (op >> 3) & 3; // op
+            instr.params[2] = op & 7; // source
+            break;
+
+        case 6: // IRQ
+            // TODO
+            logf(LogLevel::NotImplemented, logComponent, "%i IRQ %04X", index, op);
+            break;
+    }
+
+    return instr;
+}
+
 int PIO::getDREQNum(int sm, bool isTx) const
 {
     return index * (DREQ_PIO1_TX0 - DREQ_PIO0_TX0) + (isTx ? 0 : DREQ_PIO0_RX0 - DREQ_PIO0_TX0) + sm;
@@ -534,18 +579,20 @@ unsigned PIO::updateSM(int sm, unsigned maxCycles)
     int wrapTop = (hw.sm[sm].execctrl & PIO_SM0_EXECCTRL_WRAP_TOP_BITS) >> PIO_SM0_EXECCTRL_WRAP_TOP_LSB;
     int wrapBottom = (hw.sm[sm].execctrl & PIO_SM0_EXECCTRL_WRAP_BOTTOM_BITS) >> PIO_SM0_EXECCTRL_WRAP_BOTTOM_LSB;
 
-    auto nextOp = hw.instr_mem[pc];
+    auto nextOp = instrs + pc;
 
     unsigned cycles = maxCycles;
     while(cycles)
     {
-        if(executeSMInstruction(sm, nextOp))
+        if(executeSMInstruction(sm, *nextOp))
         {
             // advance pc/wrap if we didn't jump or stall
             if(pc == wrapTop)
                 pc = wrapBottom;
             else
                 pc++;
+
+            nextOp = instrs + pc;
         }
 
         cycles--;
@@ -555,17 +602,16 @@ unsigned PIO::updateSM(int sm, unsigned maxCycles)
 
         // run SM until something that might affect external state (PUSH, PULL, any output)
         // FIXME: output
-        nextOp = hw.instr_mem[pc];
-        if((nextOp >> 13) == 4)
+        if((nextOp->op >> 5) == 4)
             break;
     }
     return maxCycles - cycles;
 }
 
-bool PIO::executeSMInstruction(int sm, uint16_t op)
+bool PIO::executeSMInstruction(int sm, const Instruction &instr)
 {
     // delay/side-set are common
-    auto delaySide = (op >> 8) & 0x1F;
+    auto delaySide = instr.delaySideSet;
 
     int delay = 0;
     int sideSet = 0;
@@ -581,7 +627,7 @@ bool PIO::executeSMInstruction(int sm, uint16_t op)
         static bool logDS = false;
         if(!logDS)
         {
-            logf(LogLevel::NotImplemented, logComponent, "%i SM%i op %04X delay %i side-set %i", index, sm, op, delay, sideSet);
+            logf(LogLevel::NotImplemented, logComponent, "%i SM%i op %02X delay %i side-set %i", index, sm, instr.op, delay, sideSet);
             logDS = true;
         }
     }
@@ -626,12 +672,12 @@ bool PIO::executeSMInstruction(int sm, uint16_t op)
         return false;
     };
 
-    switch(op >> 13)
+    switch(instr.op >> 5)
     {
         case 0: // JMP
         {
-            auto cond = (op >> 5) & 0x7;
-            auto addr = op & 0x1F;
+            auto cond = instr.params[0];
+            auto addr = instr.params[1];
 
             bool condVal = false;
 
@@ -682,8 +728,8 @@ bool PIO::executeSMInstruction(int sm, uint16_t op)
 
         case 3: // OUT
         {
-            auto dest = (op >> 5) & 0x7;
-            auto count = op & 0x1F;
+            auto dest = instr.params[0];
+            auto count = instr.params[1];
 
             bool autopull = hw.sm[sm].shiftctrl & PIO_SM0_SHIFTCTRL_AUTOPULL_BITS;
             if(autopull)
@@ -748,12 +794,12 @@ bool PIO::executeSMInstruction(int sm, uint16_t op)
 
         case 4: // PUSH/PULL
         {
-            bool pull = op & (1 << 7);
-            bool block = op & (1 << 5);
+            bool pull = instr.params[0];
+            bool block = instr.params[2];
 
             if(!pull) // PUSH
             {
-                bool ifFull = op & (1 << 6);
+                bool ifFull = instr.params[1];
 
                 if(ifFull)
                 {
@@ -787,7 +833,7 @@ bool PIO::executeSMInstruction(int sm, uint16_t op)
             }
             else // PULL
             {
-                bool ifEmpty = op & (1 << 6);
+                bool ifEmpty = instr.params[1];
 
                 if(ifEmpty)
                 {
@@ -818,9 +864,9 @@ bool PIO::executeSMInstruction(int sm, uint16_t op)
 
         case 5: // MOV
         {
-            auto src = op & 0x7;
-            auto movOp = (op >> 3) & 0x3;
-            auto dest = (op >> 5) & 0x7;
+            auto src = instr.params[2];
+            auto movOp = instr.params[1];
+            auto dest = instr.params[0];
 
             uint32_t val = 0;
 
@@ -887,8 +933,8 @@ bool PIO::executeSMInstruction(int sm, uint16_t op)
 
         case 7: // SET
         {
-            auto dest = (op >> 5) & 0x7;
-            auto data = op & 0x1F;
+            auto dest = instr.params[0];
+            auto data = instr.params[1];
 
             switch(dest)
             {
@@ -909,17 +955,6 @@ bool PIO::executeSMInstruction(int sm, uint16_t op)
             }
 
             return true;
-        }
-
-        default:
-        {
-            static uint8_t logMask = 0;
-            auto maskBit = 1 << (op >> 13);
-            if(!(logMask & maskBit))
-            {
-                logf(LogLevel::NotImplemented, logComponent, "%i SM%i op %04X", index, sm, op);
-                logMask |= maskBit;
-            }
         }
     }
 
