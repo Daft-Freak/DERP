@@ -642,11 +642,12 @@ unsigned PIO::updateSM(int sm, unsigned maxCycles)
             cyclesSinceLastPull[sm]++;
 
         // run SM until something that might affect external state (PUSH, PULL, any output)
-        // FIXME: output
+        // FIXME: output other than OUT?
         nextOp = instrs + pc;
-        if((nextOp->op >> 5) == 4)
+        if((nextOp->op >> 5) == 4 || (nextOp->op >> 5) == 3)
             break;
     }
+
     return maxCycles - cycles;
 }
 
