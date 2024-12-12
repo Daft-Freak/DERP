@@ -702,9 +702,9 @@ bool PIO::executeSMInstruction(int sm, const Instruction &instr)
         return false;
     };
 
-    switch(instr.op >> 5)
+    switch(instr.op)
     {
-        case 0: // JMP
+        case 0x00: // JMP
         {
             auto cond = instr.params[0];
             auto addr = instr.params[1];
@@ -755,7 +755,7 @@ bool PIO::executeSMInstruction(int sm, const Instruction &instr)
             return true;
         }
 
-        case 3: // OUT
+        case 0x60: // OUT
         {
             auto dest = instr.params[0];
             auto count = instr.params[1];
@@ -821,7 +821,7 @@ bool PIO::executeSMInstruction(int sm, const Instruction &instr)
             return true;
         }
 
-        case 4: // PUSH/PULL
+        case 0x80: // PUSH/PULL
         {
             bool pull = instr.params[0];
             bool block = instr.params[2];
@@ -891,7 +891,7 @@ bool PIO::executeSMInstruction(int sm, const Instruction &instr)
             return true;
         }
 
-        case 5: // MOV
+        case 0xA0: // MOV
         {
             auto src = instr.params[2];
             auto movOp = instr.params[1];
@@ -956,7 +956,7 @@ bool PIO::executeSMInstruction(int sm, const Instruction &instr)
             return true;
         }
 
-        case 7: // SET
+        case 0xE0: // SET
         {
             auto dest = instr.params[0];
             auto data = instr.params[1];
