@@ -559,8 +559,23 @@ void MemoryBus::popInterpolator(interp_hw_t &interp)
 
 bool MemoryBus::syncDevices(uint64_t target, ClockedDevice **devices, int numDevices)
 {
+    if(numDevices == 1)
+    {
+        devices[0]->update(target);
+        return true;
+    }
+
     // sort devices (most behind first)
-    std::sort(devices, devices + numDevices, [](auto &a, auto &b){return a->getClock().getTime() < b->getClock().getTime();});
+    auto first = devices, last = devices + numDevices;
+    for(auto it = first + 1; it != last; ++it)
+    {
+        auto temp = it;
+        while(temp != first && (*temp)->getClock().getTime() < (*(temp - 1))->getClock().getTime())
+        {
+            std::swap(*temp, *(temp - 1));
+            temp--;
+        }
+    }
 
     int devIndex = 0;
 
