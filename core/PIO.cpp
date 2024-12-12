@@ -120,27 +120,32 @@ void PIO::update(uint64_t target)
         // go up 
         if(curSM > 0)
             curSM--;
-        else if(smCycles[0] - target < clkdiv[0])
+        else
         {
-            // first SM has reached target, go back down
-
-            // add cycles
+            // add cycles if this is the first SM
+            // (we know that every other SM is ahead of it)
             // this may be a little off
             auto cycles = (fracCycles - smCycles[0]) >> 8;
             fracCycles -= cycles << 8;
             clock.addCycles(cycles);
 
-            curSM++;
-            auto nextTarget = curSM == NUM_PIO_STATE_MACHINES - 1 ? 0 : smCycles[curSM + 1];
-            while(curSM < NUM_PIO_STATE_MACHINES && smCycles[curSM] - nextTarget < clkdiv[curSM])
+            if(smCycles[0] - target < clkdiv[0])
             {
+                // first SM has reached target, go back down
                 curSM++;
-                nextTarget = curSM >= NUM_PIO_STATE_MACHINES - 1 ? 0 : smCycles[curSM + 1];
-            }
 
-            // nothing left to update, done
-            if(curSM == NUM_PIO_STATE_MACHINES)
-                break;
+                // ... until we find one that hasn't reached its target
+                auto nextTarget = curSM == NUM_PIO_STATE_MACHINES - 1 ? 0 : smCycles[curSM + 1];
+                while(curSM < NUM_PIO_STATE_MACHINES && smCycles[curSM] - nextTarget < clkdiv[curSM])
+                {
+                    curSM++;
+                    nextTarget = curSM >= NUM_PIO_STATE_MACHINES - 1 ? 0 : smCycles[curSM + 1];
+                }
+
+                // nothing left to update, done
+                if(curSM == NUM_PIO_STATE_MACHINES)
+                    break;
+            }
         }
     }
 
