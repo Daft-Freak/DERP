@@ -475,7 +475,7 @@ void DMA::dreqHandshake(uint64_t time, int channel)
 
 uint32_t DMA::estimateChannelCompletion(int channel) const
 {
-    auto ret =transferCount[channel];
+    auto ret = transferCount[channel];
 
     int treq = (ctrl[channel] & DMA_CH0_CTRL_TRIG_TREQ_SEL_BITS) >> DMA_CH0_CTRL_TRIG_TREQ_SEL_LSB;
     
@@ -488,6 +488,21 @@ uint32_t DMA::estimateChannelCompletion(int channel) const
         case DREQ_PIO0_TX1:
         case DREQ_PIO0_TX2:
         case DREQ_PIO0_TX3:
+        {
+            int sm = (treq - DREQ_PIO0_TX0);
+            auto clkdiv = mem.getPIO(0).getHW().sm[sm].clkdiv >> 8;
+
+            auto tmp = uint64_t(ret) * clkdiv;
+
+            // get estimated time between pulls from PIO
+            // should be best-case
+            auto estPullTime = mem.getPIO(0).getMinCyclesBetweenPulls(sm);
+            if(estPullTime)
+                tmp *= estPullTime;
+            
+            ret = tmp >> 8;
+            break;
+        }
         case DREQ_PIO0_RX0:
         case DREQ_PIO0_RX1:
         case DREQ_PIO0_RX2:
@@ -495,7 +510,7 @@ uint32_t DMA::estimateChannelCompletion(int channel) const
         {
             // can't do much better than scaling by clkdiv
             // unless we try analysing the program...
-            int sm = (treq - DREQ_PIO0_TX0) & 3;
+            int sm = treq - DREQ_PIO0_RX0;
             auto clkdiv = mem.getPIO(0).getHW().sm[sm].clkdiv >> 8;
             
             ret = (ret * clkdiv) >> 8;
@@ -505,12 +520,25 @@ uint32_t DMA::estimateChannelCompletion(int channel) const
         case DREQ_PIO1_TX1:
         case DREQ_PIO1_TX2:
         case DREQ_PIO1_TX3:
+        {
+            int sm = (treq - DREQ_PIO1_TX0);
+            auto clkdiv = mem.getPIO(1).getHW().sm[sm].clkdiv >> 8;
+
+            auto tmp = uint64_t(ret) * clkdiv;
+
+            auto estPullTime = mem.getPIO(1).getMinCyclesBetweenPulls(sm);
+            if(estPullTime)
+                tmp *= estPullTime;
+            
+            ret = tmp >> 8;
+            break;
+        }
         case DREQ_PIO1_RX0:
         case DREQ_PIO1_RX1:
         case DREQ_PIO1_RX2:
         case DREQ_PIO1_RX3:
         {
-            int sm = (treq - DREQ_PIO1_TX0) & 3;
+            int sm = treq - DREQ_PIO1_RX0;
             auto clkdiv = mem.getPIO(1).getHW().sm[sm].clkdiv >> 8;
             
             ret = (ret * clkdiv) >> 8;
