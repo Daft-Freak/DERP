@@ -526,6 +526,23 @@ PIO::Instruction PIO::decodeInstruction(uint16_t op)
         case 7: // SET
             instr.params[0] = (op >> 5) & 7; // condition/source/dest/dest
             instr.params[1] = op & 0x1F; // addr/count/count/data
+
+            if(op >> 13 == 0 && instr.params[0] == 6)
+                logf(LogLevel::NotImplemented, logComponent, "%i JMP PIN", index);
+
+            if(op >> 13 == 2)
+                logf(LogLevel::NotImplemented, logComponent, "%i IN %04X", index, op);
+
+            // also OUT PINS, but we should add that one first anyway...
+            if(op >> 13 == 3 && instr.params[0] == 4)
+                logf(LogLevel::NotImplemented, logComponent, "%i OUT PINDIRS", index);
+            if(op >> 13 == 3 && instr.params[0] == 7)
+                logf(LogLevel::NotImplemented, logComponent, "%i OUT EXEC", index);
+
+            if(op >> 13 == 7 && instr.params[0] == 0)
+                logf(LogLevel::NotImplemented, logComponent, "%i SET PINS", index);
+            if(op >> 13 == 7 && instr.params[0] == 4)
+                logf(LogLevel::NotImplemented, logComponent, "%i SET PINDIRS", index);
             break;
 
         case 1: // WAIT
@@ -543,6 +560,19 @@ PIO::Instruction PIO::decodeInstruction(uint16_t op)
             instr.params[0] = (op >> 5) & 7; // dest
             instr.params[1] = (op >> 3) & 3; // op
             instr.params[2] = op & 7; // source
+
+            if(instr.params[0] == 0)
+                logf(LogLevel::NotImplemented, logComponent, "%i MOV PINS, x", index);
+            else if(instr.params[0] == 4)
+                logf(LogLevel::NotImplemented, logComponent, "%i MOV EXEC, x", index);
+
+            if(instr.params[1] == 2)
+                logf(LogLevel::NotImplemented, logComponent, "%i MOV reverse", index);
+
+            if(instr.params[2] == 0)
+                logf(LogLevel::NotImplemented, logComponent, "%i MOV x, PINS", index);
+            else if(instr.params[2] == 5)
+                logf(LogLevel::NotImplemented, logComponent, "%i MOV x, STATUS", index);
             break;
 
         case 6: // IRQ
@@ -704,7 +734,6 @@ bool PIO::executeSMInstruction(int sm, const Instruction &instr)
                     condVal = regs.x != regs.y;
                     break;
                 case 6: // PIN
-                    logf(LogLevel::NotImplemented, logComponent, "%i SM%i JMP PIN", index, sm);
                     break;
                 case 7: // !OSRE
                 {
@@ -873,7 +902,6 @@ bool PIO::executeSMInstruction(int sm, const Instruction &instr)
             switch(src)
             {
                 case 0: // PINS
-                    logf(LogLevel::NotImplemented, logComponent, "%i SM%i MOV x, PINS", index, sm);
                     break;
                 case 1: // X
                     val = regs.x;
@@ -885,7 +913,6 @@ bool PIO::executeSMInstruction(int sm, const Instruction &instr)
                     val = 0;
                     break;
                 case 5: // STATUS
-                    logf(LogLevel::NotImplemented, logComponent, "%i SM%i MOV x, STATUS", index, sm);
                     break;
                 case 6: // ISR
                     val = regs.isr;
@@ -898,12 +925,11 @@ bool PIO::executeSMInstruction(int sm, const Instruction &instr)
             if(movOp == 1) // invert
                 val = ~val;
             else if(movOp == 2) // reverse
-                logf(LogLevel::NotImplemented, logComponent, "%i SM%i MOV reverse", index, sm);
+            {}
 
             switch(dest)
             {
                 case 0: // PINS
-                    logf(LogLevel::NotImplemented, logComponent, "%i SM%i MOV PINS, x", index, sm);
                     break;
                 case 1: // X
                     regs.x = val;
@@ -913,7 +939,6 @@ bool PIO::executeSMInstruction(int sm, const Instruction &instr)
                     break;
                 case 4: // EXEC
                     //delay ignored
-                    logf(LogLevel::NotImplemented, logComponent, "%i SM%i MOV EXEC, x", index, sm);
                     break;
                 case 5: // PC
                     regs.pc = val;
@@ -939,7 +964,6 @@ bool PIO::executeSMInstruction(int sm, const Instruction &instr)
             switch(dest)
             {
                 case 0: // PINS
-                    logf(LogLevel::NotImplemented, logComponent, "%i SM%i SET PINS", index, sm);
                     break;
                 case 1: // X
                     regs.x = data;
@@ -948,7 +972,6 @@ bool PIO::executeSMInstruction(int sm, const Instruction &instr)
                     regs.y = data;
                     break;
                 case 4: // PINDIRS
-                    logf(LogLevel::NotImplemented, logComponent, "%i SM%i SET PINDIRS", index, sm);
                     break;
                 
                 // the rest are reserved
