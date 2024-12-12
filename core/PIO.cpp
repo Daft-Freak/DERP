@@ -521,14 +521,21 @@ PIO::Instruction PIO::decodeInstruction(uint16_t op)
     switch(op >> 13)
     {
         case 0: // JMP
+        {
+            // recode cond into opcode
+            instr.op |= ((op >> 5) & 7) << 2;
+
+            instr.params[0] = op & 0x1F; // addr
+
+            if(((op >> 5) & 7) == 6)
+                logf(LogLevel::NotImplemented, logComponent, "%i JMP PIN", index);
+            break;
+        }
         case 2: // IN
         case 3: // OUT
         case 7: // SET
-            instr.params[0] = (op >> 5) & 7; // condition/source/dest/dest
-            instr.params[1] = op & 0x1F; // addr/count/count/data
-
-            if(op >> 13 == 0 && instr.params[0] == 6)
-                logf(LogLevel::NotImplemented, logComponent, "%i JMP PIN", index);
+            instr.params[0] = (op >> 5) & 7; // source/dest/dest
+            instr.params[1] = op & 0x1F; // count/count/data
 
             if(op >> 13 == 2)
                 logf(LogLevel::NotImplemented, logComponent, "%i IN %04X", index, op);
@@ -702,58 +709,53 @@ bool PIO::executeSMInstruction(int sm, const Instruction &instr)
         return false;
     };
 
+    auto jump = [this, &regs](int sm, uint8_t addr)
+    {
+        regs.pc = addr;
+                
+        // clear stall if jump forced
+        rxStall &= ~(1 << sm);
+        txStall &= ~(1 << sm);
+        return false;
+    };
+
     switch(instr.op)
     {
-        case 0x00: // JMP
-        {
-            auto cond = instr.params[0];
-            auto addr = instr.params[1];
-
-            bool condVal = false;
-
-            switch(cond)
-            {
-                case 0: // always
-                    condVal = true;
-                    break;
-                case 1: // !X
-                    condVal = regs.x == 0;
-                    break;
-                case 2: // X--
-                    condVal = regs.x != 0;
-                    regs.x--;
-                    break;
-                case 3: // !Y
-                    condVal = regs.y == 0;
-                    break;
-                case 4: // Y--
-                    condVal = regs.y != 0;
-                    regs.y--;
-                    break;
-                case 5: // X != Y
-                    condVal = regs.x != regs.y;
-                    break;
-                case 6: // PIN
-                    break;
-                case 7: // !OSRE
-                {
-                    condVal = regs.osc < getPullThreshold(sm);
-                    break;
-                }
-            }
-
-            if(condVal)
-            {
-                regs.pc = addr;
-                
-                // clear stall if jump forced
-                rxStall &= ~(1 << sm);
-                txStall &= ~(1 << sm);
-                return false;
-            }
-
+        case 0x00: // JMP (always)
+            return jump(sm, instr.params[0]);
+    
+        case 0x04: // JMP !X
+            if(regs.x == 0)
+                return jump(sm, instr.params[0]);
             return true;
-        }
+
+        case 0x08: // JMP X--
+            if(regs.x-- != 0)
+                return jump(sm, instr.params[0]);
+            return true;
+
+        case 0x0C: // JMP !Y
+            if(regs.y == 0)
+                return jump(sm, instr.params[0]);
+            return true;
+
+        case 0x10: // JMP Y--
+            if(regs.y-- != 0)
+                return jump(sm, instr.params[0]);
+            return true;
+
+        case 0x14: // JMP X != Y
+            if(regs.x != regs.y)
+                return jump(sm, instr.params[0]);
+            return true;
+
+        case 0x18: // JMP PIN
+            return true; // TODO
+
+        case 0x1C: // JMP !OSRE
+            if(regs.osc < getPullThreshold(sm))
+                return jump(sm, instr.params[0]);
+            return true;
 
         case 0x60: // OUT
         {
