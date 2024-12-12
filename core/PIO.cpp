@@ -551,9 +551,10 @@ PIO::Instruction PIO::decodeInstruction(uint16_t op)
             break;
 
         case 4: // PUSH/PULL
-            instr.params[0] = (op >> 7) & 1; // is pull
-            instr.params[1] = (op >> 6) & 1; // if full/empty
-            instr.params[2] = (op >> 5) & 1; // block
+            // recode push/pull into op
+            instr.op |= ((op >> 7) & 1) << 4;
+            instr.params[0] = (op >> 6) & 1; // if full/empty
+            instr.params[1] = (op >> 5) & 1; // block
             break;
 
         case 5: // MOV
@@ -820,73 +821,74 @@ bool PIO::executeSMInstruction(int sm, const Instruction &instr)
             return true;
         }
 
-        case 0x80: // PUSH/PULL
+        case 0x80: // PUSH
         {
-            bool pull = instr.params[0];
-            bool block = instr.params[2];
+            bool ifFull = instr.params[0];
 
-            if(!pull) // PUSH
+            if(ifFull)
             {
-                bool ifFull = instr.params[1];
-
-                if(ifFull)
-                {
-                    // ignore if below threshold
-                    if(regs.isc < getPushThreshold(sm))
-                        return true;
-                }
-
-                // stall if FIFO full
-                if(rxFifo[sm].full())
-                {
-                    hw.fdebug |= 1 << (PIO_FDEBUG_RXSTALL_LSB + sm);
-
-                    if(block)
-                        rxStall |= 1 << sm;
-                    else
-                    {
-                        // non-blocking drops the data
-                        regs.isc = 0;
-                        regs.isr = 0;
-                    }
-
-                    return !block; // stall SM if block is set, otherwise ignore push
-                }
-
-                // FIFO not full, push
-                rxFifo[sm].push(regs.isr);
-                regs.isc = 0;
-                regs.isr = 0;
-                mem.getDMA().triggerDREQ(clock.getTime(), getDREQNum(sm, false));
+                // ignore if below threshold
+                if(regs.isc < getPushThreshold(sm))
+                    return true;
             }
-            else // PULL
+
+            // stall if FIFO full
+            if(rxFifo[sm].full())
             {
-                bool ifEmpty = instr.params[1];
+                hw.fdebug |= 1 << (PIO_FDEBUG_RXSTALL_LSB + sm);
 
-                if(ifEmpty)
+                bool block = instr.params[1];
+
+                if(block)
+                    rxStall |= 1 << sm;
+                else
                 {
-                    // ignore if below threshold
-                    if(regs.osc < getPullThreshold(sm))
-                        return true;
+                    // non-blocking drops the data
+                    regs.isc = 0;
+                    regs.isr = 0;
                 }
 
-                // stall if FIFO empty
-                if(txFifo[sm].empty())
-                {
-                    if(block)
-                        return stallTX(sm);
-                    else
-                    {
-                        // move X to OSR for non-blocking
-                        regs.osc = 0;
-                        regs.osr = regs.x;
-                        return true;
-                    }
-                }
-
-                // FIFO not empty, pop
-                doPull(sm);
+                return !block; // stall SM if block is set, otherwise ignore push
             }
+
+            // FIFO not full, push
+            rxFifo[sm].push(regs.isr);
+            regs.isc = 0;
+            regs.isr = 0;
+            mem.getDMA().triggerDREQ(clock.getTime(), getDREQNum(sm, false));
+
+            return true;
+        }
+
+        case 0x90: // PULL
+        {
+            bool ifEmpty = instr.params[0];
+
+            if(ifEmpty)
+            {
+                // ignore if below threshold
+                if(regs.osc < getPullThreshold(sm))
+                    return true;
+            }
+
+            // stall if FIFO empty
+            if(txFifo[sm].empty())
+            {
+                bool block = instr.params[1];
+
+                if(block)
+                    return stallTX(sm);
+                else
+                {
+                    // move X to OSR for non-blocking
+                    regs.osc = 0;
+                    regs.osr = regs.x;
+                    return true;
+                }
+            }
+
+            // FIFO not empty, pop
+            doPull(sm);
             return true;
         }
 
