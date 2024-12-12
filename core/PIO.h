@@ -46,6 +46,8 @@ public:
 
     void dreqHandshake(uint64_t time, int dreq);
 
+    uint32_t getMinCyclesBetweenPulls(int sm) const {return minCyclesBetweenPulls[sm];}
+
 private:
     int getDREQNum(int sm, bool isTx) const;
 
@@ -81,4 +83,8 @@ private:
     // TODO: joined
     FIFO<uint32_t, 4> rxFifo[NUM_PIO_STATE_MACHINES];
     FIFO<uint32_t, 4> txFifo[NUM_PIO_STATE_MACHINES];
+
+    // best-case time between pulls
+    uint32_t cyclesSinceLastPull[NUM_PIO_STATE_MACHINES];
+    uint32_t minCyclesBetweenPulls[NUM_PIO_STATE_MACHINES];
 };

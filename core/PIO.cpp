@@ -53,6 +53,12 @@ void PIO::reset()
         c = 0;
 
     txStall = rxStall = 0;
+
+    for(auto &c : cyclesSinceLastPull)
+        c = 0;
+    
+    for(auto &c : minCyclesBetweenPulls)
+        c = 0;
 }
 
 void PIO::update(uint64_t target)
@@ -291,6 +297,8 @@ void PIO::regWrite(uint64_t time, uint32_t addr, uint32_t data)
                         logf(LogLevel::Debug, logComponent, "%i SM%i restarted", index, i);
                         regs[i].isr = 0;
                         regs[i].osc = regs[i].isc = 0;
+
+                        cyclesSinceLastPull[i] = minCyclesBetweenPulls[i] = 0;
                     }
 
                     if(hw.ctrl & (1 << (PIO_CTRL_CLKDIV_RESTART_LSB + 1)))
@@ -537,6 +545,9 @@ unsigned PIO::updateSM(int sm, unsigned maxCycles)
 
         cycles--;
 
+        if(!((txStall | rxStall) & (1 << sm)))
+            cyclesSinceLastPull[sm]++;
+
         // run SM until something that might affect external state (PUSH, PULL, any output)
         // FIXME: output
         nextOp = hw.instr_mem[pc];
@@ -584,6 +595,30 @@ bool PIO::executeSMInstruction(int sm, uint16_t op)
         int thresh = (hw.sm[sm].shiftctrl & PIO_SM0_SHIFTCTRL_PULL_THRESH_BITS) >> PIO_SM0_SHIFTCTRL_PULL_THRESH_LSB;
 
         return thresh == 0 ? 32 : thresh;
+    };
+
+    auto doPull = [this, &regs](int sm)
+    {
+        regs.osr = txFifo[sm].pop();
+        regs.osc = 0;
+        // FIXME: these times are too early (we haven't updated the clock yet)
+        mem.getDMA().triggerDREQ(clock.getTime(), getDREQNum(sm, true));
+        if(txCallback)
+            txCallback(clock.getTime(), *this, sm, regs.osr);
+
+        // track time between pulls
+        auto pullCycles = cyclesSinceLastPull[sm];
+        cyclesSinceLastPull[sm] = 0;
+
+        if(!minCyclesBetweenPulls[sm] || pullCycles < minCyclesBetweenPulls[sm])
+            minCyclesBetweenPulls[sm] = pullCycles;
+    };
+
+    auto stallTX = [this](int sm)
+    {
+        txStall |= 1 << sm;
+        hw.fdebug |= 1 << (PIO_FDEBUG_TXSTALL_LSB + sm);
+        return false;
     };
 
     switch(op >> 13)
@@ -652,19 +687,10 @@ bool PIO::executeSMInstruction(int sm, uint16_t op)
                 {
                     // stall if empty
                     if(txFifo[sm].empty())
-                    {
-                        hw.fdebug |= 1 << (PIO_FDEBUG_TXSTALL_LSB + sm);
-                        txStall |= 1 << sm;
-                        return false;
-                    }
+                        return stallTX(sm);
 
                     // pull
-                    regs.osr = txFifo[sm].pop();
-                    regs.osc = 0;
-                    // FIXME: these times are too early (we haven't updated the clock yet)
-                    mem.getDMA().triggerDREQ(clock.getTime(), getDREQNum(sm, true));
-                    if(txCallback)
-                        txCallback(clock.getTime(), *this, sm, regs.osr);
+                    doPull(sm);
                 }
             }
 
@@ -769,11 +795,7 @@ bool PIO::executeSMInstruction(int sm, uint16_t op)
                 if(txFifo[sm].empty())
                 {
                     if(block)
-                    {
-                        txStall |= 1 << sm;
-                        hw.fdebug |= 1 << (PIO_FDEBUG_TXSTALL_LSB + sm);
-                        return false; // stall SM
-                    }
+                        return stallTX(sm);
                     else
                     {
                         // move X to OSR for non-blocking
@@ -784,11 +806,7 @@ bool PIO::executeSMInstruction(int sm, uint16_t op)
                 }
 
                 // FIFO not empty, pop
-                regs.osr = txFifo[sm].pop();
-                regs.osc = 0;
-                mem.getDMA().triggerDREQ(clock.getTime(), getDREQNum(sm, true));
-                if(txCallback)
-                    txCallback(clock.getTime(), *this, sm, regs.osr);
+                doPull(sm);
             }
             return true;
         }
