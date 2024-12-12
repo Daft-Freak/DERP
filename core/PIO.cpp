@@ -304,6 +304,8 @@ void PIO::regWrite(uint64_t time, uint32_t addr, uint32_t data)
                         regs[i].osc = regs[i].isc = 0;
 
                         cyclesSinceLastPull[i] = minCyclesBetweenPulls[i] = 0;
+                        rxStall &= ~(1 << i);
+                        txStall &= ~(1 << i);
                     }
 
                     if(hw.ctrl & (1 << (PIO_CTRL_CLKDIV_RESTART_LSB + 1)))
@@ -633,7 +635,10 @@ unsigned PIO::updateSM(int sm, unsigned maxCycles)
 
         cycles--;
 
-        if(!((txStall | rxStall) & (1 << sm)))
+        // stop if we stalled (we're not going to un-stall)
+        if((txStall | rxStall) & (1 << sm))
+            break;
+        else
             cyclesSinceLastPull[sm]++;
 
         // run SM until something that might affect external state (PUSH, PULL, any output)
