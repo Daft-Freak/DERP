@@ -380,7 +380,8 @@ void PIO::regWrite(uint64_t time, uint32_t addr, uint32_t data)
             update(time);
             int off = (addr - PIO_INSTR_MEM0_OFFSET) / 4;
             updateReg(hw.instr_mem[off], data, atomic);
-            instrs[off] = decodeInstruction(hw.instr_mem[off]);
+            for(unsigned i = 0; i < NUM_PIO_STATE_MACHINES; i++)
+                instrs[i][off] = decodeInstruction(hw.instr_mem[off], i);
             return;
         }
 
@@ -416,7 +417,11 @@ void PIO::regWrite(uint64_t time, uint32_t addr, uint32_t data)
             update(time);
 
             int sm = (addr - PIO_SM0_SHIFTCTRL_OFFSET) / (PIO_SM1_SHIFTCTRL_OFFSET - PIO_SM0_SHIFTCTRL_OFFSET);
-            updateReg(hw.sm[sm].shiftctrl, data, atomic);
+            if(updateReg(hw.sm[sm].shiftctrl, data, atomic))
+            {
+                for(unsigned i = 0; i < PIO_INSTRUCTION_COUNT; i++)
+                    instrs[sm][i] = decodeInstruction(hw.instr_mem[i], sm);
+            }
             return;
         }
 
@@ -433,7 +438,7 @@ void PIO::regWrite(uint64_t time, uint32_t addr, uint32_t data)
             logf(LogLevel::Debug, logComponent, "%i SM%i instr %04X", index, sm, hw.sm[sm].instr);
 
             // TODO: this does ignore the clkdiv, but this is sill maybe the wrong place...
-            executeSMInstruction(sm, decodeInstruction(hw.sm[sm].instr), clock.getCyclesToTime(time));
+            executeSMInstruction(sm, decodeInstruction(hw.sm[sm].instr, sm), clock.getCyclesToTime(time));
             return;
         }
 
@@ -501,13 +506,23 @@ void PIO::dreqHandshake(uint64_t time, int dreq)
     }
 }
 
-PIO::Instruction PIO::decodeInstruction(uint16_t op)
+PIO::Instruction PIO::decodeInstruction(uint16_t op, int sm)
 {
     Instruction instr;
     instr.op = (op >> 8) & 0xE0; // spare bits at the bottom
 
-    // would like to decode this further but it depends on per-sm state...
-    instr.delaySideSet = (op >> 8) & 0x1F;
+    // decode delay/side-set
+    // TODO: SIDE_EN
+    auto delaySideSet = (op >> 8) & 0x1F;
+
+    auto sidesetCount = (hw.sm[sm].pinctrl & PIO_SM0_PINCTRL_SIDESET_COUNT_BITS) >> PIO_SM0_PINCTRL_SIDESET_COUNT_LSB;
+    int delayBits = 5 - sidesetCount;
+
+    instr.delay = delaySideSet & ((1 << delayBits) - 1);
+    instr.sideSet = delaySideSet >> delayBits;
+
+    if(delaySideSet)
+        logf(LogLevel::NotImplemented, logComponent, "%i SM%i op %04X delay %i side-set %i", index, sm, op, instr.delay, instr.sideSet);
 
     switch(op >> 13)
     {
@@ -619,7 +634,7 @@ void PIO::updateSM(int sm, unsigned maxCycles, int32_t &cycleOffset)
     int wrapTop = (hw.sm[sm].execctrl & PIO_SM0_EXECCTRL_WRAP_TOP_BITS) >> PIO_SM0_EXECCTRL_WRAP_TOP_LSB;
     int wrapBottom = (hw.sm[sm].execctrl & PIO_SM0_EXECCTRL_WRAP_BOTTOM_BITS) >> PIO_SM0_EXECCTRL_WRAP_BOTTOM_LSB;
 
-    auto nextOp = instrs + pc;
+    auto nextOp = instrs[sm] + pc;
 
     unsigned cycles = maxCycles;
     while(cycles)
@@ -644,7 +659,7 @@ void PIO::updateSM(int sm, unsigned maxCycles, int32_t &cycleOffset)
 
         // run SM until something that might affect external state (PUSH, PULL, any output)
         // FIXME: output other than OUT?
-        nextOp = instrs + pc;
+        nextOp = instrs[sm] + pc;
         if(sm != 0 && ((nextOp->op >> 5) == 4 || (nextOp->op >> 5) == 3))
             break;
     }
@@ -652,28 +667,6 @@ void PIO::updateSM(int sm, unsigned maxCycles, int32_t &cycleOffset)
 
 bool PIO::executeSMInstruction(int sm, const Instruction &instr, uint32_t clockOffset)
 {
-    // delay/side-set are common
-    auto delaySide = instr.delaySideSet;
-
-    int delay = 0;
-    int sideSet = 0;
-
-    if(delaySide)
-    {
-        auto sidesetCount = (hw.sm[sm].pinctrl & PIO_SM0_PINCTRL_SIDESET_COUNT_BITS) >> PIO_SM0_PINCTRL_SIDESET_COUNT_LSB;
-        int delayBits = 5 - sidesetCount;
-
-        delay = delaySide & ((1 << delayBits) - 1);
-        sideSet = delaySide >> delayBits;
-
-        static bool logDS = false;
-        if(!logDS)
-        {
-            logf(LogLevel::NotImplemented, logComponent, "%i SM%i op %02X delay %i side-set %i", index, sm, instr.op, delay, sideSet);
-            logDS = true;
-        }
-    }
-
     auto &regs = this->regs[sm];
 
     auto getPushThreshold = [this](int sm)

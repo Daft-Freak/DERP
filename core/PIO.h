@@ -52,11 +52,12 @@ private:
     struct Instruction
     {
         uint8_t op;
-        uint8_t delaySideSet;
+        uint8_t delay;
+        uint8_t sideSet;
         uint8_t params[3];
     };
 
-    Instruction decodeInstruction(uint16_t op);
+    Instruction decodeInstruction(uint16_t op, int sm);
     int getDREQNum(int sm, bool isTx) const;
 
     void updateSM(int sm, unsigned maxCycles, int32_t &cycleOffset);
@@ -87,7 +88,7 @@ private:
         uint8_t osc, isc; // counters
     } regs[NUM_PIO_STATE_MACHINES];
 
-    Instruction instrs[PIO_INSTRUCTION_COUNT];
+    Instruction instrs[NUM_PIO_STATE_MACHINES][PIO_INSTRUCTION_COUNT];
 
     uint8_t txStall, rxStall; // internal flags
 
