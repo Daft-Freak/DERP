@@ -556,23 +556,32 @@ PIO::Instruction PIO::decodeInstruction(uint16_t op)
             break;
 
         case 5: // MOV
-            instr.params[0] = (op >> 5) & 7; // dest
-            instr.params[1] = (op >> 3) & 3; // op
-            instr.params[2] = op & 7; // source
+        {
+            // recode dest and (mov) op into op
+            instr.op |= (op >> 3) & 0x1F;
 
-            if(instr.params[0] == 0)
+            auto dest = (op >> 5) & 7; // dest
+            auto movOp = (op >> 3) & 3; // op
+            instr.params[0] = op & 7; // source
+
+            // MOV Y, Y / NOP
+            if(dest == 2 && movOp == 0 && instr.params[0] == 2)
+                instr.op |= 3; // map to something invalid
+
+            if(dest == 0)
                 logf(LogLevel::NotImplemented, logComponent, "%i MOV PINS, x", index);
-            else if(instr.params[0] == 4)
+            else if(dest == 4)
                 logf(LogLevel::NotImplemented, logComponent, "%i MOV EXEC, x", index);
 
-            if(instr.params[1] == 2)
+            if(movOp == 2)
                 logf(LogLevel::NotImplemented, logComponent, "%i MOV reverse", index);
 
-            if(instr.params[2] == 0)
+            if(instr.params[0] == 0)
                 logf(LogLevel::NotImplemented, logComponent, "%i MOV x, PINS", index);
-            else if(instr.params[2] == 5)
+            else if(instr.params[0] == 5)
                 logf(LogLevel::NotImplemented, logComponent, "%i MOV x, STATUS", index);
             break;
+        }
 
         case 6: // IRQ
             // TODO
@@ -714,6 +723,28 @@ bool PIO::executeSMInstruction(int sm, const Instruction &instr, uint32_t clockO
         rxStall &= ~(1 << sm);
         txStall &= ~(1 << sm);
         return false;
+    };
+
+    auto getMovSrc = [this, &regs](int src) -> uint32_t
+    {
+        switch(src)
+        {
+            case 0: // PINS
+                break;
+            case 1: // X
+                return regs.x;
+            case 2: // Y
+                return regs.y;
+            case 3: // NULL
+                return 0;
+            case 5: // STATUS
+                break;
+            case 6: // ISR
+                return regs.isr;
+            case 7: // OSR
+                return regs.osr;
+        }
+        return 0;
     };
 
     switch(instr.op)
@@ -892,70 +923,44 @@ bool PIO::executeSMInstruction(int sm, const Instruction &instr, uint32_t clockO
             return true;
         }
 
-        case 0xA0: // MOV
-        {
-            auto src = instr.params[2];
-            auto movOp = instr.params[1];
-            auto dest = instr.params[0];
-
-            uint32_t val = 0;
-
-            switch(src)
-            {
-                case 0: // PINS
-                    break;
-                case 1: // X
-                    val = regs.x;
-                    break;
-                case 2: // Y
-                    val = regs.y;
-                    break;
-                case 3: // NULL
-                    val = 0;
-                    break;
-                case 5: // STATUS
-                    break;
-                case 6: // ISR
-                    val = regs.isr;
-                    break;
-                case 7: // OSR
-                    val = regs.osr;
-                    break;
-            }
-
-            if(movOp == 1) // invert
-                val = ~val;
-            else if(movOp == 2) // reverse
-            {}
-
-            switch(dest)
-            {
-                case 0: // PINS
-                    break;
-                case 1: // X
-                    regs.x = val;
-                    break;
-                case 2: // Y
-                    regs.y = val;
-                    break;
-                case 4: // EXEC
-                    //delay ignored
-                    break;
-                case 5: // PC
-                    regs.pc = val;
-                    return false;
-                case 6: // ISR
-                    regs.isr = val;
-                    regs.isc = 0;
-                    break;
-                case 7: // OSR
-                    regs.osr = val;
-                    regs.osc = 0;
-                    break;
-            }
-
-            return true;
-        }
+        //case 0xA0: // MOV PINS, x
+        //case 0xA1: // MOV PINS, ~x
+        case 0xA4: // MOV X, x
+            regs.x = getMovSrc(instr.params[0]);
+            break;
+        case 0xA5: // MOV X, ~x
+            regs.x = ~getMovSrc(instr.params[0]);
+            break;
+        case 0xA8: // MOV Y, x
+            regs.y = getMovSrc(instr.params[0]);
+            break;
+        case 0xA9: // MOV Y, ~x
+            regs.y = ~getMovSrc(instr.params[0]);
+            break;
+        //case 0xB0: // MOV EXEC, x
+        //case 0xB1: // MOV EXEC, ~x
+        case 0xB4: // MOV PC, x
+            regs.pc = getMovSrc(instr.params[0]);
+            return false;
+        case 0xB5: // MOV PC, ~x
+            regs.pc = ~getMovSrc(instr.params[0]);
+            return false;
+        case 0xB8: // MOV ISR, x
+            regs.isr = getMovSrc(instr.params[0]);
+            regs.isc = 0;
+            break;
+        case 0xB9: // MOV ISR, ~x
+            regs.isr = ~getMovSrc(instr.params[0]);
+            regs.isc = 0;
+            break;
+        case 0xBC: // MOV OSR, x
+            regs.osr = getMovSrc(instr.params[0]);
+            regs.osc = 0;
+            break;
+        case 0xBD: // MOV OSR, ~x
+            regs.osr = ~getMovSrc(instr.params[0]);
+            regs.osc = 0;
+            break;
 
         case 0xE0: // SET
         {
