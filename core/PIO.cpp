@@ -813,6 +813,8 @@ PIO::ExecResult PIO::executeSMInstruction(int sm, const Instruction &instr, uint
             }
 
             regs.osc += count;
+            if(regs.osc > 32)
+                regs.osc = 32;
 
             switch(dest)
             {
