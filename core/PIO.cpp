@@ -101,15 +101,15 @@ void PIO::update(uint64_t target)
         // sync to next SM or end
         int32_t target = curSM == NUM_PIO_STATE_MACHINES - 1 ? (cycles << 8) : smCycles[curSM + 1];
 
-        // calc max cycles to update
-        auto maxSMCycles = (target - smCycles[curSM]) / clkdiv[curSM];
-
         // update
         // skip if not enabled, otherwise run
         if(!(hw.ctrl & (1 << (PIO_CTRL_SM_ENABLE_LSB + curSM))))
+        {
+            auto maxSMCycles = (target - smCycles[curSM]) / clkdiv[curSM];
             smCycles[curSM] += maxSMCycles * clkdiv[curSM];
+        }
         else
-            updateSM(curSM, maxSMCycles, smCycles[curSM]);
+            updateSM(curSM, target, smCycles[curSM]);
 
         // go up 
         if(curSM > 0)
@@ -612,7 +612,7 @@ int PIO::getDREQNum(int sm, bool isTx) const
     return index * (DREQ_PIO1_TX0 - DREQ_PIO0_TX0) + (isTx ? 0 : DREQ_PIO0_RX0 - DREQ_PIO0_TX0) + sm;
 }
 
-void PIO::updateSM(int sm, unsigned maxCycles, int32_t &cycleOffset)
+void PIO::updateSM(int sm, uint32_t target, int32_t &cycleOffset)
 {
     auto clkdiv = hw.sm[sm].clkdiv >> PIO_SM0_CLKDIV_FRAC_LSB;
     if(txStall & (1 << sm))
@@ -621,7 +621,7 @@ void PIO::updateSM(int sm, unsigned maxCycles, int32_t &cycleOffset)
         if(txFifo[sm].empty())
         {
             hw.fdebug |= 1 << (PIO_FDEBUG_TXSTALL_LSB + sm);
-            cycleOffset += maxCycles * clkdiv;
+            cycleOffset += (target - cycleOffset) / clkdiv * clkdiv;
             return;
         }
 
@@ -636,10 +636,8 @@ void PIO::updateSM(int sm, unsigned maxCycles, int32_t &cycleOffset)
 
     auto nextOp = instrs[sm] + pc;
 
-    unsigned cycles = maxCycles;
-    while(cycles)
+    while(cycleOffset + clkdiv <= target)
     {
-        cycles--;
         cycleOffset += clkdiv;
 
         auto res = executeSMInstruction(sm, *nextOp, cycleOffset >> 8);
