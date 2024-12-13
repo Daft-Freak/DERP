@@ -95,7 +95,6 @@ void PIO::update(uint64_t target)
 
     // start at last SM
     unsigned curSM = NUM_PIO_STATE_MACHINES - 1;
-    auto fracCycles = smCycles[0];
 
     while(true)
     {
