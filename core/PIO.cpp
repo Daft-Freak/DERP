@@ -122,7 +122,7 @@ void PIO::update(uint64_t target)
                 curSM++;
 
                 // ... until we find one that hasn't reached its target
-                auto nextTarget = curSM == NUM_PIO_STATE_MACHINES - 1 ? (cycles << 8) : smCycles[curSM + 1];
+                int32_t nextTarget = curSM == NUM_PIO_STATE_MACHINES - 1 ? (cycles << 8) : smCycles[curSM + 1];
                 while(curSM < NUM_PIO_STATE_MACHINES && nextTarget - smCycles[curSM] < clkdiv[curSM])
                 {
                     curSM++;
