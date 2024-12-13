@@ -59,7 +59,7 @@ private:
     Instruction decodeInstruction(uint16_t op);
     int getDREQNum(int sm, bool isTx) const;
 
-    unsigned updateSM(int sm, unsigned maxCycles);
+    void updateSM(int sm, unsigned maxCycles, int32_t &cycleOffset);
     bool executeSMInstruction(int sm, const Instruction &instr);
 
     MemoryBus &mem;
