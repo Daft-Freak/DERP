@@ -60,7 +60,7 @@ private:
     int getDREQNum(int sm, bool isTx) const;
 
     void updateSM(int sm, unsigned maxCycles, int32_t &cycleOffset);
-    bool executeSMInstruction(int sm, const Instruction &instr);
+    bool executeSMInstruction(int sm, const Instruction &instr, uint32_t clockOffset);
 
     MemoryBus &mem;
     int index;

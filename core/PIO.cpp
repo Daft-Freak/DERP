@@ -117,13 +117,6 @@ void PIO::update(uint64_t target)
             curSM--;
         else
         {
-            // add cycles if this is the first SM
-            // (we know that every other SM is ahead of it)
-            // this may be a little off
-            auto cycles = (smCycles[0] - fracCycles) >> 8;
-            fracCycles += cycles << 8;
-            clock.addCycles(cycles);
-
             if(target - smCycles[0] < clkdiv[0])
             {
                 // first SM has reached target, go back down
@@ -143,6 +136,8 @@ void PIO::update(uint64_t target)
             }
         }
     }
+
+    clock.addCycles(cycles);
 
     // save remaining fraction cycles
     for(unsigned i = 0; i < NUM_PIO_STATE_MACHINES; i++)
@@ -439,7 +434,7 @@ void PIO::regWrite(uint64_t time, uint32_t addr, uint32_t data)
             logf(LogLevel::Debug, logComponent, "%i SM%i instr %04X", index, sm, hw.sm[sm].instr);
 
             // TODO: this does ignore the clkdiv, but this is sill maybe the wrong place...
-            executeSMInstruction(sm, decodeInstruction(hw.sm[sm].instr));
+            executeSMInstruction(sm, decodeInstruction(hw.sm[sm].instr), clock.getCyclesToTime(time));
             return;
         }
 
@@ -621,7 +616,10 @@ void PIO::updateSM(int sm, unsigned maxCycles, int32_t &cycleOffset)
     unsigned cycles = maxCycles;
     while(cycles)
     {
-        if(executeSMInstruction(sm, *nextOp))
+        cycles--;
+        cycleOffset += clkdiv;
+
+        if(executeSMInstruction(sm, *nextOp, cycleOffset >> 8))
         {
             // advance pc/wrap if we didn't jump or stall
             if(pc == wrapTop)
@@ -629,9 +627,6 @@ void PIO::updateSM(int sm, unsigned maxCycles, int32_t &cycleOffset)
             else
                 pc++;
         }
-
-        cycles--;
-        cycleOffset += clkdiv;
 
         // stop if we stalled (we're not going to un-stall)
         if((txStall | rxStall) & (1 << sm))
@@ -642,12 +637,12 @@ void PIO::updateSM(int sm, unsigned maxCycles, int32_t &cycleOffset)
         // run SM until something that might affect external state (PUSH, PULL, any output)
         // FIXME: output other than OUT?
         nextOp = instrs + pc;
-        if((nextOp->op >> 5) == 4 || (nextOp->op >> 5) == 3)
+        if(sm != 0 && ((nextOp->op >> 5) == 4 || (nextOp->op >> 5) == 3))
             break;
     }
 }
 
-bool PIO::executeSMInstruction(int sm, const Instruction &instr)
+bool PIO::executeSMInstruction(int sm, const Instruction &instr, uint32_t clockOffset)
 {
     // delay/side-set are common
     auto delaySide = instr.delaySideSet;
@@ -687,14 +682,15 @@ bool PIO::executeSMInstruction(int sm, const Instruction &instr)
         return thresh == 0 ? 32 : thresh;
     };
 
-    auto doPull = [this, &regs](int sm)
+    auto doPull = [this, clockOffset, &regs](int sm)
     {
         regs.osr = txFifo[sm].pop();
         regs.osc = 0;
-        // FIXME: these times are too early (we haven't updated the clock yet)
-        mem.getDMA().triggerDREQ(clock.getTime(), getDREQNum(sm, true));
+
+        auto time = clock.getTimeToCycles(clockOffset);
+        mem.getDMA().triggerDREQ(time, getDREQNum(sm, true));
         if(txCallback)
-            txCallback(clock.getTime(), *this, sm, regs.osr);
+            txCallback(time, *this, sm, regs.osr);
 
         // track time between pulls
         auto pullCycles = cyclesSinceLastPull[sm];
@@ -859,7 +855,7 @@ bool PIO::executeSMInstruction(int sm, const Instruction &instr)
             rxFifo[sm].push(regs.isr);
             regs.isc = 0;
             regs.isr = 0;
-            mem.getDMA().triggerDREQ(clock.getTime(), getDREQNum(sm, false));
+            mem.getDMA().triggerDREQ(clock.getTimeToCycles(clockOffset), getDREQNum(sm, false));
 
             return true;
         }
