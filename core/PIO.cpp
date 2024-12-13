@@ -642,7 +642,8 @@ void PIO::updateSM(int sm, unsigned maxCycles, int32_t &cycleOffset)
         cycles--;
         cycleOffset += clkdiv;
 
-        if(executeSMInstruction(sm, *nextOp, cycleOffset >> 8))
+        auto res = executeSMInstruction(sm, *nextOp, cycleOffset >> 8);
+        if(res == ExecResult::Done)
         {
             // advance pc/wrap if we didn't jump or stall
             if(pc == wrapTop)
@@ -650,12 +651,11 @@ void PIO::updateSM(int sm, unsigned maxCycles, int32_t &cycleOffset)
             else
                 pc++;
         }
-
         // stop if we stalled (we're not going to un-stall)
-        if((txStall | rxStall) & (1 << sm))
+        else if(res == ExecResult::Stalled)
             break;
-        else
-            cyclesSinceLastPull[sm]++;
+
+        cyclesSinceLastPull[sm]++;
 
         // run SM until something that might affect external state (PUSH, PULL, any output)
         // FIXME: output other than OUT?
@@ -665,7 +665,7 @@ void PIO::updateSM(int sm, unsigned maxCycles, int32_t &cycleOffset)
     }
 }
 
-bool PIO::executeSMInstruction(int sm, const Instruction &instr, uint32_t clockOffset)
+PIO::ExecResult PIO::executeSMInstruction(int sm, const Instruction &instr, uint32_t clockOffset)
 {
     auto &regs = this->regs[sm];
 
@@ -705,7 +705,7 @@ bool PIO::executeSMInstruction(int sm, const Instruction &instr, uint32_t clockO
     {
         txStall |= 1 << sm;
         hw.fdebug |= 1 << (PIO_FDEBUG_TXSTALL_LSB + sm);
-        return false;
+        return ExecResult::Stalled;
     };
 
     auto jump = [this, &regs](int sm, uint8_t addr)
@@ -715,7 +715,7 @@ bool PIO::executeSMInstruction(int sm, const Instruction &instr, uint32_t clockO
         // clear stall if jump forced
         rxStall &= ~(1 << sm);
         txStall &= ~(1 << sm);
-        return false;
+        return ExecResult::Jumped;
     };
 
     auto getMovSrc = [this, &regs](int src) -> uint32_t
@@ -748,35 +748,35 @@ bool PIO::executeSMInstruction(int sm, const Instruction &instr, uint32_t clockO
         case 0x04: // JMP !X
             if(regs.x == 0)
                 return jump(sm, instr.params[0]);
-            return true;
+            break;
 
         case 0x08: // JMP X--
             if(regs.x-- != 0)
                 return jump(sm, instr.params[0]);
-            return true;
+            break;
 
         case 0x0C: // JMP !Y
             if(regs.y == 0)
                 return jump(sm, instr.params[0]);
-            return true;
+            break;
 
         case 0x10: // JMP Y--
             if(regs.y-- != 0)
                 return jump(sm, instr.params[0]);
-            return true;
+            break;
 
         case 0x14: // JMP X != Y
             if(regs.x != regs.y)
                 return jump(sm, instr.params[0]);
-            return true;
+            break;
 
         case 0x18: // JMP PIN
-            return true; // TODO
+            break; // TODO
 
         case 0x1C: // JMP !OSRE
             if(regs.osc < getPullThreshold(sm))
                 return jump(sm, instr.params[0]);
-            return true;
+            break;
 
         case 0x60: // OUT
         {
@@ -832,17 +832,17 @@ bool PIO::executeSMInstruction(int sm, const Instruction &instr, uint32_t clockO
                     break;
                 case 5: // PC
                     regs.pc = data;
-                    return false;
+                    return ExecResult::Jumped;
                 case 6: // ISR
                     regs.isr = data;
                     regs.osc = count;
                     break;
                 case 7: // EXEC
-                    return false; // stall, we didn't do it
+                    return ExecResult::Stalled; // stall, we didn't do it
 
             }
 
-            return true;
+            break;
         }
 
         case 0x80: // PUSH
@@ -853,7 +853,7 @@ bool PIO::executeSMInstruction(int sm, const Instruction &instr, uint32_t clockO
             {
                 // ignore if below threshold
                 if(regs.isc < getPushThreshold(sm))
-                    return true;
+                    return ExecResult::Done;
             }
 
             // stall if FIFO full
@@ -872,7 +872,7 @@ bool PIO::executeSMInstruction(int sm, const Instruction &instr, uint32_t clockO
                     regs.isr = 0;
                 }
 
-                return !block; // stall SM if block is set, otherwise ignore push
+                return block ? ExecResult::Done : ExecResult::Done; // stall SM if block is set, otherwise ignore push
             }
 
             // FIFO not full, push
@@ -881,7 +881,7 @@ bool PIO::executeSMInstruction(int sm, const Instruction &instr, uint32_t clockO
             regs.isr = 0;
             mem.getDMA().triggerDREQ(clock.getTimeToCycles(clockOffset), getDREQNum(sm, false));
 
-            return true;
+            break;
         }
 
         case 0x90: // PULL
@@ -892,7 +892,7 @@ bool PIO::executeSMInstruction(int sm, const Instruction &instr, uint32_t clockO
             {
                 // ignore if below threshold
                 if(regs.osc < getPullThreshold(sm))
-                    return true;
+                    return ExecResult::Done;
             }
 
             // stall if FIFO empty
@@ -907,13 +907,13 @@ bool PIO::executeSMInstruction(int sm, const Instruction &instr, uint32_t clockO
                     // move X to OSR for non-blocking
                     regs.osc = 0;
                     regs.osr = regs.x;
-                    return true;
+                    return ExecResult::Done;
                 }
             }
 
             // FIFO not empty, pop
             doPull(sm);
-            return true;
+            break;
         }
 
         //case 0xA0: // MOV PINS, x
@@ -934,10 +934,10 @@ bool PIO::executeSMInstruction(int sm, const Instruction &instr, uint32_t clockO
         //case 0xB1: // MOV EXEC, ~x
         case 0xB4: // MOV PC, x
             regs.pc = getMovSrc(instr.params[0]);
-            return false;
+            return ExecResult::Jumped;
         case 0xB5: // MOV PC, ~x
             regs.pc = ~getMovSrc(instr.params[0]);
-            return false;
+            return ExecResult::Jumped;
         case 0xB8: // MOV ISR, x
             regs.isr = getMovSrc(instr.params[0]);
             regs.isc = 0;
@@ -976,9 +976,9 @@ bool PIO::executeSMInstruction(int sm, const Instruction &instr, uint32_t clockO
                 // the rest are reserved
             }
 
-            return true;
+            break;
         }
     }
 
-    return true;
+    return ExecResult::Done;
 }
