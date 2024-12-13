@@ -778,9 +778,6 @@ PIO::ExecResult PIO::executeSMInstruction(int sm, const Instruction &instr, uint
 
         case 0x60: // OUT
         {
-            auto dest = instr.params[0];
-            auto count = instr.params[1];
-
             bool autopull = hw.sm[sm].shiftctrl & PIO_SM0_SHIFTCTRL_AUTOPULL_BITS;
             if(autopull)
             {
@@ -795,6 +792,8 @@ PIO::ExecResult PIO::executeSMInstruction(int sm, const Instruction &instr, uint
                     // TODO: this should stall, but also we should be auto-pulling at the end of instrs
                 }
             }
+
+            int count = instr.params[1];
 
             // get and shift
             bool shiftRight = hw.sm[sm].shiftctrl & PIO_SM0_SHIFTCTRL_OUT_SHIFTDIR_BITS;
@@ -816,7 +815,7 @@ PIO::ExecResult PIO::executeSMInstruction(int sm, const Instruction &instr, uint
             if(regs.osc > 32)
                 regs.osc = 32;
 
-            switch(dest)
+            switch(instr.params[0])
             {
                 case 0: // PINS
                     break;
