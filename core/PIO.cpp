@@ -770,6 +770,7 @@ bool PIO::executeSMInstruction(int sm, const Instruction &instr, uint32_t clockO
 
                     // pull
                     doPull(sm);
+                    // TODO: this should stall, but also we should be auto-pulling at the end of instrs
                 }
             }
 
