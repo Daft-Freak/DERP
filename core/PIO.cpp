@@ -1237,8 +1237,10 @@ PIO::ExecResult PIO::executeSMInstruction(int sm, const Instruction &instr, uint
             bool shiftRight = hw.sm[sm].shiftctrl & PIO_SM0_SHIFTCTRL_OUT_SHIFTDIR_BITS;
 
             uint32_t data = 0;
-
-            if(shiftRight)
+            
+            if(count == 32)
+                std::swap(regs.osr, data);
+            else if(shiftRight)
             {
                 data = regs.osr & ((1 << count) - 1);
                 regs.osr >>= count;
