@@ -742,8 +742,6 @@ void PIO::analyseProgram(int sm, int modInstrIndex)
     if(modInstrIndex != -1 && (modInstrIndex < wrapBottom || modInstrIndex > wrapTop))
         return;
 
-    logf(LogLevel::Debug, logComponent, "%i SM%i wrap %i -> %i", index, sm, wrapTop, wrapBottom);
-
     static const char *instrNames[]{"JMP", "WAIT", "IN", "OUT", "PUSH/PULL", "MOV", "IRQ", "SET"};
 
     bool unhandled = false;
@@ -909,6 +907,8 @@ void PIO::analyseProgram(int sm, int modInstrIndex)
         cycles++;
     }
     
+    auto oldCycles = cyclesBetweenPulls[sm];
+
     cyclesBetweenPulls[sm] = 0;
 
     if(unhandled)
@@ -929,7 +929,8 @@ void PIO::analyseProgram(int sm, int modInstrIndex)
     else if(totalOutBits / pullThreshold == numPulls && totalOutBits % pullThreshold == 0) // multiple words per iteration
         cyclesBetweenPulls[sm] = cycles / numPulls;
 
-    logf(LogLevel::Debug, logComponent, "%i SM%i out %i bits in %i cycles (%i pulls, %i between pulls)", index, sm, totalOutBits, cycles, numPulls, cyclesBetweenPulls[sm]);
+    if(cyclesBetweenPulls[sm] != oldCycles)
+        logf(LogLevel::Debug, logComponent, "%i SM%i (wrap %i -> %i) out %i bits in %i cycles (%i pulls, %i between pulls)", index, sm, wrapTop, wrapBottom, totalOutBits, cycles, numPulls, cyclesBetweenPulls[sm]);
 
     if(speedHack)
         minCyclesBetweenPulls[sm] = cyclesBetweenPulls[sm];
