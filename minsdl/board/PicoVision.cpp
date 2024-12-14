@@ -56,7 +56,7 @@ PicoVisionBoard::PicoVisionBoard(MemoryBus &mem) : mem(mem)
     displayClock.setFrequency(60 * 1000);
     mem.getClocks().addClockTarget(-1, displayClock);
 
-    mem.getPIO(1).setUpdateCallback([this](auto time, auto &pio){onPIOUpdate(time, pio);});
+    mem.getPIO(1).setTXCallback([this](auto time, auto &pio, auto sm, auto data){onPIOTX(time, pio, sm, data);});
 
     mem.getI2C(1).setWriteCallback([this](auto time, auto &i2c, auto data, auto stop){onI2CWrite(time, i2c, data, stop);});
 }
@@ -257,28 +257,16 @@ uint64_t PicoVisionBoard::onGetNextInterruptTime(uint64_t time)
     return ret;
 }
 
-void PicoVisionBoard::onPIOUpdate(uint64_t time, PIO &pio)
+void PicoVisionBoard::onPIOTX(uint64_t time, PIO &pio, int sm, uint32_t data)
 {
     // 32blit-sdk SD card
-    auto &sdRx = pio.getRXFIFO(1);
-    auto &sdTx = pio.getTXFIFO(1);
+    if(sm == 1)
+        pio.getRXFIFO(1).push(0xFFFFFFFF);
 
-    while(!sdTx.empty() && !sdRx.full())
-    {
-        sdTx.pop();
-        mem.getDMA().triggerDREQ(time, 9 /*DREQ_PIO1_TX1*/);
-
-        sdRx.push(0xFFFFFFFF);
-        mem.getDMA().triggerDREQ(time, 13 /*DREQ_PIO1_RX1*/);
-    }
-
-    // PSRAM
-    auto &txFifo = pio.getTXFIFO(0);
-    //auto &smHW = pio.getHW().sm[0];
-
-    if(txFifo.empty())
+    if(sm != 0)
         return;
 
+    // PSRAM
     int ramBank = (mem.getGPIO().getPadState() & (1 << 8)) ? 1 : 0;
 
     if(lastRamBank != ramBank)
@@ -295,68 +283,62 @@ void PicoVisionBoard::onPIOUpdate(uint64_t time, PIO &pio)
     auto cmdOffset = ramCmdOffset[ramBank];
     auto dataLenBytes = ramDataLenBytes[ramBank];
 
-    while(!txFifo.empty())
+    bool isResetProg = !ramQuadEnabled[ramBank]; // assume reset program until quad enabled
+
+    if(cmdOffset == cmdLenWords)
     {
-        auto data = txFifo.pop();
-        mem.getDMA().triggerDREQ(time, 8 /*DREQ_PIO1_TX0*/);
+        cmdOffset = 0;
 
-        bool isResetProg = !ramQuadEnabled[ramBank]; // assume reset program until quad enabled
+        if(isResetProg)
+            ramCmdLenWords[ramBank] = cmdLenWords = data / 32 + 2;
+        else
+            ramCmdLenWords[ramBank] = cmdLenWords = (data + 1) * (ramQuadEnabled[ramBank] ? 4 : 1) / 32 + 4;
 
-        if(cmdOffset == cmdLenWords)
-        {
-            cmdOffset = 0;
-
-            if(isResetProg)
-                ramCmdLenWords[ramBank] = cmdLenWords = data / 32 + 2;
-            else
-                ramCmdLenWords[ramBank] = cmdLenWords = (data + 1) * (ramQuadEnabled[ramBank] ? 4 : 1) / 32 + 4;
-
-            ramDataLenBytes[ramBank] = dataLenBytes = (data + 1) * (ramQuadEnabled[ramBank] ? 4 : 1) / 8;
-        }
-        else if(cmdOffset == 1)
-        {
-            auto cmd = ramCommand[ramBank] = data >> 24;
-
-            if(cmd == 0x35)
-            {
-                logf(LogLevel::Debug, logComponent, "psram %i quad enabled", ramBank);
-                ramQuadEnabled[ramBank] = true;
-            }
-            else if(cmd == 0x38) // write
-                ramCmdAddr[ramBank] = data & 0xFFFFFF;
-            else if(cmd == 0xEB) // read
-            {
-                ramCmdAddr[ramBank] = data & 0xFFFFFF;
-                ramCmdLenWords[ramBank] = 3; // the "data" part is read, not written
-            }
-            else
-                logf(LogLevel::Debug, logComponent, "psram %i cmd %02X %06X len %i", ramBank, cmd, data & 0xFFFFFF, dataLenBytes);
-        }
-        else if(cmdOffset == 2 && !isResetProg)
-        {
-            // pio addr
-        }
-        else // data
-        {
-            if(ramCommand[ramBank] == 0x38) // write
-            {
-                auto offset = (cmdOffset - 3) * 4;
-
-                int len = std::min(4, dataLenBytes - offset);
-
-                auto ptr = psramData[ramBank] + ramCmdAddr[ramBank] + offset;
-
-                for(int i = 0; i < len; i++)
-                {
-                    *ptr++ = data >> 24;
-
-                    data <<= 8;
-                }
-            }
-        }
-
-        cmdOffset++;
+        ramDataLenBytes[ramBank] = dataLenBytes = (data + 1) * (ramQuadEnabled[ramBank] ? 4 : 1) / 8;
     }
+    else if(cmdOffset == 1)
+    {
+        auto cmd = ramCommand[ramBank] = data >> 24;
+
+        if(cmd == 0x35)
+        {
+            logf(LogLevel::Debug, logComponent, "psram %i quad enabled", ramBank);
+            ramQuadEnabled[ramBank] = true;
+        }
+        else if(cmd == 0x38) // write
+            ramCmdAddr[ramBank] = data & 0xFFFFFF;
+        else if(cmd == 0xEB) // read
+        {
+            ramCmdAddr[ramBank] = data & 0xFFFFFF;
+            ramCmdLenWords[ramBank] = 3; // the "data" part is read, not written
+        }
+        else
+            logf(LogLevel::Debug, logComponent, "psram %i cmd %02X %06X len %i", ramBank, cmd, data & 0xFFFFFF, dataLenBytes);
+    }
+    else if(cmdOffset == 2 && !isResetProg)
+    {
+        // pio addr
+    }
+    else // data
+    {
+        if(ramCommand[ramBank] == 0x38) // write
+        {
+            auto offset = (cmdOffset - 3) * 4;
+
+            int len = std::min(4, dataLenBytes - offset);
+
+            auto ptr = psramData[ramBank] + ramCmdAddr[ramBank] + offset;
+
+            for(int i = 0; i < len; i++)
+            {
+                *ptr++ = data >> 24;
+
+                data <<= 8;
+            }
+        }
+    }
+
+    cmdOffset++;
 
     ramCmdOffset[ramBank] = cmdOffset;
 }
