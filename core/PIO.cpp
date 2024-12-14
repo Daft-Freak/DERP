@@ -490,7 +490,7 @@ void PIO::regWrite(uint64_t time, uint32_t addr, uint32_t data)
                 instrs[i][off] = decodeInstruction(hw.instr_mem[off], i);
             
                 if(hw.ctrl & (1 << (PIO_CTRL_SM_ENABLE_LSB + i)))
-                    analyseProgram(i);
+                    analyseProgram(i, off);
             }
             return;
         }
@@ -724,7 +724,7 @@ PIO::Instruction PIO::decodeInstruction(uint16_t op, int sm)
     return instr;
 }
 
-void PIO::analyseProgram(int sm)
+void PIO::analyseProgram(int sm, int modInstrIndex)
 {
     if(failedAnalysisAttempts > 1000)
         return;
@@ -736,6 +736,9 @@ void PIO::analyseProgram(int sm)
 
     int wrapTop = (hw.sm[sm].execctrl & PIO_SM0_EXECCTRL_WRAP_TOP_BITS) >> PIO_SM0_EXECCTRL_WRAP_TOP_LSB;
     int wrapBottom = (hw.sm[sm].execctrl & PIO_SM0_EXECCTRL_WRAP_BOTTOM_BITS) >> PIO_SM0_EXECCTRL_WRAP_BOTTOM_LSB;
+
+    if(modInstrIndex != -1 && (modInstrIndex < wrapBottom || modInstrIndex > wrapTop))
+        return;
 
     logf(LogLevel::Debug, logComponent, "%i SM%i wrap %i -> %i", index, sm, wrapTop, wrapBottom);
 

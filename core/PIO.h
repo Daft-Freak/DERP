@@ -68,7 +68,7 @@ private:
 
     Instruction decodeInstruction(uint16_t op, int sm);
 
-    void analyseProgram(int sm);
+    void analyseProgram(int sm, int modInstrIndex = -1);
 
     int getDREQNum(int sm, bool isTx) const;
 
