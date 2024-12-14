@@ -129,6 +129,11 @@ void PIO::reset()
     hw.inte1 = PIO_IRQ1_INTE_RESET;
     hw.intf1 = PIO_IRQ1_INTF_RESET;
 
+    speedHack = false;
+
+    for(auto &c : speedHackCounter)
+        c = 0;
+
     for(auto &c : clockFrac)
         c = 0;
 
@@ -138,6 +143,9 @@ void PIO::reset()
         c = 0;
     
     for(auto &c : minCyclesBetweenPulls)
+        c = 0;
+
+    for(auto &c : cyclesBetweenPulls)
         c = 0;
 }
 
@@ -221,6 +229,11 @@ void PIO::update(uint64_t target)
     // save remaining fraction cycles
     for(unsigned i = 0; i < NUM_PIO_STATE_MACHINES; i++)
         clockFrac[i] = (cycles << 8) - smCycles[i];
+}
+
+void PIO::setSpeedHackEnabled(bool enabled)
+{
+    speedHack = enabled;
 }
 
 void PIO::setUpdateCallback(UpdateCallback cb)
@@ -364,13 +377,18 @@ void PIO::regWrite(uint64_t time, uint32_t addr, uint32_t data)
                 for(unsigned i = 0; i < NUM_PIO_STATE_MACHINES; i++)
                 {
                     if(enabled & (1 << (PIO_CTRL_SM_ENABLE_LSB + i)))
+                    {
                         logf(LogLevel::Debug, logComponent, "%i SM%i enabled CLKDIV %08X EXECCTRL %08X SHIFTCTRL %08X PINCTRL %08X", index, i, hw.sm[i].clkdiv, hw.sm[i].execctrl, hw.sm[i].shiftctrl, hw.sm[i].pinctrl);
+                        analyseProgram(i);
+                    }
 
                     if(hw.ctrl & (1 << (PIO_CTRL_SM_RESTART_LSB + i)))
                     {
                         logf(LogLevel::Debug, logComponent, "%i SM%i restarted", index, i);
                         regs[i].isr = 0;
                         regs[i].osc = regs[i].isc = 0;
+
+                        speedHackCounter[i] = 0;
 
                         cyclesSinceLastPull[i] = minCyclesBetweenPulls[i] = 0;
                         rxStall &= ~(1 << i);
@@ -461,7 +479,12 @@ void PIO::regWrite(uint64_t time, uint32_t addr, uint32_t data)
             int off = (addr - PIO_INSTR_MEM0_OFFSET) / 4;
             updateReg(hw.instr_mem[off], data, atomic);
             for(unsigned i = 0; i < NUM_PIO_STATE_MACHINES; i++)
+            {
                 instrs[i][off] = decodeInstruction(hw.instr_mem[off], i);
+            
+                if(hw.ctrl & (1 << (PIO_CTRL_SM_ENABLE_LSB + i)))
+                    analyseProgram(i);
+            }
             return;
         }
 
@@ -687,6 +710,92 @@ PIO::Instruction PIO::decodeInstruction(uint16_t op, int sm)
     return instr;
 }
 
+void PIO::analyseProgram(int sm)
+{
+    bool autopull = hw.sm[sm].shiftctrl & PIO_SM0_SHIFTCTRL_AUTOPULL_BITS;
+    int pullThreshold = (hw.sm[sm].shiftctrl & PIO_SM0_SHIFTCTRL_PULL_THRESH_BITS) >> PIO_SM0_SHIFTCTRL_PULL_THRESH_LSB;
+    if(pullThreshold == 0)
+        pullThreshold = 32;
+
+    int wrapTop = (hw.sm[sm].execctrl & PIO_SM0_EXECCTRL_WRAP_TOP_BITS) >> PIO_SM0_EXECCTRL_WRAP_TOP_LSB;
+    int wrapBottom = (hw.sm[sm].execctrl & PIO_SM0_EXECCTRL_WRAP_BOTTOM_BITS) >> PIO_SM0_EXECCTRL_WRAP_BOTTOM_LSB;
+
+    logf(LogLevel::Debug, logComponent, "%i SM%i wrap %i -> %i", index, sm, wrapTop, wrapBottom);
+
+    static const char *instrNames[]{"JMP", "WAIT", "IN", "OUT", "PUSH/PULL", "MOV", "IRQ", "SET"};
+
+    bool unhandled = false;
+
+    int outCount = 32;
+    int totalOutBits = 0;
+    int cycles = 0;
+    int numPulls = 0;
+
+    for(int i = wrapBottom; i <= wrapTop; i++)
+    {
+        if(autopull && outCount >= pullThreshold)
+        {
+            outCount = 0;
+            numPulls++;
+        }
+
+        auto &instr = instrs[sm][i];
+        switch(instr.op)
+        {
+            case jmpOp(JmpCond::OutNotEmpty):
+            {
+                if(outCount < pullThreshold)
+                    i = instr.params[0] - 1;
+                break;
+            }
+
+            case outOp():
+                outCount += instr.params[1];
+                totalOutBits++;
+                if(outCount > 32) outCount = 32;
+                break;
+
+            case pullOp():
+                // ignore ifEmpty, autopull?
+                numPulls++;
+                outCount = 0;
+                break;
+
+            case movOp(MovDest::X, MovOp::None):
+                break;
+
+            case movOp(MovDest::OSR, MovOp::None):
+                outCount = 0; // resets shift counter
+                break;
+
+            case 0xAB: // NOP
+                break;
+
+            default:
+                logf(LogLevel::Debug, logComponent, "%i SM%i %s (%02X)", index, sm, instrNames[instr.op >> 5], instr.op);
+                unhandled = true;
+        }
+
+        cycles++;
+    }
+    
+    cyclesBetweenPulls[sm] = 0;
+
+    if(unhandled)
+        return;
+
+    // attempt to figure out how frequently this program will pull
+    if(numPulls == 1 && totalOutBits && (pullThreshold % totalOutBits) == 0)
+        cyclesBetweenPulls[sm] = cycles * (pullThreshold / totalOutBits);
+    else if(totalOutBits > pullThreshold && numPulls == 1)
+        cyclesBetweenPulls[sm] = cycles;
+
+    logf(LogLevel::Debug, logComponent, "%i SM%i out %i bits in %i cycles (%i pulls, %i between pulls)", index, sm, totalOutBits, cycles, numPulls, cyclesBetweenPulls[sm]);
+
+    if(speedHack)
+        minCyclesBetweenPulls[sm] = cyclesBetweenPulls[sm];
+}
+
 int PIO::getDREQNum(int sm, bool isTx) const
 {
     return index * (DREQ_PIO1_TX0 - DREQ_PIO0_TX0) + (isTx ? 0 : DREQ_PIO0_RX0 - DREQ_PIO0_TX0) + sm;
@@ -695,6 +804,7 @@ int PIO::getDREQNum(int sm, bool isTx) const
 void PIO::updateSM(int sm, uint32_t target, int32_t &cycleOffset)
 {
     auto clkdiv = hw.sm[sm].clkdiv >> PIO_SM0_CLKDIV_FRAC_LSB;
+
     if(txStall & (1 << sm))
     {
         // if we're stalled and the fifo is still empty, skip
@@ -707,6 +817,39 @@ void PIO::updateSM(int sm, uint32_t target, int32_t &cycleOffset)
 
         // otherwise clear stall
         txStall &= ~(1 << sm);
+    }
+
+    // in "speed hack" mode, reduce PIO program to a periodic FIFO read
+    if(speedHack && cyclesBetweenPulls[sm])
+    {
+        int numCycles = (target - cycleOffset) / clkdiv;
+        while(numCycles)
+        {
+            int step = std::min(numCycles, cyclesBetweenPulls[sm] - speedHackCounter[sm]);
+            numCycles -= step;
+            cycleOffset += clkdiv * step;
+
+            speedHackCounter[sm] += step;
+
+            if(speedHackCounter[sm] == cyclesBetweenPulls[sm])
+            {
+                if(txFifo[sm].empty())
+                {
+                    txStall |= 1 << sm;
+                    hw.fdebug |= 1 << (PIO_FDEBUG_TXSTALL_LSB + sm);
+                }
+                else
+                {
+                    auto data = txFifo[sm].pop();
+                    auto time = clock.getTimeToCycles(cycleOffset >> 8);
+                    mem.getDMA().triggerDREQ(time, getDREQNum(sm, true));
+                    if(txCallback)
+                        txCallback(time, *this, sm, data);
+                }
+                speedHackCounter[sm] = 0;
+            }
+        }
+        return;
     }
 
     // TODO: EXEC latch, delays

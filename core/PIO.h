@@ -26,6 +26,8 @@ public:
         return hw.inte0 || hw.inte1;
     }
 
+    void setSpeedHackEnabled(bool enabled);
+
     void setUpdateCallback(UpdateCallback cb);
     void setTXCallback(TXCallback cb);
 
@@ -65,6 +67,9 @@ private:
     };
 
     Instruction decodeInstruction(uint16_t op, int sm);
+
+    void analyseProgram(int sm);
+
     int getDREQNum(int sm, bool isTx) const;
 
     void updateSM(int sm, uint32_t target, int32_t &cycleOffset);
@@ -76,6 +81,9 @@ private:
     ClockTarget clock;
 
     pio_hw_t hw;
+
+    bool speedHack;
+    int speedHackCounter[NUM_PIO_STATE_MACHINES];
 
     UpdateCallback updateCallback;
     TXCallback txCallback;
@@ -106,4 +114,8 @@ private:
     // best-case time between pulls
     uint32_t cyclesSinceLastPull[NUM_PIO_STATE_MACHINES];
     uint32_t minCyclesBetweenPulls[NUM_PIO_STATE_MACHINES];
+
+    // info analysed from program
+    int cyclesBetweenPulls[NUM_PIO_STATE_MACHINES];
+
 };
