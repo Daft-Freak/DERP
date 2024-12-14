@@ -13,7 +13,6 @@ class MemoryBus;
 class PIO final : public ClockedDevice
 {
 public:
-    using UpdateCallback = std::function<void(uint64_t, PIO &pio)>;
     using TXCallback = std::function<void(uint64_t, PIO &pio, int, uint32_t)>;
 
     PIO(MemoryBus &mem, int index);
@@ -28,7 +27,6 @@ public:
 
     void setSpeedHackEnabled(bool enabled);
 
-    void setUpdateCallback(UpdateCallback cb);
     void setTXCallback(TXCallback cb);
 
     uint64_t getNextInterruptTime(uint64_t target);
@@ -85,7 +83,6 @@ private:
     bool speedHack;
     int speedHackCounter[NUM_PIO_STATE_MACHINES];
 
-    UpdateCallback updateCallback;
     TXCallback txCallback;
 
     uint32_t clockFrac[NUM_PIO_STATE_MACHINES];

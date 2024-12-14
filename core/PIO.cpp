@@ -160,10 +160,6 @@ void PIO::update(uint64_t target)
 {
     auto cycles = clock.getCyclesToTime(target);
 
-    // this is almost certainly a hack to work around timing issues
-    //if(updateCallback && ~(hw.fstat & PIO_FSTAT_TXEMPTY_BITS))
-    //    updateCallback(clock.getTime(), *this);
-
     if(!cycles)
         return;
 
@@ -243,11 +239,6 @@ void PIO::setSpeedHackEnabled(bool enabled)
     speedHack = enabled;
 }
 
-void PIO::setUpdateCallback(UpdateCallback cb)
-{
-    updateCallback = cb;
-}
-
 void PIO::setTXCallback(TXCallback cb)
 {
     txCallback = cb;
@@ -278,15 +269,6 @@ uint32_t PIO::regRead(uint64_t time, uint32_t addr)
         case PIO_FDEBUG_OFFSET:
         {
             update(time);
-
-            // HACK: set txstall if FIFO empty
-            // FIXME: this is wrong but we're not running the program
-            /*for(unsigned i = 0; i < NUM_PIO_STATE_MACHINES; i++)
-            {
-                if(txFifo[i].empty())
-                    hw.fdebug |= 1 << (PIO_FDEBUG_TXSTALL_LSB + i);
-            }*/
-
             return hw.fdebug;
         }
 
