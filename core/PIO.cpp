@@ -863,6 +863,10 @@ void PIO::analyseProgram(int sm)
     if(unhandled)
         return;
 
+    // if we have autopull and a program that shifts out all the bits before the end, we end up with an extra pull
+    if(autopull && totalOutBits == pullThreshold)
+        numPulls--;
+
     // attempt to figure out how frequently this program will pull
     if(numPulls == 1 && totalOutBits && (pullThreshold % totalOutBits) == 0)
         cyclesBetweenPulls[sm] = cycles * (pullThreshold / totalOutBits);
