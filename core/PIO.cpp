@@ -834,9 +834,12 @@ void PIO::analyseProgram(int sm, int modInstrIndex)
             }
 
             case pullOp():
-                // ignore ifEmpty, autopull?
-                numPulls++;
-                outCount = 0;
+                // ignore ifEmpty?
+                if(!autopull || outCount > 0)
+                {
+                    numPulls++;
+                    outCount = 0;
+                }
                 break;
 
             case movOp(MovDest::X, MovOp::None):
@@ -1290,6 +1293,12 @@ PIO::ExecResult PIO::executeSMInstruction(int sm, const Instruction &instr, uint
             {
                 // ignore if below threshold
                 if(regs.osc < getPullThreshold(sm))
+                    return ExecResult::Done;
+            }
+            else if(regs.osc == 0)
+            {
+                // PULL is a no-op if autopull is enabled and OSR is full
+                if(hw.sm[sm].shiftctrl & PIO_SM0_SHIFTCTRL_AUTOPULL_BITS)
                     return ExecResult::Done;
             }
 
