@@ -190,7 +190,10 @@ void PIO::update(uint64_t target)
     while(true)
     {
         // sync to next SM or end
-        int32_t target = curSM == NUM_PIO_STATE_MACHINES - 1 ? (cycles << 8) : smCycles[curSM + 1];
+        // round up by next SMs clkdiv in case it's higher
+        int32_t target = cycles << 8;
+        if(curSM < NUM_PIO_STATE_MACHINES - 1)
+            target = std::min(target, smCycles[curSM + 1] + clkdiv[curSM + 1] - 1);
 
         // update
         // skip if not enabled, otherwise run
