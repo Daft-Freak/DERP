@@ -393,7 +393,8 @@ void PIO::regWrite(uint64_t time, uint32_t addr, uint32_t data)
                     {
                         logf(LogLevel::Debug, logComponent, "%i SM%i restarted", index, i);
                         regs[i].isr = 0;
-                        regs[i].osc = regs[i].isc = 0;
+                        regs[i].osc = 32;
+                        regs[i].isc = 0;
 
                         speedHackCounter[i] = 0;
 
