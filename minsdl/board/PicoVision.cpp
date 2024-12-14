@@ -269,16 +269,6 @@ void PicoVisionBoard::onPIOTX(uint64_t time, PIO &pio, int sm, uint32_t data)
     // PSRAM
     int ramBank = (mem.getGPIO().getPadState() & (1 << 8)) ? 1 : 0;
 
-    if(lastRamBank != ramBank)
-    {
-        // if just changed bank and last bank not finished by one word overwrite bank
-        // this is definitely not another sync hack
-        if(ramCmdOffset[lastRamBank] && ramCmdOffset[lastRamBank] == ramCmdLenWords[lastRamBank] - 1)
-            std::swap(ramBank, lastRamBank);
-        else
-            lastRamBank = ramBank;
-    }
-
     auto cmdLenWords = ramCmdLenWords[ramBank];
     auto cmdOffset = ramCmdOffset[ramBank];
     auto dataLenBytes = ramDataLenBytes[ramBank];
