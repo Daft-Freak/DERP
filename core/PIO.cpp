@@ -69,6 +69,11 @@ static constexpr uint8_t jmpOp(JmpCond cond)
     return extendedOp(PIOOpcode::JMP, static_cast<int>(cond) << 2);
 }
 
+static constexpr uint8_t inOp()
+{
+    return extendedOp(PIOOpcode::IN, 0);
+}
+
 static constexpr uint8_t outOp()
 {
     return extendedOp(PIOOpcode::OUT, 0);
@@ -650,8 +655,8 @@ PIO::Instruction PIO::decodeInstruction(uint16_t op, int sm)
             if(instr.params[1] == 0)
                 instr.params[1] = 32;
 
-            if(op >> 13 == 2)
-                logf(LogLevel::NotImplemented, logComponent, "%i IN %04X", index, op);
+            if(op >> 13 == 2 && instr.params[0] == 0)
+                logf(LogLevel::NotImplemented, logComponent, "%i IN PINS", index);
 
             // also OUT PINS, but we should add that one first anyway...
             if(op >> 13 == 3 && instr.params[0] == 4)
@@ -1002,6 +1007,16 @@ PIO::ExecResult PIO::executeSMInstruction(int sm, const Instruction &instr, uint
         return thresh == 0 ? 32 : thresh;
     };
 
+    auto doPush = [this, clockOffset, &regs](int sm)
+    {
+        rxFifo[sm].push(regs.isr);
+        regs.isc = 0;
+        regs.isr = 0;
+
+        auto time = clock.getTimeToCycles(clockOffset);
+        mem.getDMA().triggerDREQ(time, getDREQNum(sm, false));
+    };
+
     auto doPull = [this, clockOffset, &regs](int sm)
     {
         regs.osr = txFifo[sm].pop();
@@ -1018,6 +1033,13 @@ PIO::ExecResult PIO::executeSMInstruction(int sm, const Instruction &instr, uint
 
         if(!minCyclesBetweenPulls[sm] || pullCycles < minCyclesBetweenPulls[sm])
             minCyclesBetweenPulls[sm] = pullCycles;
+    };
+
+    auto stallRX = [this](int sm)
+    {
+        rxStall |= 1 << sm;
+        hw.fdebug |= 1 << (PIO_FDEBUG_RXSTALL_LSB + sm);
+        return ExecResult::Stalled;
     };
 
     auto stallTX = [this](int sm)
@@ -1097,6 +1119,63 @@ PIO::ExecResult PIO::executeSMInstruction(int sm, const Instruction &instr, uint
                 return jump(sm, instr.params[0]);
             break;
 
+        case inOp():
+        {
+            int count = instr.params[1];
+
+            uint32_t data = 0;
+
+            switch(instr.params[0])
+            {
+                case 0: // PINS
+                    break;
+                case 1: // X
+                    data = regs.x;
+                    break;
+                case 2: // Y
+                    data = regs.y;
+                    break;
+                case 3: // NULL
+                    data = 0;
+                    break;
+                case 6: // ISR
+                    data = regs.isr;
+                    break;
+                case 7: // OSR
+                    data = regs.osr;
+                    break;
+            }
+
+            data &= (1 << count) - 1;
+
+            // shift and insert
+            bool shiftRight = hw.sm[sm].shiftctrl & PIO_SM0_SHIFTCTRL_IN_SHIFTDIR_BITS;
+
+            if(shiftRight)
+                regs.isr = regs.isr >> count | data << (32 - count);
+            else
+                regs.isr = regs.isr << count | data;
+
+            regs.isc += count;
+            if(regs.isc > 32)
+                regs.isc = 32;
+
+            bool autopush = hw.sm[sm].shiftctrl & PIO_SM0_SHIFTCTRL_AUTOPUSH_BITS;
+            if(autopush)
+            {
+                if(regs.isc >= getPushThreshold(sm))
+                {
+                    // stall if empty
+                    if(rxFifo[sm].full())
+                        return stallRX(sm);
+
+                    doPush(sm);
+                }
+            }
+
+            break;
+        }
+
         case outOp():
         {
             bool autopull = hw.sm[sm].shiftctrl & PIO_SM0_SHIFTCTRL_AUTOPULL_BITS;
@@ -1128,7 +1207,7 @@ PIO::ExecResult PIO::executeSMInstruction(int sm, const Instruction &instr, uint
             }
             else
             {
-                data = (regs.osr >> (31 - count)) & ((1 << count) - 1);
+                data = (regs.osr >> (32 - count)) & ((1 << count) - 1);
                 regs.osr <<= count;
             }
 
@@ -1179,27 +1258,23 @@ PIO::ExecResult PIO::executeSMInstruction(int sm, const Instruction &instr, uint
             // stall if FIFO full
             if(rxFifo[sm].full())
             {
+                // need to do this even if non-blocking
                 hw.fdebug |= 1 << (PIO_FDEBUG_RXSTALL_LSB + sm);
 
                 bool block = instr.params[1];
 
-                if(block)
-                    rxStall |= 1 << sm;
-                else
+                if(!block)
                 {
                     // non-blocking drops the data
                     regs.isc = 0;
                     regs.isr = 0;
                 }
 
-                return block ? ExecResult::Done : ExecResult::Done; // stall SM if block is set, otherwise ignore push
+                return block ? stallRX(sm) : ExecResult::Done; // stall SM if block is set, otherwise ignore push
             }
 
             // FIFO not full, push
-            rxFifo[sm].push(regs.isr);
-            regs.isc = 0;
-            regs.isr = 0;
-            mem.getDMA().triggerDREQ(clock.getTimeToCycles(clockOffset), getDREQNum(sm, false));
+            doPush(sm);
 
             break;
         }
