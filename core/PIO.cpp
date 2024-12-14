@@ -730,6 +730,8 @@ void PIO::analyseProgram(int sm, int modInstrIndex)
         return;
 
     bool autopull = hw.sm[sm].shiftctrl & PIO_SM0_SHIFTCTRL_AUTOPULL_BITS;
+    bool autopush = hw.sm[sm].shiftctrl & PIO_SM0_SHIFTCTRL_AUTOPUSH_BITS;
+
     int pullThreshold = (hw.sm[sm].shiftctrl & PIO_SM0_SHIFTCTRL_PULL_THRESH_BITS) >> PIO_SM0_SHIFTCTRL_PULL_THRESH_LSB;
     if(pullThreshold == 0)
         pullThreshold = 32;
@@ -805,11 +807,29 @@ void PIO::analyseProgram(int sm, int modInstrIndex)
                 break;
             }
 
+            case inOp():
+            {
+                if(autopush)
+                {
+                    // we don't really handle input
+                    unhandled = true;
+                    logf(LogLevel::Debug, logComponent, "%i SM%i IN/PUSH", index, sm);
+                }
+
+                // doesn't have much effect with no PUSHes
+                
+                break;
+            }
+
             case outOp():
             {
                 outCount += instr.params[1];
                 totalOutBits += instr.params[1];
-                if(outCount > 32) outCount = 32;
+                if(outCount > 32)
+                {
+                    totalOutBits -= outCount - 32;
+                    outCount = 32;
+                }
 
                 switch(instr.params[0])
                 {
@@ -842,7 +862,15 @@ void PIO::analyseProgram(int sm, int modInstrIndex)
                 }
                 break;
 
+            case movOp(MovDest::Pins, MovOp::None):
+            case movOp(MovDest::Pins, MovOp::Invert):
+            case movOp(MovDest::Pins, MovOp::Reverse):
+                break;
+
             case movOp(MovDest::X, MovOp::None):
+            case movOp(MovDest::X, MovOp::Invert):
+            case movOp(MovDest::X, MovOp::Reverse):
+                xSet = false; // unless src was X, Y or NULL
                 break;
 
             case movOp(MovDest::OSR, MovOp::None):
@@ -890,14 +918,16 @@ void PIO::analyseProgram(int sm, int modInstrIndex)
     }
 
     // if we have autopull and a program that shifts out all the bits before the end, we end up with an extra pull
-    if(autopull && totalOutBits == pullThreshold)
+    if(autopull && totalOutBits % pullThreshold == 0)
         numPulls--;
 
     // attempt to figure out how frequently this program will pull
-    if(numPulls == 1 && totalOutBits && (pullThreshold % totalOutBits) == 0)
+    if(numPulls == 1 && totalOutBits && (pullThreshold % totalOutBits) == 0) // outputs fraction of a word (serial output)
         cyclesBetweenPulls[sm] = cycles * (pullThreshold / totalOutBits);
-    else if(totalOutBits > pullThreshold && numPulls == 1)
+    else if(totalOutBits > pullThreshold && numPulls == 1) // only pulls once and probably outputs the entire thing
         cyclesBetweenPulls[sm] = cycles;
+    else if(totalOutBits / pullThreshold == numPulls && totalOutBits % pullThreshold == 0) // multiple words per iteration
+        cyclesBetweenPulls[sm] = cycles / numPulls;
 
     logf(LogLevel::Debug, logComponent, "%i SM%i out %i bits in %i cycles (%i pulls, %i between pulls)", index, sm, totalOutBits, cycles, numPulls, cyclesBetweenPulls[sm]);
 
