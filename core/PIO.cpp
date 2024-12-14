@@ -147,6 +147,8 @@ void PIO::reset()
 
     for(auto &c : cyclesBetweenPulls)
         c = 0;
+
+    failedAnalysisAttempts = 0;
 }
 
 void PIO::update(uint64_t target)
@@ -712,6 +714,9 @@ PIO::Instruction PIO::decodeInstruction(uint16_t op, int sm)
 
 void PIO::analyseProgram(int sm)
 {
+    if(failedAnalysisAttempts > 1000)
+        return;
+
     bool autopull = hw.sm[sm].shiftctrl & PIO_SM0_SHIFTCTRL_AUTOPULL_BITS;
     int pullThreshold = (hw.sm[sm].shiftctrl & PIO_SM0_SHIFTCTRL_PULL_THRESH_BITS) >> PIO_SM0_SHIFTCTRL_PULL_THRESH_LSB;
     if(pullThreshold == 0)
@@ -861,7 +866,10 @@ void PIO::analyseProgram(int sm)
     cyclesBetweenPulls[sm] = 0;
 
     if(unhandled)
+    {
+        failedAnalysisAttempts++;
         return;
+    }
 
     // if we have autopull and a program that shifts out all the bits before the end, we end up with an extra pull
     if(autopull && totalOutBits == pullThreshold)

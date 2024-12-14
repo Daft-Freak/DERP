@@ -117,5 +117,5 @@ private:
 
     // info analysed from program
     int cyclesBetweenPulls[NUM_PIO_STATE_MACHINES];
-
+    int failedAnalysisAttempts;
 };
