@@ -24,5 +24,5 @@ private:
     int screenDataOff = 0;
     bool doDisplayWrite = false;
 
-    void onPIOUpdate(uint64_t time, PIO &pio);
+    void onPIOTX(uint64_t time, PIO &pio, int sm, uint32_t data);
 };

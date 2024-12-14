@@ -11,7 +11,7 @@ constexpr auto logComponent = Logging::Component::Board;
 
 Tufty2040Board::Tufty2040Board(MemoryBus &mem) : mem(mem)
 {
-    mem.getPIO(1).setUpdateCallback([this](auto time, auto &pio){onPIOUpdate(time, pio);});
+    mem.getPIO(1).setTXCallback([this](auto time, auto &pio, auto sm, auto data){onPIOTX(time, pio, sm, data);});
 }
 
 void Tufty2040Board::getScreenSize(int &w, int &h)
@@ -30,39 +30,34 @@ const uint8_t *Tufty2040Board::getScreenData()
     return screenData;
 }
 
-void Tufty2040Board::onPIOUpdate(uint64_t time, PIO &pio)
+void Tufty2040Board::onPIOTX(uint64_t time, PIO &pio, int sm, uint32_t data)
 {
-    // display is usually PIO1 SM0
-    auto &txFifo = pio.getTXFIFO(0);
+    if(sm != 0)
+        return;
 
     bool rs = mem.getGPIO().getPadState() & (1 << 11);
 
-    if(txFifo.empty())
-        return;
+    data &= 0xFF;
 
-    while(!txFifo.empty())
+    if(!rs)
     {
-        auto data = txFifo.pop() & 0xFF;
-        if(!rs)
-        {
-            doDisplayWrite = false;
+        doDisplayWrite = false;
 
-            // RAM write command
-            if(data == 0x2C)
-            {
-                screenDataOff = 0;
-                doDisplayWrite = true;
-            }
-            else if(data)
-                logf(LogLevel::Debug, logComponent, "tf display cmd %02X", data);
-        }
-        else if(doDisplayWrite)
+        // RAM write command
+        if(data == 0x2C)
         {
-            screenData[screenDataOff ^ 1] = data & 0xFF; // byte swap
-            screenDataOff++;
-
-            if(screenDataOff == 320 * 240 * 2)
-                screenDataOff = 0;
+            screenDataOff = 0;
+            doDisplayWrite = true;
         }
+        else if(data)
+            logf(LogLevel::Debug, logComponent, "tf display cmd %02X", data);
+    }
+    else if(doDisplayWrite)
+    {
+        screenData[screenDataOff ^ 1] = data & 0xFF; // byte swap
+        screenDataOff++;
+
+        if(screenDataOff == 320 * 240 * 2)
+            screenDataOff = 0;
     }
 }
