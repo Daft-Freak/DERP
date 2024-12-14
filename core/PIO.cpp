@@ -644,9 +644,11 @@ PIO::Instruction PIO::decodeInstruction(uint16_t op, int sm)
         }
         case 2: // IN
         case 3: // OUT
-        case 7: // SET
-            instr.params[0] = (op >> 5) & 7; // source/dest/dest
-            instr.params[1] = op & 0x1F; // count/count/data
+            instr.params[0] = (op >> 5) & 7; // source/dest
+            instr.params[1] = op & 0x1F; // count
+
+            if(instr.params[1] == 0)
+                instr.params[1] = 32;
 
             if(op >> 13 == 2)
                 logf(LogLevel::NotImplemented, logComponent, "%i IN %04X", index, op);
@@ -656,10 +658,15 @@ PIO::Instruction PIO::decodeInstruction(uint16_t op, int sm)
                 logf(LogLevel::NotImplemented, logComponent, "%i OUT PINDIRS", index);
             if(op >> 13 == 3 && instr.params[0] == 7)
                 logf(LogLevel::NotImplemented, logComponent, "%i OUT EXEC", index);
+            break;
 
-            if(op >> 13 == 7 && instr.params[0] == 0)
+        case 7: // SET
+            instr.params[0] = (op >> 5) & 7; // dest
+            instr.params[1] = op & 0x1F; // data
+
+            if( instr.params[0] == 0)
                 logf(LogLevel::NotImplemented, logComponent, "%i SET PINS", index);
-            if(op >> 13 == 7 && instr.params[0] == 4)
+            if(instr.params[0] == 4)
                 logf(LogLevel::NotImplemented, logComponent, "%i SET PINDIRS", index);
             break;
 
