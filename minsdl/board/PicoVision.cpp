@@ -260,8 +260,7 @@ uint64_t PicoVisionBoard::onGetNextInterruptTime(uint64_t time)
 void PicoVisionBoard::onPIOTX(uint64_t time, PIO &pio, int sm, uint32_t data)
 {
     // 32blit-sdk SD card
-    if(sm == 1)
-        pio.getRXFIFO(1).push(0xFFFFFFFF);
+    //if(sm == 1)
 
     if(sm != 0)
         return;
