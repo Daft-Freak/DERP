@@ -14,6 +14,86 @@ using Logging::logf;
 using LogLevel = Logging::Level;
 constexpr auto logComponent = Logging::Component::PIO;
 
+// high three bits
+enum class PIOOpcode
+{
+    JMP = 0,
+    WAIT,
+    IN,
+    OUT,
+    PUSH,
+    PULL = PUSH,
+    MOV,
+    IRQ,
+    SET,
+};
+
+enum class JmpCond
+{
+    Always = 0,
+    NotX,
+    XDec,
+    NotY,
+    YDec,
+    XNotEqY,
+    Pin,
+    OutNotEmpty,
+};
+
+enum class MovDest
+{
+    Pins = 0,
+    X,
+    Y,
+    Exec = 4,
+    PC,
+    ISR,
+    OSR,
+};
+
+enum class MovOp
+{
+    None = 0,
+    Invert,
+    Reverse
+};
+
+// "extended" encoding
+static constexpr uint8_t extendedOp(PIOOpcode op, int low)
+{
+    return static_cast<uint8_t>(op) << 5 | low;
+}
+
+static constexpr uint8_t jmpOp(JmpCond cond)
+{
+    return extendedOp(PIOOpcode::JMP, static_cast<int>(cond) << 2);
+}
+
+static constexpr uint8_t outOp()
+{
+    return extendedOp(PIOOpcode::OUT, 0);
+}
+
+static constexpr uint8_t pushOp()
+{
+    return extendedOp(PIOOpcode::PUSH, 0);
+}
+
+static constexpr uint8_t pullOp()
+{
+    return extendedOp(PIOOpcode::PULL, 1 << 4);
+}
+
+static constexpr uint8_t movOp(MovDest dest, MovOp op)
+{
+    return extendedOp(PIOOpcode::MOV, static_cast<int>(dest) << 2 | static_cast<int>(op));
+}
+
+static constexpr uint8_t setOp()
+{
+    return extendedOp(PIOOpcode::SET, 0);
+}
+
 PIO::PIO(MemoryBus &mem, int index) : mem(mem), index(index)
 {
 }
@@ -740,43 +820,43 @@ PIO::ExecResult PIO::executeSMInstruction(int sm, const Instruction &instr, uint
 
     switch(instr.op)
     {
-        case 0x00: // JMP (always)
+        case jmpOp(JmpCond::Always):
             return jump(sm, instr.params[0]);
     
-        case 0x04: // JMP !X
+        case jmpOp(JmpCond::NotX):
             if(regs.x == 0)
                 return jump(sm, instr.params[0]);
             break;
 
-        case 0x08: // JMP X--
+        case jmpOp(JmpCond::XDec):
             if(regs.x-- != 0)
                 return jump(sm, instr.params[0]);
             break;
 
-        case 0x0C: // JMP !Y
+        case jmpOp(JmpCond::NotY):
             if(regs.y == 0)
                 return jump(sm, instr.params[0]);
             break;
 
-        case 0x10: // JMP Y--
+        case jmpOp(JmpCond::YDec):
             if(regs.y-- != 0)
                 return jump(sm, instr.params[0]);
             break;
 
-        case 0x14: // JMP X != Y
+        case jmpOp(JmpCond::XNotEqY):
             if(regs.x != regs.y)
                 return jump(sm, instr.params[0]);
             break;
 
-        case 0x18: // JMP PIN
+        case jmpOp(JmpCond::Pin):
             break; // TODO
 
-        case 0x1C: // JMP !OSRE
+        case jmpOp(JmpCond::OutNotEmpty):
             if(regs.osc < getPullThreshold(sm))
                 return jump(sm, instr.params[0]);
             break;
 
-        case 0x60: // OUT
+        case outOp():
         {
             bool autopull = hw.sm[sm].shiftctrl & PIO_SM0_SHIFTCTRL_AUTOPULL_BITS;
             if(autopull)
@@ -844,7 +924,7 @@ PIO::ExecResult PIO::executeSMInstruction(int sm, const Instruction &instr, uint
             break;
         }
 
-        case 0x80: // PUSH
+        case pushOp():
         {
             bool ifFull = instr.params[0];
 
@@ -883,7 +963,7 @@ PIO::ExecResult PIO::executeSMInstruction(int sm, const Instruction &instr, uint
             break;
         }
 
-        case 0x90: // PULL
+        case pullOp():
         {
             bool ifEmpty = instr.params[0];
 
@@ -915,46 +995,46 @@ PIO::ExecResult PIO::executeSMInstruction(int sm, const Instruction &instr, uint
             break;
         }
 
-        //case 0xA0: // MOV PINS, x
-        //case 0xA1: // MOV PINS, ~x
-        case 0xA4: // MOV X, x
+        //case movOp(MovDest::Pins, MovOp::None):
+        //case movOp(MovDest::Pins, MovOp::Invert):
+        case movOp(MovDest::X, MovOp::None):
             regs.x = getMovSrc(instr.params[0]);
             break;
-        case 0xA5: // MOV X, ~x
+        case movOp(MovDest::X, MovOp::Invert):
             regs.x = ~getMovSrc(instr.params[0]);
             break;
-        case 0xA8: // MOV Y, x
+        case movOp(MovDest::Y, MovOp::None):
             regs.y = getMovSrc(instr.params[0]);
             break;
-        case 0xA9: // MOV Y, ~x
+        case movOp(MovDest::Y, MovOp::Invert):
             regs.y = ~getMovSrc(instr.params[0]);
             break;
-        //case 0xB0: // MOV EXEC, x
-        //case 0xB1: // MOV EXEC, ~x
-        case 0xB4: // MOV PC, x
+        //case movOp(MovDest::Exec, MovOp::None):
+        //case movOp(MovDest::Exec, MovOp::Invert):
+        case movOp(MovDest::PC, MovOp::None):
             regs.pc = getMovSrc(instr.params[0]);
             return ExecResult::Jumped;
-        case 0xB5: // MOV PC, ~x
+        case movOp(MovDest::PC, MovOp::Invert):
             regs.pc = ~getMovSrc(instr.params[0]);
             return ExecResult::Jumped;
-        case 0xB8: // MOV ISR, x
+        case movOp(MovDest::ISR, MovOp::None):
             regs.isr = getMovSrc(instr.params[0]);
             regs.isc = 0;
             break;
-        case 0xB9: // MOV ISR, ~x
+        case movOp(MovDest::ISR, MovOp::Invert):
             regs.isr = ~getMovSrc(instr.params[0]);
             regs.isc = 0;
             break;
-        case 0xBC: // MOV OSR, x
+        case movOp(MovDest::OSR, MovOp::None):
             regs.osr = getMovSrc(instr.params[0]);
             regs.osc = 0;
             break;
-        case 0xBD: // MOV OSR, ~x
+        case movOp(MovDest::OSR, MovOp::Invert):
             regs.osr = ~getMovSrc(instr.params[0]);
             regs.osc = 0;
             break;
 
-        case 0xE0: // SET
+        case setOp():
         {
             auto dest = instr.params[0];
             auto data = instr.params[1];
