@@ -731,6 +731,10 @@ void PIO::analyseProgram(int sm)
     int cycles = 0;
     int numPulls = 0;
 
+    // regs
+    uint32_t x = 0, y = 0;
+    bool xSet = false, ySet = false;
+
     for(int i = wrapBottom; i <= wrapTop; i++)
     {
         if(autopull && outCount >= pullThreshold)
@@ -742,6 +746,38 @@ void PIO::analyseProgram(int sm)
         auto &instr = instrs[sm][i];
         switch(instr.op)
         {
+            case jmpOp(JmpCond::XDec):
+            {
+                if(xSet)
+                {
+                    // we can follow this if X was set to a constant
+                    if(x-- != 0)
+                        i = instr.params[0] - 1;
+                }
+                else
+                {
+                    logf(LogLevel::Debug, logComponent, "%i SM%i JMP unknown X", index, sm);
+                    unhandled = true;
+                }
+                break;
+            }
+
+            case jmpOp(JmpCond::YDec):
+            {
+                if(ySet)
+                {
+                    // we can follow this if Y was set to a constant
+                    if(y-- != 0)
+                        i = instr.params[0] - 1;
+                }
+                else
+                {
+                    logf(LogLevel::Debug, logComponent, "%i SM%i JMP unknown Y", index, sm);
+                    unhandled = true;
+                }
+                break;
+            }
+
             case jmpOp(JmpCond::OutNotEmpty):
             {
                 if(outCount < pullThreshold)
@@ -750,10 +786,32 @@ void PIO::analyseProgram(int sm)
             }
 
             case outOp():
+            {
                 outCount += instr.params[1];
-                totalOutBits++;
+                totalOutBits += instr.params[1];
                 if(outCount > 32) outCount = 32;
+
+                switch(instr.params[0])
+                {
+                    case 0: // PINS
+                    case 4: // PINDIRS
+                    case 3: // NULL
+                        break;
+                    case 1: // X
+                        xSet = false;
+                        break;
+                    case 2: // Y
+                        ySet = false;
+                        break;
+                    case 5: // PC
+                    case 6: // ISR
+                    case 7: // EXEC
+                        logf(LogLevel::Debug, logComponent, "%i SM%i OUT %i", index, sm, instr.params[0]);
+                        unhandled = true;
+                        break;
+                }
                 break;
+            }
 
             case pullOp():
                 // ignore ifEmpty, autopull?
@@ -770,6 +828,27 @@ void PIO::analyseProgram(int sm)
 
             case 0xAB: // NOP
                 break;
+
+            case setOp():
+            {
+                auto data = instr.params[1];
+
+                switch(instr.params[0])
+                {
+                    case 0: // PINS
+                    case 4: // PINDIRS
+                        break;
+                    case 1: // X
+                        x = data;
+                        xSet = true;
+                        break;
+                    case 2: // Y
+                        y = data;
+                        ySet = true;
+                        break;
+                }
+                break;
+            }
 
             default:
                 logf(LogLevel::Debug, logComponent, "%i SM%i %s (%02X)", index, sm, instrNames[instr.op >> 5], instr.op);
