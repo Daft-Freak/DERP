@@ -329,11 +329,14 @@ uint32_t PIO::regRead(uint64_t time, uint32_t addr)
         }
 
         case PIO_SM0_ADDR_OFFSET:
+        case PIO_SM1_ADDR_OFFSET:
+        case PIO_SM2_ADDR_OFFSET:
+        case PIO_SM3_ADDR_OFFSET:
         {
             update(time);
 
-            static int counter = 0;
-            return counter++ & PIO_SM0_ADDR_BITS;
+            int sm = (addr - PIO_SM0_ADDR_OFFSET) / (PIO_SM1_ADDR_OFFSET - PIO_SM0_ADDR_OFFSET);
+            return regs[sm].pc & PIO_SM0_ADDR_BITS;
         }
 
         // INSTR
