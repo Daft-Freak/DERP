@@ -401,8 +401,8 @@ void MemoryBus::gpioUpdate(uint64_t target)
         &pwm,
         // technically affects IO, but not implemented yet
         // would also need to sync DMA most of the time
-        //&pio[0],
-        //&pio[1],
+        &pio[0],
+        &pio[1],
     };
     syncDevices(target, devices, std::size(devices));
 
