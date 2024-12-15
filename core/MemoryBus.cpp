@@ -1323,7 +1323,6 @@ uint32_t MemoryBus::doIOPORTRead(ClockTarget &masterClock, int core, uint32_t ad
             return core;
 
         case SIO_GPIO_IN_OFFSET:
-            gpioUpdate(masterClock.getTime());
             return gpio.getInputs(masterClock.getTime());
 
         case SIO_GPIO_HI_IN_OFFSET:
