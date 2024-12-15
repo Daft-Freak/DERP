@@ -214,12 +214,13 @@ uint64_t DMA::getNextInterruptTime(uint64_t target)
 
 uint32_t DMA::regRead(uint64_t time, uint32_t addr)
 {
-    update(time);
-
     if(addr < DMA_INTR_OFFSET)
     {
         int ch = addr / 0x40;
         assert(ch < numChannels);
+
+        if(channelTriggered & (1 << ch))
+            mem.syncDMA(time);
 
         switch(addr & 0x3F)
         {
@@ -247,6 +248,8 @@ uint32_t DMA::regRead(uint64_t time, uint32_t addr)
     }
     else
     {
+        mem.syncDMA(time); // technically not needed for INTE or INTF
+
         switch(addr)
         {
             case DMA_INTR_OFFSET:

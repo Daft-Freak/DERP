@@ -73,6 +73,8 @@ public:
 
     void gpioUpdate(uint64_t target);
 
+    void syncDMA(uint64_t target);
+
     uint64_t getNextInterruptTime() const {return nextInterruptTime;}
     void calcNextInterruptTime();
 
@@ -144,8 +146,6 @@ private:
     void popInterpolator(interp_hw_t &interp);
 
     bool syncDevices(uint64_t target, ClockedDevice **devices, int numDevices);
-
-    void syncDMA(uint64_t target);
 
     bool pcInCachedXIP = false;
 

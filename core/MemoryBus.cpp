@@ -409,6 +409,25 @@ void MemoryBus::gpioUpdate(uint64_t target)
     gpio.update(target);
 }
 
+void MemoryBus::syncDMA(uint64_t target)
+{
+    ClockedDevice *devices[3];
+    int numDevices = 0;
+
+    devices[numDevices++] = &dma;
+
+    // also sync DREQ-generating periphs
+    auto dmaTREQMask = dma.getActiveTREQMask();
+    
+    if(dmaTREQMask & (0xF << DREQ_PIO0_TX0 | 0xF << DREQ_PIO0_RX0))
+        devices[numDevices++] = &pio[0];
+
+    if(dmaTREQMask & (0xF << DREQ_PIO1_TX0 | 0xF << DREQ_PIO1_RX0))
+        devices[numDevices++] = &pio[1];
+
+    syncDevices(target, devices, numDevices);
+}
+
 void MemoryBus::peripheralUpdate(uint64_t target, uint32_t irqMask, ARMv6MCore *core)
 {
     if(interruptUpdateCallback)
@@ -610,25 +629,6 @@ bool MemoryBus::syncDevices(uint64_t target, ClockedDevice **devices, int numDev
     }
 
     return true;
-}
-
-void MemoryBus::syncDMA(uint64_t target)
-{
-    ClockedDevice *devices[3];
-    int numDevices = 0;
-
-    devices[numDevices++] = &dma;
-
-    // also sync DREQ-generating periphs
-    auto dmaTREQMask = dma.getActiveTREQMask();
-    
-    if(dmaTREQMask & (0xF << DREQ_PIO0_TX0 | 0xF << DREQ_PIO0_RX0))
-        devices[numDevices++] = &pio[0];
-
-    if(dmaTREQMask & (0xF << DREQ_PIO1_TX0 | 0xF << DREQ_PIO1_RX0))
-        devices[numDevices++] = &pio[1];
-
-    syncDevices(target, devices, numDevices);
 }
 
 template<class T, size_t size>
@@ -1196,7 +1196,8 @@ uint32_t MemoryBus::doAHBPeriphRead(ClockTarget &masterClock, uint32_t addr)
 
     // update DMA for any periph read
     // TODO: any access that DMA could affect, possibly filter by dest addrs
-    syncDMA(masterClock.getTime());
+    if(peripheral != AHBPeripheral::DMA)
+        syncDMA(masterClock.getTime());
 
     switch(peripheral)
     {
