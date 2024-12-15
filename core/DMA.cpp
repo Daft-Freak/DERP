@@ -313,11 +313,12 @@ void DMA::regWrite(uint64_t time, uint32_t addr, uint32_t data)
         {
             transferCount[ch] = transferCountReload[ch];
             channelTriggered |= 1 << ch;
-            dreqHandshake(time, ch);
 
             int treq = (ctrl[ch] & DMA_CH0_CTRL_TRIG_TREQ_SEL_BITS) >> DMA_CH0_CTRL_TRIG_TREQ_SEL_LSB;
             if(treq != DMA_CH0_CTRL_TRIG_TREQ_SEL_VALUE_PERMANENT)
                 activeTREQMask |= 1 << treq;
+
+            dreqHandshake(time, ch);
         }
     }
     else
@@ -364,6 +365,9 @@ bool DMA::isChannelActive(int ch) const
 
 void DMA::triggerDREQ(uint64_t time, int dreq)
 {
+    if(!(activeTREQMask & (1ull << dreq)))
+        return;
+
     // TODO: sync other periphs?
     update(time);
 
