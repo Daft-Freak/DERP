@@ -163,15 +163,18 @@ void PIO::update(uint64_t target)
     if(!cycles)
         return;
 
+    assert(cycles <= 0xFFFFFF);
+    cycles <<= 8;
+
     // skip fully disabled instance
     if(!(hw.ctrl & PIO_CTRL_SM_ENABLE_BITS))
     {
         for(unsigned i = 0; i < NUM_PIO_STATE_MACHINES; i++)
         {
             auto clkdiv = hw.sm[i].clkdiv >> PIO_SM0_CLKDIV_FRAC_LSB;
-            clockFrac[i] = (clockFrac[i] + (cycles << 8)) % clkdiv;
+            clockFrac[i] = (clockFrac[i] + cycles) % clkdiv;
         }
-        clock.addCycles(cycles);
+        clock.addCycles(cycles >> 8);
         return;
     }
 
@@ -191,7 +194,7 @@ void PIO::update(uint64_t target)
     {
         // sync to next SM or end
         // round up by next SMs clkdiv in case it's higher
-        int32_t target = cycles << 8;
+        int32_t target = cycles;
         if(curSM < NUM_PIO_STATE_MACHINES - 1)
             target = std::min(target, smCycles[curSM + 1] + clkdiv[curSM + 1] - 1);
 
@@ -216,11 +219,11 @@ void PIO::update(uint64_t target)
                 curSM++;
 
                 // ... until we find one that hasn't reached its target
-                int32_t nextTarget = curSM == NUM_PIO_STATE_MACHINES - 1 ? (cycles << 8) : smCycles[curSM + 1];
+                int32_t nextTarget = curSM == NUM_PIO_STATE_MACHINES - 1 ? cycles : smCycles[curSM + 1];
                 while(curSM < NUM_PIO_STATE_MACHINES && nextTarget - smCycles[curSM] < clkdiv[curSM])
                 {
                     curSM++;
-                    nextTarget = curSM >= NUM_PIO_STATE_MACHINES - 1 ? (cycles << 8) : smCycles[curSM + 1];
+                    nextTarget = curSM >= NUM_PIO_STATE_MACHINES - 1 ? cycles : smCycles[curSM + 1];
                 }
 
                 // nothing left to update, done
@@ -230,11 +233,11 @@ void PIO::update(uint64_t target)
         }
     }
 
-    clock.addCycles(cycles);
+    clock.addCycles(cycles >> 8);
 
     // save remaining fraction cycles
     for(unsigned i = 0; i < NUM_PIO_STATE_MACHINES; i++)
-        clockFrac[i] = (cycles << 8) - smCycles[i];
+        clockFrac[i] = cycles - smCycles[i];
 }
 
 void PIO::setSpeedHackEnabled(bool enabled)
