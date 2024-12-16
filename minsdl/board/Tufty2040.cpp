@@ -12,6 +12,9 @@ constexpr auto logComponent = Logging::Component::Board;
 Tufty2040Board::Tufty2040Board(MemoryBus &mem, const Options &options) : mem(mem)
 {
     mem.getPIO(1).setTXCallback([this](auto time, auto &pio, auto sm, auto data){onPIOTX(time, pio, sm, data);});
+
+    if(options.pioHacks)
+        mem.getPIO(1).setSpeedHackEnabled(true);
 }
 
 void Tufty2040Board::getScreenSize(int &w, int &h)

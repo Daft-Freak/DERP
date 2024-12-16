@@ -39,6 +39,10 @@ PicoSystemBoard::PicoSystemBoard(MemoryBus &mem, const Options &options) : mem(m
 
     mem.getPIO(0).setTXCallback([this](auto time, auto &pio, auto sm, auto data){onPIOTX(time, pio, sm, data);});
 
+    // should also disable this if we want IO outputs (iolog/SUMP)
+    if(options.pioHacks)
+        mem.getPIO(0).setSpeedHackEnabled(true);
+
     mem.getPWM().setOutputCallback([this](auto time, auto pwm){onPWMUpdate(time, pwm);}, 1 << 11); // audio
 
     const int fps = 40; // default to picosystem sdk setting

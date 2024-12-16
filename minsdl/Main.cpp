@@ -298,6 +298,8 @@ int main(int argc, char *argv[])
             opts.gdbEnabled = true;
         else if(arg == "--iolog" && i + 1 < argc)
             opts.ioLogPath = argv[++i];
+        else if(arg == "--no-pio-hacks")
+            opts.pioHacks = false;
         else
             break;
     }

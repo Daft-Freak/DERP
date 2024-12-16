@@ -21,6 +21,7 @@ struct Options
     bool usbEnabled = false;
     bool usbipEnabled = false;
     bool gdbEnabled = false;
+    bool pioHacks = true;
     
     std::string ioLogPath;
 };

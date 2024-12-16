@@ -80,6 +80,10 @@ static const uint8_t invGamma[1024]
 Interstate75Board::Interstate75Board(MemoryBus &mem, const Options &options) : mem(mem)
 {
     mem.getPIO(0).setTXCallback([this](auto time, auto &pio, auto sm, auto data){onPIOTX(time, pio, sm, data);});
+
+    if(options.pioHacks)
+        mem.getPIO(0).setSpeedHackEnabled(true);
+
 }
 
 void Interstate75Board::getScreenSize(int &w, int &h)

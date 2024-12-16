@@ -58,6 +58,10 @@ PicoVisionBoard::PicoVisionBoard(MemoryBus &mem, const Options &options) : mem(m
 
     mem.getPIO(1).setTXCallback([this](auto time, auto &pio, auto sm, auto data){onPIOTX(time, pio, sm, data);});
 
+    // not the RAM program
+    if(options.pioHacks)
+        mem.getPIO(0).setSpeedHackEnabled(true);
+
     mem.getI2C(1).setWriteCallback([this](auto time, auto &i2c, auto data, auto stop){onI2CWrite(time, i2c, data, stop);});
 }
 
