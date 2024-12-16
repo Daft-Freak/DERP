@@ -47,6 +47,7 @@ public:
     void dreqHandshake(uint64_t time, int dreq);
 
     uint32_t getMinCyclesBetweenPulls(int sm) const {return minCyclesBetweenPulls[sm];}
+    void resetMinCyclesBetweenPulls(int sm);
 
 private:
     struct Instruction

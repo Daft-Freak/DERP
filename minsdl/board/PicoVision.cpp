@@ -314,6 +314,10 @@ void PicoVisionBoard::onPIOTX(uint64_t time, PIO &pio, int sm, uint32_t data)
         {
             auto offset = (cmdOffset - 3) * 4;
 
+            // data takes more cycles that the initial command, so recalculate for more perf
+            if(!offset)
+                pio.resetMinCyclesBetweenPulls(0);
+
             int len = std::min(4, dataLenBytes - offset);
 
             auto ptr = psramData[ramBank] + ramCmdAddr[ramBank] + offset;

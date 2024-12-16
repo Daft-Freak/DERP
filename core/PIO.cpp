@@ -608,6 +608,12 @@ void PIO::dreqHandshake(uint64_t time, int dreq)
     }
 }
 
+void PIO::resetMinCyclesBetweenPulls(int sm)
+{
+    minCyclesBetweenPulls[sm] = 0;
+    cyclesSinceLastPull[sm] = 0;
+}
+
 PIO::Instruction PIO::decodeInstruction(uint16_t op, int sm)
 {
     Instruction instr;
