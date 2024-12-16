@@ -10,6 +10,8 @@
 #include "GDBServer.h"
 #include "Logging.h"
 
+#include "Main.h"
+
 #include "board/Pico.h"
 #include "board/Interstate75.h"
 #include "board/PicoSystem.h"
@@ -20,16 +22,6 @@ using Logging::logf;
 using LogLevel = Logging::Level;
 constexpr auto logComponent = Logging::Component::Main;
 
-enum class BoardId
-{
-    Unknown = -1,
-    Pico = 0,
-
-    PimoroniInterstate75,
-    PimoroniPicoSystem,
-    PimoroniPicoVision,
-    PimoroniTufty2040,
-};
 
 static bool quit = false;
 
@@ -267,12 +259,7 @@ void queueAudio(const int16_t *samples, unsigned int numSamples)
 
 int main(int argc, char *argv[])
 {
-    int screenScale = 5;
-
     std::thread gdbServerThread;
-
-    bool usbEnabled = false;
-    bool gdbEnabled = false;
 
     std::string romFilename;
 
@@ -282,33 +269,35 @@ int main(int argc, char *argv[])
 
     int i = 1;
 
+    Options opts;
+
     for(; i < argc; i++)
     {
         std::string arg(argv[i]);
 
         if(arg == "--scale" && i + 1 < argc)
-            screenScale = std::stoi(argv[++i]);
+            opts.screenScale = std::stoi(argv[++i]);
         else if(arg == "--picosystem-sdk")
         {
             // picosystem SDK does not require the correct board to be set... so most uf2s don't
-            boardId = BoardId::PimoroniPicoSystem;
+            opts.boardId = BoardId::PimoroniPicoSystem;
             logf(LogLevel::Warning, logComponent, "Use --board pimoroni_picosystem instead of --picosystem-sdk");
         }
         else if(arg == "--board" && i + 1 < argc)
-            boardId = stringToBoard(argv[++i]);
+            opts.boardId = stringToBoard(argv[++i]);
         else if(arg == "--usb")
-            usbEnabled = true;
+            opts.usbEnabled = true;
         else if(arg == "--usbip")
         {
-            usbEnabled = true;
-            mem.getUSB().setUSBIPEnabled(true);
+            opts.usbEnabled = true;
+            opts.usbipEnabled = true;
         }
         else if(arg == "--log" && i + 1 < argc)
             handleLogArg(argv[++i]);
         else if(arg == "--gdb")
-            gdbEnabled = true;
+            opts.gdbEnabled = true;
         else if(arg == "--iolog" && i + 1 < argc)
-            mem.getGPIO().openLogFile(argv[++i]);
+            opts.ioLogPath = argv[++i];
         else
             break;
     }
@@ -317,6 +306,14 @@ int main(int argc, char *argv[])
         logf(LogLevel::Info, logComponent, "No file specified!");
     else
         romFilename = argv[i];
+
+
+    boardId = opts.boardId;
+
+    mem.getUSB().setUSBIPEnabled(opts.usbipEnabled);
+
+    if(!opts.ioLogPath.empty())
+        mem.getGPIO().openLogFile(opts.ioLogPath.c_str());
 
     // get base path
     std::string basePath;
@@ -393,7 +390,7 @@ int main(int argc, char *argv[])
 
     board->getScreenSize(screenWidth, screenHeight);
 
-    if(gdbEnabled)
+    if(opts.gdbEnabled)
         gdbServerThread = std::thread(runGDBServer);
 
     // SDL init
@@ -410,7 +407,7 @@ int main(int argc, char *argv[])
     if(boardHasScreen)
     {
         window = SDL_CreateWindow("DaftBoySDL", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
-                                    screenWidth * screenScale, screenHeight * screenScale,
+                                    screenWidth * opts.screenScale, screenHeight * opts.screenScale,
                                     SDL_WINDOW_RESIZABLE);
 
         renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_PRESENTVSYNC);
@@ -483,7 +480,7 @@ int main(int argc, char *argv[])
             elapsed = 30;
 
         // lock cpu access around updates
-        if(gdbEnabled)
+        if(opts.gdbEnabled)
             gdbServer.getCPUMutex().lock();
 
         cpuCycles += cpuCores[0].run(elapsed);
@@ -496,13 +493,13 @@ int main(int argc, char *argv[])
         // sync peripherals
         mem.peripheralUpdate(time);
 
-        if(gdbEnabled)
+        if(opts.gdbEnabled)
             gdbServer.getCPUMutex().unlock();
 
         board->update(time);
 
         // attempt to connect USB
-        if(usbEnabled)
+        if(opts.usbEnabled)
         {
             auto &usb = mem.getUSB();
             if(usb.getEnabled() && !usb.getConfigured())
@@ -539,7 +536,7 @@ int main(int argc, char *argv[])
 
     delete board;
 
-    if(gdbEnabled)
+    if(opts.gdbEnabled)
         gdbServerThread.join();
     return 0;
 }
