@@ -753,7 +753,15 @@ void PIO::analyseProgram(int sm, int modInstrIndex)
     uint32_t x = 0, y = 0;
     bool xSet = false, ySet = false;
 
-    for(int i = wrapBottom; i <= wrapTop; i++)
+    int startAddr = wrapBottom;
+
+    // start from current PC if inside wrap range
+    if(regs[sm].pc > wrapBottom && regs[sm].pc <= wrapTop)
+        startAddr = regs[sm].pc;
+
+    int i = startAddr;
+
+    while(true)
     {
         if(autopull && outCount >= pullThreshold)
         {
@@ -903,6 +911,15 @@ void PIO::analyseProgram(int sm, int modInstrIndex)
         }
 
         cycles++;
+
+        if(i == wrapTop)
+            i = wrapBottom;
+        else
+            i++;
+
+        // run through program once
+        if(i == startAddr)
+            break;
     }
     
     auto oldCycles = cyclesBetweenPulls[sm];
@@ -916,7 +933,7 @@ void PIO::analyseProgram(int sm, int modInstrIndex)
     }
 
     // if we have autopull and a program that shifts out all the bits before the end, we end up with an extra pull
-    if(autopull && totalOutBits % pullThreshold == 0)
+    if(autopull && numPulls > 1 && totalOutBits % pullThreshold == 0)
         numPulls--;
 
     // attempt to figure out how frequently this program will pull
