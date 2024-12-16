@@ -369,19 +369,19 @@ int main(int argc, char *argv[])
     switch(boardId)
     {
         case BoardId::PimoroniInterstate75:
-            board = new Interstate75Board(mem);
+            board = new Interstate75Board(mem, opts);
             break;
 
         case BoardId::PimoroniPicoSystem:
-            board = new PicoSystemBoard(mem);
+            board = new PicoSystemBoard(mem, opts);
             break;
 
         case BoardId::PimoroniPicoVision:
-            board = new PicoVisionBoard(mem);
+            board = new PicoVisionBoard(mem, opts);
             break;
 
         case BoardId::PimoroniTufty2040:
-            board = new Tufty2040Board(mem);
+            board = new Tufty2040Board(mem, opts);
             break;
 
         default:

@@ -45,7 +45,7 @@ static const int modeHeight[]
     720,
 };
 
-PicoVisionBoard::PicoVisionBoard(MemoryBus &mem) : mem(mem)
+PicoVisionBoard::PicoVisionBoard(MemoryBus &mem, const Options &options) : mem(mem)
 {
     mem.setInterruptUpdateCallback([this](auto time, auto irqMask){onInterruptUpdate(time, irqMask);});
     mem.setGetNextInterruptTimeCallback([this](auto time){return onGetNextInterruptTime(time);});

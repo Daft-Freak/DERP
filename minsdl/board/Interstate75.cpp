@@ -77,7 +77,7 @@ static const uint8_t invGamma[1024]
     253, 253, 253, 253, 253, 253, 253, 254, 254, 254, 254, 254, 254, 254, 254, 255
 };
 
-Interstate75Board::Interstate75Board(MemoryBus &mem) : mem(mem)
+Interstate75Board::Interstate75Board(MemoryBus &mem, const Options &options) : mem(mem)
 {
     mem.getPIO(0).setTXCallback([this](auto time, auto &pio, auto sm, auto data){onPIOTX(time, pio, sm, data);});
 }

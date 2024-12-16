@@ -9,7 +9,7 @@ using Logging::logf;
 using LogLevel = Logging::Level;
 constexpr auto logComponent = Logging::Component::Board;
 
-Tufty2040Board::Tufty2040Board(MemoryBus &mem) : mem(mem)
+Tufty2040Board::Tufty2040Board(MemoryBus &mem, const Options &options) : mem(mem)
 {
     mem.getPIO(1).setTXCallback([this](auto time, auto &pio, auto sm, auto data){onPIOTX(time, pio, sm, data);});
 }

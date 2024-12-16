@@ -1,6 +1,8 @@
 #pragma once
 #include "Board.h"
 
+#include "../Main.h"
+
 #include "ClockTarget.h"
 
 class GPIO;
@@ -10,7 +12,7 @@ class PIO;
 class PicoVisionBoard final : public Board
 {
 public:
-    PicoVisionBoard(MemoryBus &mem);
+    PicoVisionBoard(MemoryBus &mem, const Options &options);
 
     void getScreenSize(int &w, int &h) override;
     int getScreenFormat() override;

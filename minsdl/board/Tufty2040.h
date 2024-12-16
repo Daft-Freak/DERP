@@ -1,12 +1,14 @@
 #pragma once
 #include "Board.h"
 
+#include "../Main.h"
+
 class PIO;
 
 class Tufty2040Board final : public Board
 {
 public:
-    Tufty2040Board(MemoryBus &mem);
+    Tufty2040Board(MemoryBus &mem, const Options &options);
 
     void getScreenSize(int &w, int &h) override;
     int getScreenFormat() override;
