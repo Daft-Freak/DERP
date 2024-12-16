@@ -219,30 +219,39 @@ uint32_t DMA::regRead(uint64_t time, uint32_t addr)
         int ch = addr / 0x40;
         assert(ch < numChannels);
 
-        if(channelTriggered & (1 << ch))
-            mem.syncDMA(time);
-
         switch(addr & 0x3F)
         {
             case DMA_CH0_READ_ADDR_OFFSET:
             case DMA_CH0_AL1_READ_ADDR_OFFSET:
             case DMA_CH0_AL2_READ_ADDR_OFFSET:
             case DMA_CH0_AL3_READ_ADDR_TRIG_OFFSET:
+                // read/write addr and trans count aren't going to change if the channel isn't triggered
+                // (will need to update when chaining is implemented)
+                if(channelTriggered & (1 << ch))
+                    mem.syncDMA(time);
                 return readAddr[ch];
             case DMA_CH0_WRITE_ADDR_OFFSET:
             case DMA_CH0_AL1_WRITE_ADDR_OFFSET:
             case DMA_CH0_AL2_WRITE_ADDR_TRIG_OFFSET:
             case DMA_CH0_AL3_WRITE_ADDR_OFFSET:
+                if(channelTriggered & (1 << ch))
+                    mem.syncDMA(time);
                 return writeAddr[ch];
             case DMA_CH0_TRANS_COUNT_OFFSET:
             case DMA_CH0_AL1_TRANS_COUNT_TRIG_OFFSET:
             case DMA_CH0_AL2_TRANS_COUNT_OFFSET:
             case DMA_CH0_AL3_TRANS_COUNT_OFFSET:
+                if(channelTriggered & (1 << ch))
+                    mem.syncDMA(time);
                 return transferCount[ch];
             case DMA_CH0_CTRL_TRIG_OFFSET:
             case DMA_CH0_AL1_CTRL_OFFSET:
             case DMA_CH0_AL2_CTRL_OFFSET:
             case DMA_CH0_AL3_CTRL_OFFSET:
+                // don't need to update for busy if chan isn't near completion
+                // (we don't handle bus errors yet)
+                if((channelTriggered & (1 << ch)) && time >= clock.getTimeToCycles(estimateChannelCompletion(ch)))
+                    mem.syncDMA(time);
                 return ctrl[ch] | (channelTriggered & (1 << ch) ? DMA_CH0_CTRL_TRIG_BUSY_BITS : 0);
         }
     }
