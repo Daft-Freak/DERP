@@ -34,6 +34,9 @@ enum class GenOpcode : uint8_t
     ShiftRightArith,
     ShiftRightLogic,
 
+    SignExtend8,
+    SignExtend16,
+
     Jump,
 };
 
