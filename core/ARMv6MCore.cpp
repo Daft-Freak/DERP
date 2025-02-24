@@ -112,7 +112,6 @@ void ARMv6MCore::update(uint64_t target)
                 if(!exec)
                     continue;
 
-                cycles += exec;
                 exec = 0; // we've already added it to the clock...
             }
             else
