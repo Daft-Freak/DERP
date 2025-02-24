@@ -1546,6 +1546,49 @@ bool X86Target::compile(uint8_t *&codePtr, uint8_t *codeBufEnd, uint32_t pc, Gen
                 break;
             }
 
+            case GenOpcode::SignExtend8:
+            {
+                auto regSize = sourceInfo.registers[instr.dst[0]].size;
+
+                if(regSize == 32)
+                {
+                    auto dst = checkValue32(instr.dst[0], 0);
+                    auto src = checkValue32(instr.src[0], Value_Memory);
+                    
+                    if(src.index() && dst.index())
+                    {
+                        auto rmDst = std::get<RMOperand>(dst);
+                        auto rmSrc = std::get<RMOperand>(src);
+                        builder.movsxB(rmDst.getReg32(), rmSrc);
+                    }
+                }
+                else
+                    badRegSize(regSize);
+
+                break;
+            }
+            case GenOpcode::SignExtend16:
+            {
+                auto regSize = sourceInfo.registers[instr.dst[0]].size;
+
+                if(regSize == 32)
+                {
+                    auto dst = checkValue32(instr.dst[0], 0);
+                    auto src = checkValue32(instr.src[0], Value_Memory);
+                    
+                    if(src.index() && dst.index())
+                    {
+                        auto rmDst = std::get<RMOperand>(dst);
+                        auto rmSrc = std::get<RMOperand>(src);
+                        builder.movsxW(rmDst.getReg32(), rmSrc);
+                    }
+                }
+                else
+                    badRegSize(regSize);
+
+                break;
+            }
+
             case GenOpcode::Jump:
             {
                 auto condition = static_cast<GenCondition>(instr.src[0]);
