@@ -219,6 +219,8 @@ public:
 
     void movsx(Reg32 dst, Reg16 src);
     void movsx(Reg32 dst, Reg8 src);
+    void movsxW(Reg32 dst, RMOperand src);
+    void movsxB(Reg32 dst, RMOperand src);
 
     void movzx(Reg32 dst, Reg16 src);
     void movzx(Reg32 dst, Reg8 src);
