@@ -90,7 +90,7 @@ jobs:
 
     - name: Upload artifact
       if: github.event_name != 'release' && matrix.release-suffix != ''
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: ${{env.RELEASE_FILE}}
         path: ${{runner.workspace}}/build/${{env.RELEASE_FILE}}.zip
