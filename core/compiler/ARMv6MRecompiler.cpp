@@ -337,7 +337,7 @@ bool ARMv6MRecompiler::attemptToRun(int cyclesToRun, int &cyclesExecuted)
             it = compiled.emplace(cpuPC, info).first;
 
             // track range of code in RAM
-            if(cpuPC >= 0x2000000 && cpuPC < 0x8000000)
+            if(cpuPC >= 0x20000000)
             {
                 if(cpuPC < minRAMCode)
                     minRAMCode = cpuPC;
@@ -345,7 +345,7 @@ bool ARMv6MRecompiler::attemptToRun(int cyclesToRun, int &cyclesExecuted)
                     maxRAMCode = pc;
             }
 
-            ramStartIt = compiled.lower_bound(0x2000000); // cache this iterator
+            ramStartIt = compiled.lower_bound(0x20000000); // cache this iterator
         }
 
         // reject code if compiled for a different CPU mode
