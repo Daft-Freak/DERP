@@ -692,7 +692,7 @@ bool X86Target::compile(uint8_t *&codePtr, uint8_t *codeBufEnd, uint32_t pc, Gen
 
                 // also preserve non-flags bits
                 if(auto f = checkReg32(flagsReg))
-                    builder.and_(RMOperand(*f), preserveMask | (~flagsMask));
+                    builder.and_(*f, preserveMask | (~flagsMask));
             }
         }
 
@@ -2219,7 +2219,7 @@ void X86Target::callRestore(X86Builder &builder, Reg8 dstReg, bool zeroExtend, b
         else if(!zeroExtend)
         {
             // EAX = EAX + (R10D & 0xFF00)
-            builder.and_(RMOperand(Reg32::R10D), 0xFF00u);
+            builder.and_(Reg32::R10D, 0xFF00u);
             builder.movzx(Reg32::EAX, Reg8::AL);
             builder.add(Reg32::EAX, Reg32::R10D); // TODO: OR? (haven't added that to builder yet)
         }
