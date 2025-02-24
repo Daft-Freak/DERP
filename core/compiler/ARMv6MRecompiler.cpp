@@ -736,9 +736,10 @@ void ARMv6MRecompiler::convertTHUMBToGeneric(uint32_t &pc, GenBlockInfo &genBloc
                             }
                             else if(dstReg == 13) // dest SP
                             {
+                                addInstruction(move(reg(srcReg), reg(dstReg), pcSCycles));
                                 // mask out low bits
                                 addInstruction(loadImm(~3u));
-                                addInstruction(alu(GenOpcode::And, GenReg::Temp, reg(srcReg), reg(dstReg), pcSCycles), 2);
+                                addInstruction(alu(GenOpcode::And, reg(dstReg), GenReg::Temp, reg(dstReg)), 2);
                             }
                             else
                                 addInstruction(move(reg(srcReg), reg(dstReg), pcSCycles), 2);
