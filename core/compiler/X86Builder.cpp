@@ -646,25 +646,33 @@ void X86Builder::mov(RMOperand dst, uint8_t imm)
 // sign extend, reg -> reg, 16 bit
 void X86Builder::movsx(Reg32 dst, Reg16 src)
 {
-    auto dstReg = static_cast<int>(dst);
-    auto srcReg = static_cast<int>(src);
-
-    encodeREX(false, dstReg, 0, srcReg);
-    write(0x0F); // two byte opcode
-    write(0xBF); // opcode, w = 1
-    encodeModRM(srcReg, dstReg);
+    movsxW(dst, RMOperand(src));
 }
 
 // sign extend, reg -> reg, 8 bit
 void X86Builder::movsx(Reg32 dst, Reg8 src)
 {
-    auto dstReg = static_cast<int>(dst);
-    auto srcReg = static_cast<int>(src);
+    movsxB(dst, RMOperand(src));
+}
 
-    encodeREX(false, dstReg, 0, srcReg);
+void X86Builder::movsxW(Reg32 dst, RMOperand src)
+{
+    auto dstReg = static_cast<int>(dst);
+
+    encodeREX(false, dstReg, src);
+    write(0x0F); // two byte opcode
+    write(0xBF); // opcode, w = 1
+    encodeModRM(src, dstReg);
+}
+
+void X86Builder::movsxB(Reg32 dst, RMOperand src)
+{
+    auto dstReg = static_cast<int>(dst);
+
+    encodeREX(false, dstReg, src);
     write(0x0F); // two byte opcode
     write(0xBE); // opcode, w = 0
-    encodeModRMReg8(srcReg, dstReg);
+    encodeModRM(src, dstReg);
 }
 
 // zero extend, reg -> reg, 16 bit
