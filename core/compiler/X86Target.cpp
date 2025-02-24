@@ -1107,23 +1107,25 @@ bool X86Target::compile(uint8_t *&codePtr, uint8_t *codeBufEnd, uint32_t pc, Gen
                 if(regSize == 32)
                 {
                     auto src = checkValue32(instr.src[swapped ? 0 : 1], Value_Immediate, Reg32::R8D);
-                    auto dst = checkReg32(instr.dst[0]);
+                    auto dst = checkValue32(instr.dst[0], Value_Memory);
 
-                    if(src.index() && dst)
+                    if(src.index() && dst.index())
                     {
+                        auto rmDst = std::get<RMOperand>(dst);
                         if(std::holds_alternative<uint32_t>(src))
                         {
                             auto imm = std::get<uint32_t>(src);
                             if(imm < 0x80 || imm >= 0xFFFFFF80)
-                                builder.andD(RMOperand(*dst), static_cast<int8_t>(imm));
+                                builder.andD(rmDst, static_cast<int8_t>(imm));
                             else 
-                                builder.and_(RMOperand(*dst), imm);
+                                builder.and_(rmDst, imm);
                         }
                         else
-                            builder.and_(RMOperand(*dst), std::get<RMOperand>(src).getReg32());
+                            builder.and_(rmDst, std::get<RMOperand>(src).getReg32());
 
                         assert(!writesFlag(instr.flags, SourceFlagType::Overflow));
-                        setFlags32(*dst, {}, instr.flags);
+                        assert(!writtenFlags || !rmDst.isMem());
+                        setFlags32(rmDst.getReg32(), {}, instr.flags);
                     }
                 }
                 else
