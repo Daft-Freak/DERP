@@ -696,6 +696,13 @@ void ARMv6MRecompiler::convertTHUMBToGeneric(uint32_t &pc, GenBlockInfo &genBloc
                                 printf("unhandled add pc in convertToGeneric %i -> %i\n", srcReg, dstReg);
                                 done = true;
                             }
+                            else if(dstReg == 13) // dest SP
+                            {
+                                addInstruction(alu(GenOpcode::Add, reg(dstReg), reg(srcReg), reg(dstReg), pcSCycles));
+                                // mask out low bits
+                                addInstruction(loadImm(~3u));
+                                addInstruction(alu(GenOpcode::And, reg(dstReg), GenReg::Temp, reg(dstReg)), 2);
+                            }
                             else
                                 addInstruction(alu(GenOpcode::Add, reg(dstReg), reg(srcReg), reg(dstReg), pcSCycles), 2);
                             break;
@@ -726,6 +733,12 @@ void ARMv6MRecompiler::convertTHUMBToGeneric(uint32_t &pc, GenBlockInfo &genBloc
                                 addInstruction(jump(GenCondition::Always, GenReg::Temp, pcNCycles + pcSCycles * 2), 2);
                                 if(pc > maxBranch)
                                     done = true;
+                            }
+                            else if(dstReg == 13) // dest SP
+                            {
+                                // mask out low bits
+                                addInstruction(loadImm(~3u));
+                                addInstruction(alu(GenOpcode::And, GenReg::Temp, reg(srcReg), reg(dstReg), pcSCycles), 2);
                             }
                             else
                                 addInstruction(move(reg(srcReg), reg(dstReg), pcSCycles), 2);
@@ -811,7 +824,7 @@ void ARMv6MRecompiler::convertTHUMBToGeneric(uint32_t &pc, GenBlockInfo &genBloc
                             addInstruction(alu(GenOpcode::Or, dstReg, srcReg, dstReg, pcSCycles), 2, preserveV | preserveC | writeZ | writeN);
                             break;
                         case 0xD: // MUL
-                            addInstruction(alu(GenOpcode::Multiply, dstReg, srcReg, dstReg, pcSCycles), 2, preserveV | writeZ | writeN);
+                            addInstruction(alu(GenOpcode::Multiply, dstReg, srcReg, dstReg, pcSCycles), 2, preserveV | preserveC | writeZ | writeN);
                             break;
                         case 0xE: // BIC
                         {
@@ -1142,6 +1155,7 @@ void ARMv6MRecompiler::convertTHUMBToGeneric(uint32_t &pc, GenBlockInfo &genBloc
 
                 if(!regList)
                 {
+                    // not quite invalid yet (would fault on v7)
                     if(isLoad)
                     {
                         // load PC
@@ -1154,20 +1168,15 @@ void ARMv6MRecompiler::convertTHUMBToGeneric(uint32_t &pc, GenBlockInfo &genBloc
                         if(pc > maxBranch)
                             done = true;
 
-                        // update base
-                        addInstruction(loadImm(0x40));
-                        addInstruction(alu(GenOpcode::Add, baseReg, GenReg::Temp, baseReg));
-
                         addInstruction(jump(GenCondition::Always, GenReg::Temp2, pcSCycles + 1), 2); // TODO: cycles for branch (not implemented in CPU either)
                     }
                     else
                     {
-                        // store PC
-                        addInstruction(loadImm(pc + 4));
-                        addInstruction(store(4, baseReg, GenReg::Temp, 0), 0, GenOp_UpdateCycles);
+                        // store LR
+                        addInstruction(store(4, baseReg, GenReg::R14, 0), 0, GenOp_UpdateCycles);
 
                         // update base
-                        addInstruction(loadImm(0x40));
+                        addInstruction(loadImm(4));
                         addInstruction(alu(GenOpcode::Add, baseReg, GenReg::Temp, baseReg, pcSCycles), 2);
                     }
                 }
@@ -1200,6 +1209,12 @@ void ARMv6MRecompiler::convertTHUMBToGeneric(uint32_t &pc, GenBlockInfo &genBloc
                             addInstruction(move(baseReg, lastReg));
                             baseReg = lastReg;
                         }
+                    }
+
+                    if(!isLoad && (regList & (1 << baseRegIndex)))
+                    {
+                        // on v6, base doesn't get overriden if it's in the list for STM
+                        first = false;
                     }
 
                     uint32_t offset = 0;
