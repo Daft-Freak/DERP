@@ -1106,6 +1106,19 @@ void ARMv6MRecompiler::convertTHUMBToGeneric(uint32_t &pc, GenBlockInfo &genBloc
                         }
                         break;   
                     }
+                    
+                    case 0x6: // CPS
+                    {
+                        assert((opcode & 0xFFEF) == 0xB662);
+                        // assume privileged
+                        if(opcode & (1 << 4))
+                            addInstruction(loadImm(1));
+                        else
+                            addInstruction(loadImm(0));
+
+                        addInstruction(move(GenReg::Temp, GenReg::PriMask, pcSCycles), 2);
+                        break;
+                    }
 
                     case 0xF: // hints
                     {
