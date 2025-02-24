@@ -670,7 +670,7 @@ void ARMv6MRecompiler::convertTHUMBToGeneric(uint32_t &pc, GenBlockInfo &genBloc
 
                     int cycles = pcSCycles + 1;
 
-                    addInstruction(loadImm(mem.read<uint32_t>(&cpu, addr, cycles, false)));
+                    addInstruction(loadImm(mem.read<uint32_t>(&cpu, addr, cycles)));
                     addInstruction(move(GenReg::Temp, dstReg, cycles), 2);
                 }
                 else if(opcode & (1 << 10)) // format 5, Hi reg/branch exchange
