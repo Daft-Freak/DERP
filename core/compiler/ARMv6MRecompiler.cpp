@@ -237,7 +237,7 @@ int ARMv6MRecompiler::run(int cyclesToRun)
 
         // CPU update stuff
         auto curTime = cpu.clock.getTime();
-        if(cpu.mem.getNextInterruptTime() < curTime)
+        if(cpu.mem.getNextInterruptTime() <= curTime)
         {
             cpu.mem.peripheralUpdate(curTime, cpu.sleeping ? ~0u : cpu.nvicEnabled, &cpu);
             cpu.mem.calcNextInterruptTime();
@@ -353,7 +353,7 @@ bool ARMv6MRecompiler::attemptToRun(int cyclesToRun, int &cyclesExecuted)
             codePtr = it->second.startPtr;
     }
 
-    cycleCount = 0;
+    cycleCount = extraCycleCount = 0;
 
     // run the code if valid, or stop
     if(codePtr)
@@ -361,7 +361,7 @@ bool ARMv6MRecompiler::attemptToRun(int cyclesToRun, int &cyclesExecuted)
     else
         return false;
 
-    cyclesExecuted += cycleCount;
+    cyclesExecuted += cycleCount + extraCycleCount;
 
     // code exited with a saved address for re-entry, store PC for later
     if(tmpSavedPtr)
@@ -1451,11 +1451,15 @@ void ARMv6MRecompiler::compileEntry()
 // wrappers around member funcs
 uint8_t ARMv6MRecompiler::readMem8(ARMv6MCore *cpu, uint32_t addr, int &cycles, uint8_t flags)
 {
+    syncClockForPeriphAccess(cpu, addr);
+
     return cpu->readMem8(addr, cycles, flags & (GenOp_Sequential >> 8));
 }
 
 uint32_t ARMv6MRecompiler::readMem16(ARMv6MCore *cpu, uint32_t addr, int &cycles, uint8_t flags)
 {
+    syncClockForPeriphAccess(cpu, addr);
+
     auto ret = cpu->readMem16(addr, cycles, flags & (GenOp_Sequential >> 8));
 
     // unaligned sign extend half -> byte
@@ -1470,12 +1474,16 @@ uint32_t ARMv6MRecompiler::readMem32(ARMv6MCore *cpu, uint32_t addr, int &cycles
     if(flags & (GenOp_ForceAlign >> 8))
         addr &= ~3;
 
+    syncClockForPeriphAccess(cpu, addr);
+
     return cpu->readMem32(addr, cycles, flags & (GenOp_Sequential >> 8));
 }
 
 int ARMv6MRecompiler::writeMem8(ARMv6MCore *cpu, uint32_t addr, uint8_t data, int &cycles, uint8_t flags, int cyclesToRun)
 {
     invalidateCode(cpu, addr);
+    syncClockForPeriphAccess(cpu, addr);
+
     cpu->writeMem8(addr, data, cycles, flags & (GenOp_Sequential >> 8));
     return updateCyclesForWrite(cpu, cyclesToRun);
 }
@@ -1483,6 +1491,8 @@ int ARMv6MRecompiler::writeMem8(ARMv6MCore *cpu, uint32_t addr, uint8_t data, in
 int ARMv6MRecompiler::writeMem16(ARMv6MCore *cpu, uint32_t addr, uint16_t data, int &cycles, uint8_t flags, int cyclesToRun)
 {
     invalidateCode(cpu, addr);
+    syncClockForPeriphAccess(cpu, addr);
+
     cpu->writeMem16(addr, data, cycles, flags & (GenOp_Sequential >> 8));
     return updateCyclesForWrite(cpu, cyclesToRun);
 }
@@ -1490,6 +1500,8 @@ int ARMv6MRecompiler::writeMem16(ARMv6MCore *cpu, uint32_t addr, uint16_t data, 
 int ARMv6MRecompiler::writeMem32(ARMv6MCore *cpu, uint32_t addr, uint32_t data, int &cycles, uint8_t flags, int cyclesToRun)
 {
     invalidateCode(cpu, addr);
+    syncClockForPeriphAccess(cpu, addr);
+
     cpu->writeMem32(addr, data, cycles, flags & (GenOp_Sequential >> 8));
     return updateCyclesForWrite(cpu, cyclesToRun);
 }
@@ -1539,6 +1551,18 @@ void ARMv6MRecompiler::invalidateCode(ARMv6MCore *cpu, uint32_t addr)
 
     if(erased)
         compiler.ramStartIt = compiler.compiled.lower_bound(0x2000000);
+}
+
+void ARMv6MRecompiler::syncClockForPeriphAccess(ARMv6MCore *cpu, uint32_t addr)
+{
+    // peripherals heavily rely on the cpu clock being up-to-date for sync
+    if(addr >= 0x40000000)
+    {
+        cpu->getClock().addCycles(cpu->compiler.cycleCount);
+        // keep track for updating cyclesExecuted later
+        cpu->compiler.extraCycleCount += cpu->compiler.cycleCount;
+        cpu->compiler.cycleCount = 0;
+    }
 }
 
 int ARMv6MRecompiler::updateCyclesForWrite(ARMv6MCore *cpu, int cyclesToRun)

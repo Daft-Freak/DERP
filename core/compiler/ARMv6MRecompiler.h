@@ -41,6 +41,7 @@ protected:
     static int writeMem32(ARMv6MCore *cpu, uint32_t addr, uint32_t data, int &cycles, uint8_t flags, int cyclesToRun);
 
     static void invalidateCode(ARMv6MCore *cpu, uint32_t addr);
+    static void syncClockForPeriphAccess(ARMv6MCore *cpu, uint32_t addr);
     static int updateCyclesForWrite(ARMv6MCore *cpu, int cyclesToRun);
 
 
@@ -73,7 +74,8 @@ protected:
     int curSavedExit = 0;
     std::tuple<uint8_t *, uint32_t, uint32_t> savedExits[savedExitsSize];
 
-    uint32_t cycleCount;
+    // "extra" ones have already been added to the CPU's clock
+    uint32_t cycleCount, extraCycleCount;
 
 #if defined(RECOMPILER_X86)
     X86Target target;
