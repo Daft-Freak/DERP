@@ -692,7 +692,7 @@ bool X86Target::compile(uint8_t *&codePtr, uint8_t *codeBufEnd, uint32_t pc, Gen
 
                 // also preserve non-flags bits
                 if(auto f = checkReg32(flagsReg))
-                    builder.and_(*f, preserveMask | (~flagsMask));
+                    builder.and_(RMOperand(*f), preserveMask | (~flagsMask));
             }
         }
 
@@ -1115,12 +1115,12 @@ bool X86Target::compile(uint8_t *&codePtr, uint8_t *codeBufEnd, uint32_t pc, Gen
                         {
                             auto imm = std::get<uint32_t>(src);
                             if(imm < 0x80 || imm >= 0xFFFFFF80)
-                                builder.and_(*dst, static_cast<int8_t>(imm));
+                                builder.andD(RMOperand(*dst), static_cast<int8_t>(imm));
                             else 
-                                builder.and_(*dst, imm);
+                                builder.and_(RMOperand(*dst), imm);
                         }
                         else
-                            builder.and_(*dst, std::get<RMOperand>(src).getReg32());
+                            builder.and_(RMOperand(*dst), std::get<RMOperand>(src).getReg32());
 
                         assert(!writesFlag(instr.flags, SourceFlagType::Overflow));
                         setFlags32(*dst, {}, instr.flags);
@@ -2217,7 +2217,7 @@ void X86Target::callRestore(X86Builder &builder, Reg8 dstReg, bool zeroExtend, b
         else if(!zeroExtend)
         {
             // EAX = EAX + (R10D & 0xFF00)
-            builder.and_(Reg32::R10D, 0xFF00u);
+            builder.and_(RMOperand(Reg32::R10D), 0xFF00u);
             builder.movzx(Reg32::EAX, Reg8::AL);
             builder.add(Reg32::EAX, Reg32::R10D); // TODO: OR? (haven't added that to builder yet)
         }
