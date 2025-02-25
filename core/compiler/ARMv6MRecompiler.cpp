@@ -1379,6 +1379,57 @@ void ARMv6MRecompiler::convertTHUMBToGeneric(uint32_t &pc, GenBlockInfo &genBloc
                 {
                     switch(op1)
                     {
+                        case 0x38: // MSR
+                        case 0x39:
+                        {
+                            auto srcReg = reg((opcode32 >> 16) & 0xF);
+                            auto sysm = opcode32 & 0xFF;
+
+                            if((sysm >> 3) == 0)
+                            {
+                                // APSR
+                                addInstruction(loadImm(~0xF8000000));
+                                addInstruction(alu(GenOpcode::And, GenReg::CPSR, GenReg::Temp, GenReg::CPSR));
+                                addInstruction(loadImm(0xF8000000));
+                                addInstruction(alu(GenOpcode::And, GenReg::Temp, srcReg, GenReg::Temp));
+                                addInstruction(alu(GenOpcode::Or, GenReg::CPSR, GenReg::Temp, GenReg::CPSR, pcSCycles * 2 + 1), 4);
+                            }
+                            else if((sysm >> 3) == 1)
+                            {
+                                // MSP/PSP
+                                // assuming priviledged
+                                if(sysm == 8) // MSP
+                                {
+                                    addInstruction(loadImm(~3));
+                                    addInstruction(alu(GenOpcode::And, GenReg::Temp, srcReg, GenReg::Temp));
+                                    addInstruction(move(GenReg::Temp, GenReg::R13, pcSCycles * 2 + 1), 4);
+                                }
+                                else if(sysm == 9)
+                                {
+                                    printf("unhandled MSR PSP in convertToGeneric\n");
+                                    done = true;
+                                }
+                            }
+                            else if((sysm >> 3) == 2)
+                            {
+                                // PRIMASK/CONTROL
+                                // assuming priviledged
+
+                                if(sysm == 0x10) // PRIMASK
+                                {
+                                    addInstruction(loadImm(1));
+                                    addInstruction(alu(GenOpcode::And, GenReg::Temp, srcReg, GenReg::Temp));
+                                    addInstruction(move(GenReg::Temp, GenReg::PriMask, pcSCycles * 2 + 1), 4);
+                                }
+                                else
+                                {
+                                    printf("unhandled MSR CONTROL in convertToGeneric\n");    
+                                    done = true;
+                                }
+                            }
+                            break;
+                        }
+
                         case 0x3B: // misc
                         {
                             auto op = (opcode32 >> 4) & 0xF;
