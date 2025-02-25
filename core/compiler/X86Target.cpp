@@ -63,7 +63,7 @@ static bool doRegImmShift32(X86Builder &builder, std::optional<Reg32> dst, std::
 
         auto patchCondBranch = [&builder](uint8_t *branchPtr, Condition cond)
         {
-            if(!branchPtr)
+            if(!branchPtr || builder.getError())
                 return;
 
             auto off = builder.getPtr() - branchPtr - 2;
@@ -74,7 +74,7 @@ static bool doRegImmShift32(X86Builder &builder, std::optional<Reg32> dst, std::
 
         auto patchBranch = [&builder](uint8_t *branchPtr)
         {
-            if(!branchPtr)
+            if(!branchPtr || builder.getError())
                 return;
 
             auto off = builder.getPtr() - branchPtr - 2;
