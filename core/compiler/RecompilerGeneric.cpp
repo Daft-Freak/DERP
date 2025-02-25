@@ -288,6 +288,8 @@ void printGenBlock(uint32_t pc, const GenBlockInfo &block, const SourceInfo &sou
         {"shl ", 2, 1},
         {"shra", 2, 1},
         {"shrl", 2, 1},
+        {"sx8 ", 1, 1},
+        {"sx16", 1, 1},
         {"jump", 2, 0},
     };
 
