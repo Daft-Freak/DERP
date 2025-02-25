@@ -60,8 +60,8 @@ protected:
     };
 
     std::map<uint32_t, FuncInfo> compiled;
-    uint32_t minRAMCode = 0xFFFFFFFF, maxRAMCode = 0;
-    std::map<uint32_t, FuncInfo>::iterator ramStartIt;
+    uint32_t minRAMCode[2] = {0xFFFFFFFF, 0xFFFFFFFF}, maxRAMCode[2] = {0, 0};
+    std::map<uint32_t, FuncInfo>::iterator ramStartIt[2];
 
     // common code
     CompiledFunc entryFunc = nullptr;
