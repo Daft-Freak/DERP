@@ -339,13 +339,18 @@ bool ARMv6MRecompiler::attemptToRun(int cyclesToRun, int &cyclesExecuted)
             // track range of code in RAM
             if(cpuPC >= 0x20000000)
             {
-                if(cpuPC < minRAMCode)
-                    minRAMCode = cpuPC;
-                if(pc > maxRAMCode)
-                    maxRAMCode = pc;
+                bool inScratch = cpuPC >= 0x20040000;
+                int index = inScratch ? 1 : 0;
+
+                if(cpuPC < minRAMCode[index])
+                    minRAMCode[index] = cpuPC;
+                if(pc > maxRAMCode[index])
+                    maxRAMCode[index] = pc;
             }
 
-            ramStartIt = compiled.lower_bound(0x20000000); // cache this iterator
+            // cache these iterators for invalidation checks
+            ramStartIt[0] = compiled.lower_bound(0x20000000);
+            ramStartIt[1] = compiled.lower_bound(0x20040000);
         }
 
         // reject code if compiled for a different CPU mode
@@ -1528,15 +1533,17 @@ int ARMv6MRecompiler::writeMem32(ARMv6MCore *cpu, uint32_t addr, uint32_t data, 
 void ARMv6MRecompiler::invalidateCode(ARMv6MCore *cpu, uint32_t addr)
 {
     auto &compiler = cpu->compiler;
+
+    int index = addr >= 0x20040000;
     
-    if(addr < compiler.minRAMCode || addr >= compiler.maxRAMCode)
+    if(addr < compiler.minRAMCode[index] || addr >= compiler.maxRAMCode[index])
         return;
 
     auto end = compiler.compiled.end();
 
     bool erased = false;
 
-    for(auto it = compiler.ramStartIt; it != end;)
+    for(auto it = compiler.ramStartIt[index]; it != end;)
     {
         if(addr >= it->first && addr < it->second.endPC)
         {
@@ -1569,7 +1576,10 @@ void ARMv6MRecompiler::invalidateCode(ARMv6MCore *cpu, uint32_t addr)
     }
 
     if(erased)
-        compiler.ramStartIt = compiler.compiled.lower_bound(0x2000000);
+    {
+        compiler.ramStartIt[0] = compiler.compiled.lower_bound(0x2000000);
+        compiler.ramStartIt[1] = compiler.compiled.lower_bound(0x2040000);
+    }
 }
 
 void ARMv6MRecompiler::syncClockForPeriphAccess(ARMv6MCore *cpu, uint32_t addr)
