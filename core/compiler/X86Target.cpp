@@ -1124,7 +1124,7 @@ bool X86Target::compile(uint8_t *&codePtr, uint8_t *codeBufEnd, uint32_t pc, Gen
                             builder.and_(rmDst, std::get<RMOperand>(src).getReg32());
 
                         assert(!writesFlag(instr.flags, SourceFlagType::Overflow));
-                        assert(!writtenFlags || !rmDst.isMem());
+                        assert(!(instr.flags & GenOp_WriteFlags) || !rmDst.isMem());
                         setFlags32(rmDst.getReg32(), {}, instr.flags);
                     }
                 }
