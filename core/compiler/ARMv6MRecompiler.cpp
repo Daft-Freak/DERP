@@ -1630,6 +1630,18 @@ void ARMv6MRecompiler::invalidateCode(ARMv6MCore *cpu, uint32_t addr)
     {
         compiler.ramStartIt[0] = compiler.compiled.lower_bound(0x20000000);
         compiler.ramStartIt[1] = compiler.compiled.lower_bound(0x20040000);
+
+        if(compiler.ramStartIt[index] != compiler.compiled.end())
+        {
+            // can update min easily
+            compiler.minRAMCode[index] = compiler.ramStartIt[index]->first;
+        }
+        else
+        {
+            // there's no code left, reset the ranges
+            compiler.minRAMCode[index] = 0xFFFFFFFF;
+            compiler.maxRAMCode[index] = 0;
+        }
     }
 }
 
