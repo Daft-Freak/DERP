@@ -1577,8 +1577,8 @@ void ARMv6MRecompiler::invalidateCode(ARMv6MCore *cpu, uint32_t addr)
 
     if(erased)
     {
-        compiler.ramStartIt[0] = compiler.compiled.lower_bound(0x2000000);
-        compiler.ramStartIt[1] = compiler.compiled.lower_bound(0x2040000);
+        compiler.ramStartIt[0] = compiler.compiled.lower_bound(0x20000000);
+        compiler.ramStartIt[1] = compiler.compiled.lower_bound(0x20040000);
     }
 }
 
