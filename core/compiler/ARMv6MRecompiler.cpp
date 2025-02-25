@@ -346,6 +346,13 @@ bool ARMv6MRecompiler::attemptToRun(int cyclesToRun, int &cyclesExecuted)
                     minRAMCode[index] = cpuPC;
                 if(pc > maxRAMCode[index])
                     maxRAMCode[index] = pc;
+
+                if(!inScratch)
+                {
+                    // mark every halfword in sram
+                    for(uint32_t i = (cpuPC & 0x3FFFF) >> 1; i < (pc & 0x3FFFF) >> 1; i++)
+                        sramCodeBitset.set(i);
+                }
             }
 
             // cache these iterators for invalidation checks
@@ -1588,6 +1595,9 @@ void ARMv6MRecompiler::invalidateCode(ARMv6MCore *cpu, uint32_t addr)
     int index = addr >= 0x20040000;
     
     if(addr < compiler.minRAMCode[index] || addr >= compiler.maxRAMCode[index])
+        return;
+
+    if(!index && !compiler.sramCodeBitset.test((addr & 0x3FFFF) >> 1))
         return;
 
     auto end = compiler.compiled.end();
