@@ -4,6 +4,7 @@
 #include <cstring>
 
 #include "hardware/regs/addressmap.h"
+#include "hardware/regs/busctrl.h" // TODO
 #include "hardware/regs/intctrl.h"
 #include "hardware/regs/io_qspi.h" // TODO: move
 #include "hardware/regs/pio.h" // TODO
@@ -901,6 +902,18 @@ uint32_t MemoryBus::doAPBPeriphRead(ClockTarget &masterClock, uint32_t addr)
             return clocks.pllSysRegRead(periphAddr);
         case APBPeripheral::PLL_USB:
             return clocks.pllUSBRegRead(periphAddr);
+
+        case APBPeripheral::BusCtrl:
+        {
+            if(periphAddr >= BUSCTRL_PERFCTR0_OFFSET)
+            {
+                if(periphAddr & 4) // PERFSELx
+                    return BUSCTRL_PERFSEL0_RESET;
+                // else // PERFCTRx
+            }
+
+            break;
+        }
 
         case APBPeripheral::UART0:
             return uart[0].regRead(periphAddr);
