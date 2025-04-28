@@ -565,9 +565,10 @@ bool GDBServer::handleCommand(int fd, std::string_view command)
 
     if(decCommand == "reset halt" || decCommand == "reset init")
     {
-        std::lock_guard lock(cpuMutex);
-
+        cpuMutex.lock();
         cpus[0].getMem().reset();
+        cpuMutex.unlock();
+
         haltCPUs();
         return sendReply(fd, "OK", 2);
     }
