@@ -1449,19 +1449,34 @@ int ARMv6MCore::doTHUMB32BitInstruction(uint16_t opcode, uint32_t pc)
     loReg(Reg::PC) = pc;
 
     // decode
-    assert((opcode32 & 0x18008000) == 0x10008000);
 
-    auto op1 = (opcode32 >> 20) & 0x7F;
-    auto op2 = (opcode32 >> 12) & 0x7;
+    auto op0 = opcode32 >> 27;
+    assert(op0); // 0 should be a 16-bit instruction
+
+    if(op0 == 0b11110)
+    {
+        if(opcode32 & (1 << 15))
+            return doTHUMB32BitBranchMisc(opcode32, pc);
+    }
+
+    logf(LogLevel::Error, logComponent, "Unhandled opcode %08X @%08X",opcode32, pc - 6);
+    fault("Undefined instruction");
+    return pcSCycles;
+}
+
+int ARMv6MCore::doTHUMB32BitBranchMisc(uint32_t opcode, uint32_t pc)
+{
+    auto op1 = (opcode >> 20) & 0x7F;
+    auto op2 = (opcode >> 12) & 0x7;
 
     if((op2 & 0b101) == 0b101) // BL
     {
-        auto imm11 = opcode32 & 0x7FF;
-        auto imm10 = (opcode32 >> 16) & 0x3FF;
+        auto imm11 = opcode & 0x7FF;
+        auto imm10 = (opcode >> 16) & 0x3FF;
 
-        auto s = opcode32 & (1 << 26);
-        auto i1 = (opcode32 >> 13) & 1;
-        auto i2 = (opcode32 >> 11) & 1;
+        auto s = opcode & (1 << 26);
+        auto i1 = (opcode >> 13) & 1;
+        auto i2 = (opcode >> 11) & 1;
 
         if(!s)
         {
@@ -1487,8 +1502,8 @@ int ARMv6MCore::doTHUMB32BitInstruction(uint16_t opcode, uint32_t pc)
         case 0x38: // MSR
         case 0x39:
         {
-            auto srcReg = static_cast<Reg>((opcode32 >> 16) & 0xF);
-            auto sysm = opcode32 & 0xFF;
+            auto srcReg = static_cast<Reg>((opcode >> 16) & 0xF);
+            auto sysm = opcode & 0xFF;
             bool isPrivileged = (cpsr & 0x3F) != 0 || !(control & (1 << 0));
 
             if((sysm >> 3) == 0)
@@ -1527,7 +1542,7 @@ int ARMv6MCore::doTHUMB32BitInstruction(uint16_t opcode, uint32_t pc)
 
         case 0x3B: // misc
         {
-            auto op = (opcode32 >> 4) & 0xF;
+            auto op = (opcode >> 4) & 0xF;
 
             if(op == 0x4 || op == 0x5) // DSB/DMB
             {
@@ -1541,8 +1556,8 @@ int ARMv6MCore::doTHUMB32BitInstruction(uint16_t opcode, uint32_t pc)
         case 0x3E: // MRS
         case 0x3F:
         {
-            auto dstReg = static_cast<Reg>((opcode32 >> 8) & 0xF);
-            auto sysm = opcode32 & 0xFF;
+            auto dstReg = static_cast<Reg>((opcode >> 8) & 0xF);
+            auto sysm = opcode & 0xFF;
 
             if((sysm >> 3) == 0)
             {
@@ -1584,7 +1599,7 @@ int ARMv6MCore::doTHUMB32BitInstruction(uint16_t opcode, uint32_t pc)
         }
     }
 
-    logf(LogLevel::Error, logComponent, "Unhandled opcode %08X @%08X",opcode32, pc - 6);
+    logf(LogLevel::Error, logComponent, "Unhandled opcode %08X @%08X", opcode, pc - 6);
     fault("Undefined instruction");
     return pcSCycles;
 }
