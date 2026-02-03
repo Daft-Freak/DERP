@@ -191,7 +191,7 @@ void Timer::regWrite(uint64_t time, uint32_t addr, uint32_t data)
                 // set any forced irqs pending now (still wrong as it shouldn't clear, but better than nothing)
                 auto mask = interruptForce & interruptEnables;
 
-                for(unsigned i = 0; i < NUM_TIMERS; i++)
+                for(unsigned i = 0; i < NUM_ALARMS; i++)
                 {
                     if(mask & (1 << i))
                         mem.setPendingIRQ(TIMER_IRQ_0 + i);

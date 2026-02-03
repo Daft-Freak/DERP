@@ -99,7 +99,7 @@ private:
 
     ClockTarget clock;
 
-    iobank0_hw_t io;
+    io_bank0_hw_t io;
 
     uint32_t padControl[NUM_BANK0_GPIOS + 2]; // GPIO0-29, SWCLK, SWD
 

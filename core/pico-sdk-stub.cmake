@@ -24,5 +24,6 @@ endmacro()
 add_library(hardware_base INTERFACE)
 add_library(hardware_base_headers INTERFACE)
 
-# include enough to get hardware_regs
-add_subdirectory(../pico-sdk/src/rp2040 pico-sdk-rp2040)
+# include enough to get hardware_regs/structs
+add_subdirectory(../pico-sdk/src/rp2040/hardware_regs pico-sdk-rp2040-regs)
+add_subdirectory(../pico-sdk/src/rp2040/hardware_structs pico-sdk-rp2040-structs)
