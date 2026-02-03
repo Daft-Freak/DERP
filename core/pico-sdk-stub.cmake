@@ -25,5 +25,10 @@ add_library(hardware_base INTERFACE)
 add_library(hardware_base_headers INTERFACE)
 
 # include enough to get hardware_regs/structs
-add_subdirectory(../pico-sdk/src/rp2040/hardware_regs pico-sdk-rp2040-regs)
-add_subdirectory(../pico-sdk/src/rp2040/hardware_structs pico-sdk-rp2040-structs)
+if(RP2350)
+    add_subdirectory(../pico-sdk/src/rp2350/hardware_regs pico-sdk-rp2350-regs)
+    add_subdirectory(../pico-sdk/src/rp2350/hardware_structs pico-sdk-rp2350-structs)
+else()
+    add_subdirectory(../pico-sdk/src/rp2040/hardware_regs pico-sdk-rp2040-regs)
+    add_subdirectory(../pico-sdk/src/rp2040/hardware_structs pico-sdk-rp2040-structs)
+endif()

@@ -13,6 +13,11 @@ using Logging::logf;
 using LogLevel = Logging::Level;
 constexpr auto logComponent = Logging::Component::Timer;
 
+#ifdef RP2350
+// TODO: timer1
+#define TIMER_IRQ_0 TIMER0_IRQ_0
+#endif
+
 Timer::Timer(MemoryBus &mem) : mem(mem)
 {
 }

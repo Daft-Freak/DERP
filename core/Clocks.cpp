@@ -337,7 +337,9 @@ void Clocks::calcFreq(int clock)
 
         case clk_usb:
         case clk_adc:
+#ifndef RP2350
         case clk_rtc:
+#endif
         {
             int aux = (hw.clk[clock].ctrl & CLOCKS_CLK_USB_CTRL_AUXSRC_BITS) >> CLOCKS_CLK_USB_CTRL_AUXSRC_LSB;
 

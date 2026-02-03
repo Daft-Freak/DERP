@@ -12,13 +12,18 @@
 #include "hardware/regs/pio.h" // TODO
 #include "hardware/regs/psm.h" // TODO
 #include "hardware/regs/resets.h" // TODO
-#include "hardware/regs/rtc.h" // TODO
 #include "hardware/regs/spi.h" // TODO
-#include "hardware/regs/ssi.h" // TODO: move
 #include "hardware/regs/sio.h" // TODO
 #include "hardware/regs/sysinfo.h" // TODO
 #include "hardware/structs/clocks.h" // clock_index
 #include "hardware/structs/usb.h" // USB_DPRAM_SIZE
+
+#ifdef RP2350
+#include "hardware/regs/qmi.h" // TODO
+#else
+#include "hardware/regs/rtc.h" // TODO
+#include "hardware/regs/ssi.h" // TODO: move
+#endif
 
 #include "MemoryBus.h"
 
@@ -50,12 +55,19 @@ enum MemoryRegion
 {
     Region_ROM           = ROM_BASE >> 24,
     Region_XIP           = XIP_BASE >> 24,
+#ifdef RP2350
+    Region_XIP_Maint     = XIP_MAINTENANCE_BASE >> 24,
+    Region_XIP_NoCNoANoT = XIP_NOCACHE_NOALLOC_NOTRANSLATE_BASE >> 24,
+#else
     Region_XIP_NoAlloc   = XIP_NOALLOC_BASE >> 24,
     Region_XIP_NoCache   = XIP_NOCACHE_BASE >> 24,
+#endif
     Region_XIP_NoCNoA    = XIP_NOCACHE_NOALLOC_BASE >> 24,
+#ifndef RP2350
     Region_XIP_Ctrl      = XIP_CTRL_BASE >> 24,
     Region_XIP_CacheSRAM = XIP_SRAM_BASE >> 24,
     Region_XIP_SSI       = XIP_SSI_BASE >> 24,
+#endif
     Region_SRAM          = SRAM_BASE >> 24,
     Region_APBPeriph     = SYSINFO_BASE >> 24, // first periph
     Region_AHBPeriph     = DMA_BASE >> 24, // first periph
@@ -64,7 +76,11 @@ enum MemoryRegion
 };
 
 // peripherals
+#ifdef RP2350
+#define PERIPH(x) ((x##_BASE >> 15) & 0x3F)
+#else
 #define PERIPH(x) ((x##_BASE >> 14) & 0x1F)
+#endif
 
 enum class APBPeripheral
 {
@@ -80,6 +96,9 @@ enum class APBPeripheral
     XOsc = PERIPH(XOSC),
     PLL_Sys = PERIPH(PLL_SYS),
     PLL_USB = PERIPH(PLL_USB),
+#ifdef RP2350
+    AccessCtrl = PERIPH(ACCESSCTRL),
+#endif
     BusCtrl = PERIPH(BUSCTRL),
     UART0 = PERIPH(UART0),
     UART1 = PERIPH(UART1),
@@ -89,11 +108,39 @@ enum class APBPeripheral
     I2C1 = PERIPH(I2C1),
     ADC = PERIPH(ADC),
     PWM = PERIPH(PWM),
+#ifdef RP2350
+    Timer0 = PERIPH(TIMER0),
+    Timer1 = PERIPH(TIMER1),
+    Timer = Timer0,
+    HSTXCtrl = PERIPH(HSTX_CTRL),
+    XIPCtrl = PERIPH(XIP_CTRL),
+    XIP_QMI = PERIPH(XIP_QMI),
+#else
     Timer = PERIPH(TIMER),
+#endif
     Watchdog = PERIPH(WATCHDOG),
+#ifdef RP2350
+    BootRAM = PERIPH(BOOTRAM),
+#else
     RTC = PERIPH(RTC),
+#endif
     ROsc = PERIPH(ROSC),
+#ifdef RP2350
+    TRNG = PERIPH(TRNG),
+
+    SHA256 = PERIPH(SHA256),
+    POWMAN = PERIPH(POWMAN),
+    TICKS = PERIPH(TICKS),
+    OTP = PERIPH(OTP),
+    OTPData = PERIPH(OTP_DATA),
+    OTPDataGuarded = PERIPH(OTP_DATA_GUARDED),
+    CoreSightPeriph = PERIPH(CORESIGHT_PERIPH),
+    CoreSightPeriph2 = PERIPH(CORESIGHT_TPIU),
+    DFT = PERIPH(DFT),
+    GlitchDetector = PERIPH(GLITCH_DETECTOR),
+#else
     VRegAndChipReset = PERIPH(VREG_AND_CHIP_RESET),
+#endif
     TBMan = PERIPH(TBMAN),
 };
 
@@ -106,7 +153,14 @@ enum class AHBPeripheral
     USB = PERIPH(USBCTRL),
     PIO0 = PERIPH(PIO0),
     PIO1 = PERIPH(PIO1),
+#ifdef RP2350
+    PIO2 = PERIPH(PIO2),
+#endif
     XIPAux = PERIPH(XIP_AUX),
+#ifdef RP2350
+    HSTX_FIFO = PERIPH(HSTX_FIFO),
+    CoresightTrace = PERIPH(CORESIGHT_TRACE),
+#endif
 };
 
 #undef PERIPH
@@ -190,12 +244,15 @@ T MemoryBus::read(ClockedDevice *master, uint32_t addr, int &cycles)
             return doROMRead<T>(addr);
 
         case Region_XIP:
+#ifndef RP2350
         case Region_XIP_NoAlloc: // TODO: implement the cache
         case Region_XIP_NoCache:
+#endif
         case Region_XIP_NoCNoA:
             accessCycles(1);
             return doRead<T>(qspiFlash, addr);
 
+#ifndef RP2350 // TODO: the SRAM is at the end of the XIP region
         case Region_XIP_Ctrl:
             accessCycles(1);
             return doXIPCtrlRead<T>(addr);
@@ -211,6 +268,7 @@ T MemoryBus::read(ClockedDevice *master, uint32_t addr, int &cycles)
         case Region_XIP_SSI:
             accessCycles(1);
             return doXIPSSIRead<T>(addr);
+#endif
 
         case Region_SRAM:
             accessCycles(1);
@@ -256,7 +314,7 @@ void MemoryBus::write(ClockedDevice *master, uint32_t addr, T data, int &cycles)
         case Region_ROM:
             accessCycles(1);
             return;
-
+#ifndef RP2350 // TODO: the SRAM is at the end of the XIP region
         case Region_XIP_Ctrl:
             accessCycles(1);
             doXIPCtrlWrite<T>(addr, data);
@@ -275,6 +333,7 @@ void MemoryBus::write(ClockedDevice *master, uint32_t addr, T data, int &cycles)
             accessCycles(1);
             doXIPSSIWrite<T>(addr, data);
             return;
+#endif
 
         case Region_SRAM:
             accessCycles(1);
@@ -320,9 +379,10 @@ const uint8_t *MemoryBus::mapAddress(uint32_t addr) const
         case Region_XIP:
             return qspiFlash + (addr & 0xFFFFFF);
 
+#ifndef RP2350 // TODO: the SRAM is at the end of the XIP region
         case Region_XIP_CacheSRAM:
             return xipCache + (addr & 0x3FFF);
-
+#endif
         case Region_SRAM:
         {
             // SRAM0-3 is stored striped so that we can do this
@@ -345,8 +405,10 @@ uint8_t *MemoryBus::mapAddress(uint32_t addr)
         case Region_XIP:
             return qspiFlash + (addr & 0xFFFFFF);
 
+#ifndef RP2350 // TODO: the SRAM is at the end of the XIP region
         case Region_XIP_CacheSRAM:
             return xipCache + (addr & 0x3FFF);
+#endif
 
         case Region_SRAM:
         {
@@ -445,7 +507,11 @@ void MemoryBus::peripheralUpdate(uint64_t target, uint32_t irqMask, ARMv6MCore *
     auto dmaTREQMask = dma.getActiveTREQMask();
     // DMA and anything that can generate a DREQ
     // (incomplete)
+#ifdef RP2350
+    const auto dmaMask = 1 << PWM_IRQ_WRAP_0 | 1 << PWM_IRQ_WRAP_1 | 1 << PIO0_IRQ_0 | 1 << PIO0_IRQ_1 | 1 << PIO1_IRQ_0 | 1 << PIO1_IRQ_1 | 1 << DMA_IRQ_0 | 1 << DMA_IRQ_1;
+#else
     const auto dmaMask = 1 << PWM_IRQ_WRAP | 1 << PIO0_IRQ_0 | 1 << PIO0_IRQ_1 | 1 << PIO1_IRQ_0 | 1 << PIO1_IRQ_1 | 1 << DMA_IRQ_0 | 1 << DMA_IRQ_1;
+#endif
     uint32_t forcedMask = 0;
 
     // if there are active DMA transfers with a DREQ and DMA or any periph that might generate a DREQ has an enabled IRQ
@@ -457,15 +523,28 @@ void MemoryBus::peripheralUpdate(uint64_t target, uint32_t irqMask, ARMv6MCore *
             forcedMask |= 1 << PIO0_IRQ_0;
         if(dmaTREQMask & (0xF << DREQ_PIO1_TX0 | 0xF << DREQ_PIO1_RX0))
             forcedMask |= 1 << PIO1_IRQ_0;
+#ifdef RP2350
+        if(dmaTREQMask & (0xFFFull << DREQ_PWM_WRAP0))
+            forcedMask |= 1 << PWM_IRQ_WRAP_0 | 1 << PWM_IRQ_WRAP_1;
+#else
         if(dmaTREQMask & (0xFF << DREQ_PWM_WRAP0))
             forcedMask |= 1 << PWM_IRQ_WRAP;
+#endif
     }
-
+#ifdef RP2350
+    const auto timerIRQs = 1 << TIMER0_IRQ_0 | 1 << TIMER0_IRQ_1 | 1 << TIMER0_IRQ_2 | 1 << TIMER0_IRQ_3
+                         | 1 << TIMER1_IRQ_0 | 1 << TIMER1_IRQ_1 | 1 << TIMER1_IRQ_2 | 1 << TIMER1_IRQ_3;
+#else
     const auto timerIRQs = 1 << TIMER_IRQ_0 | 1 << TIMER_IRQ_1 | 1 << TIMER_IRQ_2 | 1 << TIMER_IRQ_3;
+#endif
     if((irqMask & timerIRQs) && timer.needUpdateForInterrupts())
         devices[numDevices++] = &timer;
 
+#ifdef RP2350
+    const auto pwmIRQs = 1 << PWM_IRQ_WRAP_0 | 1 << PWM_IRQ_WRAP_1;;
+#else
     const auto pwmIRQs = 1 << PWM_IRQ_WRAP;
+#endif
     if(((irqMask & pwmIRQs) && pwm.needUpdateForInterrupts()) || (forcedMask & pwmIRQs))
         devices[numDevices++] = &pwm;
 
@@ -757,6 +836,7 @@ static const char *ssiRegNames[]
 template<class T>
 T MemoryBus::doXIPSSIRead(uint32_t addr)
 {
+#ifndef RP2350
     switch(addr & 0xFF)
     {
         case SSI_TXFLR_OFFSET:
@@ -778,6 +858,7 @@ T MemoryBus::doXIPSSIRead(uint32_t addr)
             return v;
         }
     }
+#endif
     logf(LogLevel::NotImplemented, logComponent, "XIP SSI R %s (%08X)", ssiRegNames[(addr & 0xFF) / 4], addr);
     return 0;
 }
@@ -785,6 +866,7 @@ T MemoryBus::doXIPSSIRead(uint32_t addr)
 template<class T>
 void MemoryBus::doXIPSSIWrite(uint32_t addr, T data)
 {
+#ifndef RP2350
     switch(addr & 0xFF)
     {
         case SSI_SSIENR_OFFSET:
@@ -879,6 +961,7 @@ void MemoryBus::doXIPSSIWrite(uint32_t addr, T data)
             return;
         }
     }
+#endif
     logf(LogLevel::NotImplemented, logComponent, "XIP SSI W %s (%08X) = %08X", ssiRegNames[(addr & 0xFF) / 4], addr, data);
 }
 
@@ -910,8 +993,13 @@ static const char *apbPeriphNames[]{
     "SYSINFO",
     "SYSCFG",
     "CLOCKS",
+#ifndef RP2350
     "RESETS",
+#endif
     "PSM",
+#ifdef RP2350
+    "RESETS",
+#endif
     "IO_BANK0",
     "IO_QSPI",
     "PADS_BANK0",
@@ -919,6 +1007,9 @@ static const char *apbPeriphNames[]{
     "XOSC",
     "PLL_SYS",
     "PLL_USB",
+#ifdef RP2350
+    "ACCESSCTRL",
+#endif
     "BUSCTRL",
     "UART0",
     "UART1",
@@ -928,12 +1019,40 @@ static const char *apbPeriphNames[]{
     "I2C1",
     "ADC",
     "PWM",
+#ifdef RP2350
+    "TIMER0",
+    "TIMER1",
+    "HSTX_CTRL",
+    "XIP_CTRL",
+    "XIP_QMI",
+#else
     "TIMER",
+#endif
     "WATCHDOG",
+#ifdef RP2350
+    "BOOTRAM",
+#else
     "RTC",
+#endif
     "ROSC",
+#ifdef RP2350
+    "TRNG",
+    "SHA256",
+    "POWMAN",
+    "TICKS",
+    "110000",
+    "118000",
+    "OTP",
+    "OTP_DATA",
+    "OTP_DATA_GUARDED",
+    "CORESIGHT_PERIPH",
+    "CORESIGHT_PERIPH+1",
+    "DFT",
+    "GLITCH_DETECTOR",
+#else
     "VREG_AND_CHIP_RESET",
     "68000",
+#endif
     "TBMAN"
 };
 
@@ -948,14 +1067,24 @@ T MemoryBus::doAPBPeriphRead(ClockTarget &masterClock, uint32_t addr)
 template<>
 uint32_t MemoryBus::doAPBPeriphRead(ClockTarget &masterClock, uint32_t addr)
 {
+#ifdef RP2350
+    auto peripheral = static_cast<APBPeripheral>((addr >> 15) & 0x3F);
+    auto periphAddr = addr & 0x7FFF;
+#else
     auto peripheral = static_cast<APBPeripheral>((addr >> 14) & 0x1F);
     auto periphAddr = addr & 0x3FFF;
+#endif
 
     switch(peripheral)
     {
         case APBPeripheral::SysInfo:
+#ifdef RP2350
+            if(periphAddr == SYSINFO_GITREF_RP2350_OFFSET)
+                return 0xDF2350DF; // TODO: put a real value here?
+#else
             if(periphAddr == SYSINFO_GITREF_RP2040_OFFSET)
                 return 0xDF2040DF; // TODO: put a real value here?
+#endif
             break;
 
         case APBPeripheral::Clocks:
@@ -1043,10 +1172,11 @@ uint32_t MemoryBus::doAPBPeriphRead(ClockTarget &masterClock, uint32_t addr)
         case APBPeripheral::Watchdog:
             return watchdog.regRead(masterClock.getTime(), periphAddr);
 
+#ifndef RP2350
         case APBPeripheral::RTC:
             if(periphAddr == RTC_CTRL_OFFSET)
                 return rtcCtrl | (rtcCtrl & 1) << 1; // RTC_ACTIVE = RTC_ENABLE
-
+#endif
             break;
 
         default:
@@ -1074,8 +1204,13 @@ void MemoryBus::doAPBPeriphWrite(ClockTarget &masterClock, uint32_t addr, uint16
 template<class T>
 void MemoryBus::doAPBPeriphWrite(ClockTarget &masterClock, uint32_t addr, T data)
 {
+#ifdef RP2350
+    auto peripheral = static_cast<APBPeripheral>((addr >> 15) & 0x3F);
+    auto periphAddr = addr & 0x7FFF;
+#else
     auto peripheral = static_cast<APBPeripheral>((addr >> 14) & 0x1F);
     auto periphAddr = addr & 0x3FFF;
+#endif
 
     switch(peripheral)
     {
@@ -1171,6 +1306,7 @@ void MemoryBus::doAPBPeriphWrite(ClockTarget &masterClock, uint32_t addr, T data
             watchdog.regWrite(masterClock.getTime(), periphAddr, data);
             return;
 
+#ifndef RP2350
         case APBPeripheral::RTC:
             if(periphAddr == RTC_CTRL_OFFSET)
             {
@@ -1178,7 +1314,7 @@ void MemoryBus::doAPBPeriphWrite(ClockTarget &masterClock, uint32_t addr, T data
                 return;
             }
             break;
-
+#endif
         default:
             break;
     }
@@ -1236,9 +1372,25 @@ uint32_t MemoryBus::doAHBPeriphRead(ClockTarget &masterClock, uint32_t addr)
         case AHBPeripheral::PIO1:
             return pio[1].regRead(masterClock.getTime(), periphAddr);
 
+#ifdef RP2350
+        case AHBPeripheral::PIO2:
+            logf(LogLevel::NotImplemented, logComponent, "AHBP PIO2 R %08X", addr);
+            break;
+#endif
+
         case AHBPeripheral::XIPAux:
             logf(LogLevel::NotImplemented, logComponent, "AHBP XIP_AUX R %08X", addr);
             break;
+
+#ifdef RP2350
+        case AHBPeripheral::HSTX_FIFO:
+            logf(LogLevel::NotImplemented, logComponent, "AHBP HSTX_FIFO R %08X", addr);
+            break;
+        case AHBPeripheral::CoresightTrace:
+            logf(LogLevel::NotImplemented, logComponent, "AHBP CORESIGHT_TRACE R %08X", addr);
+            break;
+#endif
+
     }
 
     return doOpenRead<uint32_t>(addr);
@@ -1314,9 +1466,25 @@ void MemoryBus::doAHBPeriphWrite(ClockTarget &masterClock, uint32_t addr, T data
             return;
         }
 
+#ifdef RP2350
+        case AHBPeripheral::PIO2:
+            logf(LogLevel::NotImplemented, logComponent, "AHBP PIO2 W %08X = %08X", addr, data);
+            return;
+#endif
+
         case AHBPeripheral::XIPAux:
             logf(LogLevel::NotImplemented, logComponent, "AHBP XIP_AUX W %08X = %08X", addr, data);
             return;
+
+#ifdef RP2350
+        case AHBPeripheral::HSTX_FIFO:
+            logf(LogLevel::NotImplemented, logComponent, "AHBP HSTX_FIFO W %08X = %08X", addr, data);
+            return;
+        case AHBPeripheral::CoresightTrace:
+            logf(LogLevel::NotImplemented, logComponent, "AHBP CORESIGHT_TRACE W %08X = %08X", addr, data);
+            return;
+#endif
+
     }
 }
 
@@ -1355,6 +1523,7 @@ uint32_t MemoryBus::doIOPORTRead(ClockTarget &masterClock, int core, uint32_t ad
         case SIO_FIFO_RD_OFFSET:
             return coreFIFO[1 - core].popOrDefault();
 
+#ifndef RP2350
         case SIO_DIV_UDIVIDEND_OFFSET:
         case SIO_DIV_SDIVIDEND_OFFSET:
             return dividend[core];
@@ -1368,6 +1537,7 @@ uint32_t MemoryBus::doIOPORTRead(ClockTarget &masterClock, int core, uint32_t ad
             return divRem[core];
         case SIO_DIV_CSR_OFFSET:
             return (dividerDirty[core] ? SIO_DIV_CSR_DIRTY_BITS : 0) | SIO_DIV_CSR_READY_BITS;
+#endif
 
         case SIO_INTERP0_ACCUM0_OFFSET:
         case SIO_INTERP0_ACCUM1_OFFSET:
@@ -1548,9 +1718,14 @@ void MemoryBus::doIOPORTWrite(ClockTarget &masterClock, int core, uint32_t addr,
         case SIO_FIFO_WR_OFFSET:
             coreFIFO[core].pushIfNotFull(data);
             // at least one status flag got set here...
+#ifdef RP2350
+            setPendingIRQ(SIO_IRQ_FIFO + core);
+#else
             setPendingIRQ(SIO_IRQ_PROC0 + core);
+#endif
             return;
 
+#ifndef RP2350
         case SIO_DIV_UDIVIDEND_OFFSET:
             dividend[core] = data;
             dividerDirty[core] = true;
@@ -1583,6 +1758,7 @@ void MemoryBus::doIOPORTWrite(ClockTarget &masterClock, int core, uint32_t addr,
             divRem[core] = data;
             dividerDirty[core] = true;
             return;
+#endif
 
         case SIO_INTERP0_ACCUM0_OFFSET:
         case SIO_INTERP0_ACCUM1_OFFSET:

@@ -7,7 +7,13 @@
 #include <limits>
 #include <utility>
 
+#ifdef RP2350
+#include "hardware/regs/m33.h"
+#define CPU_REG(x) M33_##x
+#else
 #include "hardware/regs/m0plus.h"
+#define CPU_REG(x) M0PLUS_##x
+#endif
 
 #include "ARMv6MCore.h"
 #include "Logging.h"
@@ -19,6 +25,51 @@ constexpr auto logComponent = Logging::Component::ArmCore;
 #ifdef _MSC_VER
 #define __builtin_unreachable() __assume(false)
 #endif
+
+// reg remapping
+#define CPU_SYST_CSR_OFFSET         CPU_REG(SYST_CSR_OFFSET)
+#define CPU_SYST_CSR_RESET          CPU_REG(SYST_CSR_RESET)
+
+#define CPU_SYST_CSR_ENABLE_BITS    CPU_REG(SYST_CSR_ENABLE_BITS)
+#define CPU_SYST_CSR_CLKSOURCE_BITS CPU_REG(SYST_CSR_CLKSOURCE_BITS)
+
+#define CPU_SYST_RVR_OFFSET         CPU_REG(SYST_RVR_OFFSET)
+#define CPU_SYST_RVR_RESET          CPU_REG(SYST_RVR_RESET)
+
+#define CPU_SYST_CVR_OFFSET         CPU_REG(SYST_CVR_OFFSET)
+#define CPU_SYST_CVR_RESET          CPU_REG(SYST_CVR_RESET)
+
+#define CPU_SYST_CVR_CURRENT_BITS   CPU_REG(SYST_CVR_CURRENT_BITS)
+
+#define CPU_SYST_CALIB_OFFSET       CPU_REG(SYST_CALIB_OFFSET)
+#define CPU_SYST_CALIB_RESET        CPU_REG(SYST_CALIB_RESET)
+
+#define CPU_NVIC_IPR0_OFFSET        CPU_REG(NVIC_IPR0_OFFSET)
+#define CPU_NVIC_IPR1_OFFSET        CPU_REG(NVIC_IPR1_OFFSET)
+#define CPU_NVIC_IPR2_OFFSET        CPU_REG(NVIC_IPR2_OFFSET)
+#define CPU_NVIC_IPR3_OFFSET        CPU_REG(NVIC_IPR3_OFFSET)
+#define CPU_NVIC_IPR4_OFFSET        CPU_REG(NVIC_IPR4_OFFSET)
+#define CPU_NVIC_IPR5_OFFSET        CPU_REG(NVIC_IPR5_OFFSET)
+#define CPU_NVIC_IPR6_OFFSET        CPU_REG(NVIC_IPR6_OFFSET)
+#define CPU_NVIC_IPR7_OFFSET        CPU_REG(NVIC_IPR7_OFFSET)
+
+#define CPU_CPUID_OFFSET            CPU_REG(CPUID_OFFSET)
+#define CPU_CPUID_RESET             CPU_REG(CPUID_RESET)
+#define CPU_ICSR_OFFSET             CPU_REG(ICSR_OFFSET)
+#define CPU_VTOR_OFFSET             CPU_REG(VTOR_OFFSET)
+#define CPU_AIRCR_OFFSET            CPU_REG(AIRCR_OFFSET)
+#define CPU_SCR_OFFSET              CPU_REG(SCR_OFFSET)
+#define CPU_CCR_OFFSET              CPU_REG(CCR_OFFSET)
+#define CPU_SHPR2_OFFSET            CPU_REG(SHPR2_OFFSET)
+#define CPU_SHPR3_OFFSET            CPU_REG(SHPR3_OFFSET)
+#define CPU_SHCSR_OFFSET            CPU_REG(SHCSR_OFFSET)
+
+#define CPU_MPU_TYPE_OFFSET         CPU_REG(MPU_TYPE_OFFSET)
+#define CPU_MPU_TYPE_RESET          CPU_REG(MPU_TYPE_RESET)
+#define CPU_MPU_CTRL_OFFSET         CPU_REG(MPU_CTRL_OFFSET)
+#define CPU_MPU_RNR_OFFSET          CPU_REG(MPU_RNR_OFFSET)
+#define CPU_MPU_RBAR_OFFSET         CPU_REG(MPU_RBAR_OFFSET)
+
 
 // FIXME: this still thinks it's an ARMv4T
 
@@ -44,10 +95,10 @@ void ARMv6MCore::reset()
     exceptionActive = exceptionPending = 0;
     needException = false;
 
-    sysTickCSR = M0PLUS_SYST_CSR_RESET;
-    sysTickReload = M0PLUS_SYST_RVR_RESET;
-    sysTickCurrent = M0PLUS_SYST_CVR_RESET;
-    sysTickCalib = M0PLUS_SYST_CALIB_RESET;
+    sysTickCSR = CPU_SYST_CSR_RESET;
+    sysTickReload = CPU_SYST_RVR_RESET;
+    sysTickCurrent = CPU_SYST_CVR_RESET;
+    sysTickCalib = CPU_SYST_CALIB_RESET;
 
     nvicEnabled = 0;
     for(auto &reg : nvicPriority)
@@ -61,12 +112,12 @@ void ARMv6MCore::reset()
 
     // CPUID
     // TODO: maybe not harcoded M0+ if I ever reuse this...
-    scbRegs[0] = M0PLUS_CPUID_RESET;
+    scbRegs[0] = CPU_CPUID_RESET;
     // CCR
     scbRegs[5] = 0x3F8;
 
     // MPU_TYPE
-    mpuRegs[0] = M0PLUS_MPU_TYPE_RESET;
+    mpuRegs[0] = CPU_MPU_TYPE_RESET;
 
     int cycles;
     reg(Reg::SP) = mem.read<uint32_t>(this, 0, cycles); // MSP
@@ -117,7 +168,7 @@ void ARMv6MCore::update(uint64_t target)
             clock.addCycles(exec);
 
             // update systick if using cpu clock
-            uint32_t mask = M0PLUS_SYST_CSR_ENABLE_BITS | M0PLUS_SYST_CSR_CLKSOURCE_BITS;
+            uint32_t mask = CPU_SYST_CSR_ENABLE_BITS | CPU_SYST_CSR_CLKSOURCE_BITS;
             if((sysTickCSR & mask) == mask)
                 updateSysTick(exec);
 
@@ -177,51 +228,54 @@ uint32_t ARMv6MCore::readReg(uint32_t addr)
 {
     switch(addr & 0xFFFFFFF)
     {
-        case M0PLUS_SYST_CSR_OFFSET:
+        case CPU_SYST_CSR_OFFSET:
             updateSysTick();
             return sysTickCSR;
-        case M0PLUS_SYST_RVR_OFFSET:
+        case CPU_SYST_RVR_OFFSET:
             updateSysTick();
             return sysTickReload;
-        case M0PLUS_SYST_CVR_OFFSET:
+        case CPU_SYST_CVR_OFFSET:
             updateSysTick();
             return sysTickCurrent;
-        case M0PLUS_SYST_CALIB_OFFSET:
+        case CPU_SYST_CALIB_OFFSET:
             updateSysTick();
             return sysTickCalib;
-        
+#ifndef RP2350 // FIXME: two of these
         case M0PLUS_NVIC_ISER_OFFSET:
         case M0PLUS_NVIC_ICER_OFFSET:
             return nvicEnabled;
         case M0PLUS_NVIC_ISPR_OFFSET:
         case M0PLUS_NVIC_ICPR_OFFSET:
             return exceptionPending >> 16;
-        case M0PLUS_NVIC_IPR0_OFFSET:
-        case M0PLUS_NVIC_IPR1_OFFSET:
-        case M0PLUS_NVIC_IPR2_OFFSET:
-        case M0PLUS_NVIC_IPR3_OFFSET:
-        case M0PLUS_NVIC_IPR4_OFFSET:
-        case M0PLUS_NVIC_IPR5_OFFSET:
-        case M0PLUS_NVIC_IPR6_OFFSET:
-        case M0PLUS_NVIC_IPR7_OFFSET:
+#endif
+        case CPU_NVIC_IPR0_OFFSET:
+        case CPU_NVIC_IPR1_OFFSET:
+        case CPU_NVIC_IPR2_OFFSET:
+        case CPU_NVIC_IPR3_OFFSET:
+        case CPU_NVIC_IPR4_OFFSET:
+        case CPU_NVIC_IPR5_OFFSET:
+        case CPU_NVIC_IPR6_OFFSET:
+        case CPU_NVIC_IPR7_OFFSET:
             return nvicPriority[(addr & 0xFF) / 4];
 
-        case M0PLUS_CPUID_OFFSET:
-        case M0PLUS_ICSR_OFFSET:
-        case M0PLUS_VTOR_OFFSET:
-        case M0PLUS_AIRCR_OFFSET:
-        case M0PLUS_SCR_OFFSET:
-        case M0PLUS_CCR_OFFSET:
-        case M0PLUS_SHPR2_OFFSET:
-        case M0PLUS_SHPR3_OFFSET:
-        case M0PLUS_SHCSR_OFFSET:
+        case CPU_CPUID_OFFSET:
+        case CPU_ICSR_OFFSET:
+        case CPU_VTOR_OFFSET:
+        case CPU_AIRCR_OFFSET:
+        case CPU_SCR_OFFSET:
+        case CPU_CCR_OFFSET:
+        case CPU_SHPR2_OFFSET:
+        case CPU_SHPR3_OFFSET:
+        case CPU_SHCSR_OFFSET:
             return scbRegs[(addr & 0xFF) / 4];
 
-        case M0PLUS_MPU_TYPE_OFFSET:
-        case M0PLUS_MPU_CTRL_OFFSET:
-        case M0PLUS_MPU_RNR_OFFSET:
-        case M0PLUS_MPU_RBAR_OFFSET:
+        case CPU_MPU_TYPE_OFFSET:
+        case CPU_MPU_CTRL_OFFSET:
+        case CPU_MPU_RNR_OFFSET:
+        case CPU_MPU_RBAR_OFFSET:
+#ifndef RP2350
         case M0PLUS_MPU_RASR_OFFSET:
+#endif
             return mpuRegs[((addr & 0xFF) - 0x90) / 4];
     }
 
@@ -233,19 +287,20 @@ void ARMv6MCore::writeReg(uint32_t addr, uint32_t data)
 {
     switch(addr & 0xFFFFFFF)
     {
-        case M0PLUS_SYST_CSR_OFFSET:
+        case CPU_SYST_CSR_OFFSET:
             updateSysTick();
             sysTickCSR = data;
             return;
-        case M0PLUS_SYST_RVR_OFFSET:
+        case CPU_SYST_RVR_OFFSET:
             updateSysTick();
             sysTickReload = data;
             return;
-        case M0PLUS_SYST_CVR_OFFSET:
+        case CPU_SYST_CVR_OFFSET:
             updateSysTick();
             sysTickCurrent = sysTickReload;
             return;
-        
+
+#ifndef RP2350 // FIXME: two of these
         case M0PLUS_NVIC_ISER_OFFSET:
             nvicEnabled |= data;
             checkPendingExceptions();
@@ -262,32 +317,35 @@ void ARMv6MCore::writeReg(uint32_t addr, uint32_t data)
             exceptionPending &= ~(static_cast<uint64_t>(data) << 16);
             checkPendingExceptions();
             return;
-        case M0PLUS_NVIC_IPR0_OFFSET:
-        case M0PLUS_NVIC_IPR1_OFFSET:
-        case M0PLUS_NVIC_IPR2_OFFSET:
-        case M0PLUS_NVIC_IPR3_OFFSET:
-        case M0PLUS_NVIC_IPR4_OFFSET:
-        case M0PLUS_NVIC_IPR5_OFFSET:
-        case M0PLUS_NVIC_IPR6_OFFSET:
-        case M0PLUS_NVIC_IPR7_OFFSET:
+#endif
+        case CPU_NVIC_IPR0_OFFSET:
+        case CPU_NVIC_IPR1_OFFSET:
+        case CPU_NVIC_IPR2_OFFSET:
+        case CPU_NVIC_IPR3_OFFSET:
+        case CPU_NVIC_IPR4_OFFSET:
+        case CPU_NVIC_IPR5_OFFSET:
+        case CPU_NVIC_IPR6_OFFSET:
+        case CPU_NVIC_IPR7_OFFSET:
             nvicPriority[(addr & 0xFF) / 4] = data;
             return;
 
-        //case M0PLUS_ICSR_OFFSET:
-        case M0PLUS_VTOR_OFFSET:
-        //case M0PLUS_AIRCR_OFFSET:
-        case M0PLUS_SCR_OFFSET:
-        case M0PLUS_SHPR2_OFFSET:
-        case M0PLUS_SHPR3_OFFSET:
-        case M0PLUS_SHCSR_OFFSET:
+        //case CPU_ICSR_OFFSET:
+        case CPU_VTOR_OFFSET:
+        //case CPU_AIRCR_OFFSET:
+        case CPU_SCR_OFFSET:
+        case CPU_SHPR2_OFFSET:
+        case CPU_SHPR3_OFFSET:
+        case CPU_SHCSR_OFFSET:
             scbRegs[(addr & 0xFF) / 4] = data;
             return;
 
-        case M0PLUS_MPU_TYPE_OFFSET:
-        case M0PLUS_MPU_CTRL_OFFSET:
-        case M0PLUS_MPU_RNR_OFFSET:
-        case M0PLUS_MPU_RBAR_OFFSET:
+        case CPU_MPU_TYPE_OFFSET:
+        case CPU_MPU_CTRL_OFFSET:
+        case CPU_MPU_RNR_OFFSET:
+        case CPU_MPU_RBAR_OFFSET:
+#ifndef RP2350
         case M0PLUS_MPU_RASR_OFFSET:
+#endif
             mpuRegs[((addr & 0xFF) - 0x90) / 4] = data;
             return;
     }
@@ -1706,13 +1764,21 @@ int ARMv6MCore::getExceptionPriority(int exception) const
         case 3: // HardFault
             return -1;
 
+#ifdef RP2350
+        case 11: // SVCall
+            return scbRegs[7]/*SHPR2*/ >> M33_SHPR2_PRI_11_3_LSB;
+        case 14: // PendSV
+            return  (scbRegs[8]/*SHPR3*/ & M33_SHPR3_PRI_14_3_BITS) >> M33_SHPR3_PRI_14_3_LSB;
+        case 15: // SysTick
+            return scbRegs[8]/*SHPR3*/ >> M33_SHPR3_PRI_15_3_LSB;
+#else
         case 11: // SVCall
             return scbRegs[7]/*SHPR2*/ >> M0PLUS_SHPR2_PRI_11_LSB;
         case 14: // PendSV
             return  (scbRegs[8]/*SHPR3*/ & M0PLUS_SHPR3_PRI_14_BITS) >> M0PLUS_SHPR3_PRI_14_LSB;
         case 15: // SysTick
             return scbRegs[8]/*SHPR3*/ >> M0PLUS_SHPR3_PRI_15_LSB;
-        
+#endif   
         default:
             assert(exception >= 16);
             // external interrupt
@@ -1762,10 +1828,10 @@ void ARMv6MCore::checkPendingExceptions()
 
 void ARMv6MCore::updateSysTick(int sysCycles)
 {
-    if(!(sysTickCSR & M0PLUS_SYST_CSR_CLKSOURCE_BITS))
+    if(!(sysTickCSR & CPU_SYST_CSR_CLKSOURCE_BITS))
         return; // TODO: watchdog tick
 
-    sysTickCurrent = (sysTickCurrent - sysCycles) & M0PLUS_SYST_CVR_CURRENT_BITS;
+    sysTickCurrent = (sysTickCurrent - sysCycles) & CPU_SYST_CVR_CURRENT_BITS;
 
     if(!sysTickCurrent)
         sysTickCurrent = sysTickReload;

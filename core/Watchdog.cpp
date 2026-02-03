@@ -19,8 +19,9 @@ Watchdog::Watchdog(MemoryBus &mem) : mem(mem)
 void Watchdog::reset()
 {
     ctrl = WATCHDOG_CTRL_RESET;
+#ifndef RP2350
     tick = WATCHDOG_TICK_RESET;
-
+#endif
     clock.reset();
 
     timer = 0;
@@ -35,6 +36,9 @@ void Watchdog::update(uint64_t target)
     if(!passed)
         return;
 
+#ifdef RP2350
+    int ticksToAdd = 0; // FIXME: tick generator is elsewhere
+#else
     if(!(tick & WATCHDOG_TICK_ENABLE_BITS)) // enable tick
     {
         clock.addCycles(passed);
@@ -57,7 +61,7 @@ void Watchdog::update(uint64_t target)
             ticksToAdd++;
         }
     }
-
+#endif
     ticks += ticksToAdd;
 
     // watchdog timer
@@ -97,7 +101,11 @@ uint32_t Watchdog::getTicks()
 
 uint64_t Watchdog::getTickTarget(uint32_t numTicks)
 {
+#ifdef RP2350
+    int tickCycles = 1; // FIXME
+#else
     int tickCycles = tick & WATCHDOG_TICK_CYCLES_BITS;
+#endif
     uint32_t cycles = numTicks * tickCycles - tickCounter;
     return clock.getTimeToCycles(cycles);
 }
@@ -123,8 +131,10 @@ uint32_t Watchdog::regRead(uint64_t time, uint32_t addr)
         case WATCHDOG_SCRATCH6_OFFSET:
         case WATCHDOG_SCRATCH7_OFFSET:
             return scratch[addr / 4 - 3];
+#ifndef RP2350
         case WATCHDOG_TICK_OFFSET:
             return tick | WATCHDOG_TICK_RUNNING_BITS | tickCounter << 11;
+#endif
     }
     return 0;
 }
@@ -156,8 +166,10 @@ void Watchdog::regWrite(uint64_t time, uint32_t addr, uint32_t data)
         case WATCHDOG_SCRATCH7_OFFSET:
             scratch[addr / 4 - 3] = data;
             return;
+#ifndef RP2350
         case WATCHDOG_TICK_OFFSET:
             updateReg(tick, data & (WATCHDOG_TICK_ENABLE_BITS | WATCHDOG_TICK_CYCLES_BITS), atomic);
             return;
+#endif
     }
 }

@@ -14,6 +14,7 @@ else()
 endif()
 
 option(BUILD_SDL "Build minimal SDL UI" ON)
+option(RP2350 "RP2350 support" OFF)
 
 add_subdirectory(core)
 add_subdirectory(usbip-server)

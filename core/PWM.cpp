@@ -29,8 +29,15 @@ void PWM::reset()
     }
 
     hw.intr = PWM_INTR_RESET;
+#ifdef RP2350
+    hw.inte = PWM_IRQ0_INTE_RESET;
+    hw.intf = PWM_IRQ0_INTF_RESET;
+    hw.inte1 = PWM_IRQ1_INTE_RESET;
+    hw.intf1 = PWM_IRQ1_INTF_RESET;
+#else
     hw.inte = PWM_INTE_RESET;
     hw.intf = PWM_INTF_RESET;
+#endif
 
     for(unsigned i = 0; i < NUM_PWM_SLICES; i++)
     {
