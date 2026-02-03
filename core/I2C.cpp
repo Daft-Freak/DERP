@@ -96,7 +96,17 @@ void I2C::regWrite(uint32_t addr, uint32_t data)
 
         case I2C_IC_DATA_CMD_OFFSET:
         {
-            logf(LogLevel::Info, logComponent, "%i: %02X (addr %02X)", index, data & I2C_IC_DATA_CMD_DAT_BITS, hw.tar & I2C_IC_TAR_IC_TAR_BITS);
+            bool stop = data & I2C_IC_DATA_CMD_STOP_BITS;
+            bool read = data & I2C_IC_DATA_CMD_CMD_BITS;
+            auto dat = data & I2C_IC_DATA_CMD_DAT_BITS;
+
+            if(!read)
+            {
+                if(writeCallback)
+                    writeCallback(0/*FIXME: clock*/, *this, dat, stop);
+                else
+                    logf(LogLevel::Info, logComponent, "%i: %02X%s (addr %02X)", index, dat, stop ? " STOP" : "", hw.tar & I2C_IC_TAR_IC_TAR_BITS);
+            }
             return;
         }
 
@@ -106,4 +116,14 @@ void I2C::regWrite(uint32_t addr, uint32_t data)
     }
 
     logf(LogLevel::NotImplemented, logComponent, "%i W %04X%s%08X", index, addr, op[atomic], data);
+}
+
+void I2C::setWriteCallback(WriteCallback cb)
+{
+    writeCallback = cb;
+}
+
+uint16_t I2C::getTargetAddr() const
+{
+    return hw.tar & I2C_IC_TAR_IC_TAR_BITS;
 }

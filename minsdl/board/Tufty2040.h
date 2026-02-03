@@ -1,12 +1,14 @@
 #pragma once
 #include "Board.h"
 
+#include "../Main.h"
+
 class PIO;
 
 class Tufty2040Board final : public Board
 {
 public:
-    Tufty2040Board(MemoryBus &mem);
+    Tufty2040Board(MemoryBus &mem, const Options &options);
 
     void getScreenSize(int &w, int &h) override;
     int getScreenFormat() override;
@@ -24,5 +26,5 @@ private:
     int screenDataOff = 0;
     bool doDisplayWrite = false;
 
-    void onPIOUpdate(uint64_t time, PIO &pio);
+    void onPIOTX(uint64_t time, PIO &pio, int sm, uint32_t data);
 };

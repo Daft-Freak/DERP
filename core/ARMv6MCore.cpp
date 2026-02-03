@@ -76,13 +76,14 @@ void ARMv6MCore::reset()
 unsigned int ARMv6MCore::run(int ms)
 {
     auto targetTime = clock.getTargetTime(ms);
-    return update(targetTime);
+    auto oldTime = clock.getTime();
+    update(targetTime);
+
+    return clock.getCyclesFromTime(oldTime);
 }
 
-unsigned int ARMv6MCore::update(uint64_t target)
+void ARMv6MCore::update(uint64_t target)
 {
-    unsigned int cycles = 0;
-
     mem.calcNextInterruptTime();
 
     while(clock.getTime() < target)
@@ -114,7 +115,6 @@ unsigned int ARMv6MCore::update(uint64_t target)
                 exec += handleException();
 
             clock.addCycles(exec);
-            cycles += exec;
 
             // update systick if using cpu clock
             uint32_t mask = M0PLUS_SYST_CSR_ENABLE_BITS | M0PLUS_SYST_CSR_CLKSOURCE_BITS;
@@ -131,15 +131,18 @@ unsigned int ARMv6MCore::update(uint64_t target)
 
             if(sleeping && curTime < target)
             {
-                // skip ahead
-                auto skipTarget = std::min(target, mem.getNextInterruptTime());
-                exec = std::max(UINT32_C(1), clock.getCyclesToTime(skipTarget, true));
+                if(!(primask & 1) && needException)
+                    exec = 1; // wake up for irq
+                else
+                {
+                    // skip ahead
+                    auto skipTarget = std::min(target, mem.getNextInterruptTime());
+                    exec = std::max(UINT32_C(1), clock.getCyclesToTime(skipTarget, true));
+                }
             }
         }
         while(sleeping && curTime < target);
     }
-
-    return cycles;
 }
 
 void ARMv6MCore::setPendingIRQ(int n)

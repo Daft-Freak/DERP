@@ -2,9 +2,11 @@
 
 #include <cstdint>
 
+#include "ClockTarget.h"
+
 class MemoryBus;
 
-class Timer final
+class Timer final : public ClockedDevice
 {
 public:
     Timer(MemoryBus &mem);
@@ -12,16 +14,19 @@ public:
     void reset();
 
     void update(uint64_t target);
-    void updateForInterrupts(uint64_t target)
+    bool needUpdateForInterrupts()
     {
-        if(armed & interruptEnables)
-            update(target);
+        return armed & interruptEnables;
     }
 
     uint64_t getNextInterruptTime(uint64_t target);
 
-    uint32_t regRead(uint32_t addr);
-    void regWrite(uint32_t addr, uint32_t data);
+    uint32_t regRead(uint64_t time, uint32_t addr);
+    void regWrite(uint64_t time, uint32_t addr, uint32_t data);
+
+    ClockTarget &getClock();
+
+    int getDeviceFlags() const {return 0;}
 
 private:
     MemoryBus &mem;

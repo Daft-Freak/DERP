@@ -115,6 +115,8 @@ void USB::reset()
 
 void USB::update(uint64_t target)
 {
+    clock.addCycles(clock.getCyclesToTime(target));
+
     if(shouldCheckBuffers)
     {
         usbipUpdate();
@@ -129,20 +131,20 @@ void USB::update(uint64_t target)
 
         shouldCheckBuffers = 0;
     }
-
-    lastUpdate = target;
 }
 
 uint64_t USB::getNextInterruptTime(uint64_t target)
 {
     if(interruptEnables && shouldCheckBuffers)
-        return lastUpdate + 1; // "now"
+        return clock.getTimeToCycles(1); // "now"
 
     return target;
 }
 
-uint32_t USB::regRead(uint32_t addr)
+uint32_t USB::regRead(uint64_t time, uint32_t addr)
 {
+    update(time);
+
     switch(addr)
     {
         case USB_MAIN_CTRL_OFFSET:
@@ -175,8 +177,10 @@ uint32_t USB::regRead(uint32_t addr)
     return 0xBADADD55;
 }
 
-void USB::regWrite(uint32_t addr, uint32_t data)
+void USB::regWrite(uint64_t time, uint32_t addr, uint32_t data)
 {
+    update(time);
+
     int atomic = addr >> 12;
     addr &= 0xFFF;
 

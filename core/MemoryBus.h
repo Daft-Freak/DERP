@@ -3,7 +3,6 @@
 #include <cstdint>
 #include <functional>
 #include <queue>
-#include <variant>
 
 #include "hardware/structs/interp.h"
 
@@ -23,8 +22,6 @@ class ARMv6MCore;
 
 bool updateReg(uint32_t &curVal, uint32_t newVal, int atomic);
 
-using BusMasterPtr = std::variant<ARMv6MCore *, DMA *>;
-
 class MemoryBus
 {
 public:
@@ -40,9 +37,9 @@ public:
     void reset();
 
     template<class T>
-    T read(BusMasterPtr master, uint32_t addr, int &cycles);
+    T read(ClockedDevice *master, uint32_t addr, int &cycles);
     template<class T>
-    void write(BusMasterPtr master, uint32_t addr, T data, int &cycles);
+    void write(ClockedDevice *master, uint32_t addr, T data, int &cycles);
 
     const uint8_t *mapAddress(uint32_t addr) const;
     uint8_t *mapAddress(uint32_t addr);
@@ -76,6 +73,8 @@ public:
 
     void gpioUpdate(uint64_t target);
 
+    void syncDMA(uint64_t target);
+
     uint64_t getNextInterruptTime() const {return nextInterruptTime;}
     void calcNextInterruptTime();
 
@@ -88,6 +87,7 @@ public:
 
     Clocks &getClocks() {return clocks;}
     GPIO &getGPIO() {return gpio;}
+    I2C &getI2C(int i) {return i2c[i];}
     PWM &getPWM() {return pwm;}
     Watchdog &getWatchdog() {return watchdog;}
 
@@ -144,6 +144,8 @@ private:
 
     void updateInterpolatorResult(interp_hw_t &interp);
     void popInterpolator(interp_hw_t &interp);
+
+    bool syncDevices(uint64_t target, ClockedDevice **devices, int numDevices);
 
     bool pcInCachedXIP = false;
 

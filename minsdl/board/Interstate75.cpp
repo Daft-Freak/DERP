@@ -77,11 +77,13 @@ static const uint8_t invGamma[1024]
     253, 253, 253, 253, 253, 253, 253, 254, 254, 254, 254, 254, 254, 254, 254, 255
 };
 
-Interstate75Board::Interstate75Board(MemoryBus &mem) : mem(mem)
+Interstate75Board::Interstate75Board(MemoryBus &mem, const Options &options) : mem(mem)
 {
-    mem.getPIO(0).setUpdateCallback([this](auto time, auto &pio){onPIOUpdate(time, pio);});
-    
-    mem.getClocks().addClockTarget(clk_sys, rowClock);
+    mem.getPIO(0).setTXCallback([this](auto time, auto &pio, auto sm, auto data){onPIOTX(time, pio, sm, data);});
+
+    if(options.pioHacks)
+        mem.getPIO(0).setSpeedHackEnabled(true);
+
 }
 
 void Interstate75Board::getScreenSize(int &w, int &h)
@@ -102,51 +104,27 @@ const uint8_t *Interstate75Board::getScreenData()
 
 void Interstate75Board::update(uint64_t time)
 {
-    // prevent row clock getting massively behind
-    if(rowClock.getCyclesToTime(time) >= rowCycles)
-    {
-        rowClock.addCycles(rowClock.getCyclesToTime(time));
-        rowCycles = 0;
-    }
 }
 
-void Interstate75Board::onPIOUpdate(uint64_t time, PIO &pio)
+void Interstate75Board::onPIOTX(uint64_t time, PIO &pio, int sm, uint32_t data)
 {
-    // data is PIO0 SM0
-    // row select is PIO0 SM1
-    auto &dataTXFifo = pio.getTXFIFO(0);
-    auto &rowTXFifo = pio.getTXFIFO(1);
-
-    if(dataTXFifo.empty() && rowTXFifo.empty())
-        return;
-
     int halfPanelHeight = panelHeight / 2;
 
-    // slow this down to simulate the delay from the pulse
-    // (mostly for perf)
-    if(rowClock.getCyclesToTime(time) < rowCycles)
-        return;
-
-    if(!rowTXFifo.empty())
+    if(sm == 1) // row select
     {
-        auto data = rowTXFifo.pop();
         row = data & 0x1F;
         row = (row + 1) % halfPanelHeight;
 
-        rowClock.addCycles(rowCycles);
         rowCycles = (data >> 5) + 1 + 10;
 
         column = 0;
         bottom = false;
     }
-
-    while(!dataTXFifo.empty())
+    else if(sm == 0) // data
     {
-        auto data = dataTXFifo.pop();
-
         // grab the data on the first pass
         if(rowCycles > 20)
-            continue;
+            return;
 
         int r = data & 0x3FF;
         int g = (data >> 10) & 0x3FF;
@@ -163,6 +141,4 @@ void Interstate75Board::onPIOUpdate(uint64_t time, PIO &pio)
         if(!bottom)
             column++;
     }
-
-    pio.updateFifoStatus(0);
 }

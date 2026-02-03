@@ -9,7 +9,7 @@
 
 class MemoryBus;
 
-class PWM final
+class PWM final : public ClockedDevice
 {
 public:
     using OutputCallback = std::function<void(uint64_t, uint16_t)>;
@@ -19,20 +19,21 @@ public:
     void reset();
 
     void update(uint64_t target);
-    void updateForInterrupts(uint64_t target)
+    bool needUpdateForInterrupts()
     {
-        if(hw.inte)
-            update(target);
+        return hw.inte;
     }
 
     void setOutputCallback(OutputCallback cb, uint16_t mask);
 
     uint64_t getNextInterruptTime(uint64_t target);
 
-    uint32_t regRead(uint32_t addr);
-    void regWrite(uint32_t addr, uint32_t data);
+    uint32_t regRead(uint64_t time, uint32_t addr);
+    void regWrite(uint64_t time, uint32_t addr, uint32_t data);
 
     ClockTarget &getClock() {return clock;}
+
+    int getDeviceFlags() const {return 0;}
 
 private:
     MemoryBus &mem;

@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <cassert>
 #include <cstddef>
 #include <cstdio>
@@ -5,6 +6,7 @@
 
 #include "hardware/regs/addressmap.h"
 #include "hardware/regs/busctrl.h" // TODO
+#include "hardware/regs/dreq.h"
 #include "hardware/regs/intctrl.h"
 #include "hardware/regs/io_qspi.h" // TODO: move
 #include "hardware/regs/pio.h" // TODO
@@ -109,12 +111,12 @@ enum class AHBPeripheral
 
 #undef PERIPH
 
-template uint8_t MemoryBus::read(BusMasterPtr master, uint32_t addr, int &cycles);
-template uint16_t MemoryBus::read(BusMasterPtr master, uint32_t addr, int &cycles);
-template uint32_t MemoryBus::read(BusMasterPtr master, uint32_t addr, int &cycles);
-template void MemoryBus::write(BusMasterPtr master, uint32_t addr, uint8_t val, int &cycles);
-template void MemoryBus::write(BusMasterPtr master, uint32_t addr, uint16_t val, int &cycles);
-template void MemoryBus::write(BusMasterPtr master, uint32_t addr, uint32_t val, int &cycles);
+template uint8_t MemoryBus::read(ClockedDevice *master, uint32_t addr, int &cycles);
+template uint16_t MemoryBus::read(ClockedDevice *master, uint32_t addr, int &cycles);
+template uint32_t MemoryBus::read(ClockedDevice *master, uint32_t addr, int &cycles);
+template void MemoryBus::write(ClockedDevice *master, uint32_t addr, uint8_t val, int &cycles);
+template void MemoryBus::write(ClockedDevice *master, uint32_t addr, uint16_t val, int &cycles);
+template void MemoryBus::write(ClockedDevice *master, uint32_t addr, uint32_t val, int &cycles);
 
 static inline uint32_t getStripedSRAMAddr(uint32_t addr)
 {
@@ -132,6 +134,7 @@ MemoryBus::MemoryBus() : gpio(*this), uart{{*this, 0}, {*this, 1}}, i2c{{*this, 
     clocks.addClockTarget(clk_sys, pwm.getClock());
     
     clocks.addClockTarget(clk_sys, dma.getClock());
+    clocks.addClockTarget(clk_usb, usb.getClock());
     clocks.addClockTarget(clk_sys, pio[0].getClock());
     clocks.addClockTarget(clk_sys, pio[1].getClock());
 }
@@ -173,12 +176,8 @@ void MemoryBus::reset()
 }
 
 template<class T>
-T MemoryBus::read(BusMasterPtr master, uint32_t addr, int &cycles)
+T MemoryBus::read(ClockedDevice *master, uint32_t addr, int &cycles)
 {
-    auto &masterClock = std::holds_alternative<ARMv6MCore *>(master) ?
-        std::get<ARMv6MCore *>(master)->getClock() :
-        std::get<DMA *>(master)->getClock();
-
     auto accessCycles = [&cycles, this](int c)
     {
         cycles += c;
@@ -219,38 +218,34 @@ T MemoryBus::read(BusMasterPtr master, uint32_t addr, int &cycles)
 
         case Region_APBPeriph:
             accessCycles(3);
-            return doAPBPeriphRead<T>(masterClock, addr);
+            return doAPBPeriphRead<T>(master->getClock(), addr);
 
         case Region_AHBPeriph:
             accessCycles(1);
-            return doAHBPeriphRead<T>(masterClock, addr);
+            return doAHBPeriphRead<T>(master->getClock(), addr);
 
         case Region_IOPORT:
         {
-            assert(std::holds_alternative<ARMv6MCore *>(master));
-            int core = std::get<ARMv6MCore *>(master) - cpuCores;
-            return doIOPORTRead<T>(masterClock, core, addr);
+            assert(master->getDeviceFlags() & ClockedDevice_CPU);
+            int core = static_cast<ARMv6MCore *>(master) - cpuCores;
+            return doIOPORTRead<T>(master->getClock(), core, addr);
         }
 
         case Region_CPUInternal:
             accessCycles(1);
-            assert(std::holds_alternative<ARMv6MCore *>(master));
-            return doCPUInternalRead<T>(*std::get<ARMv6MCore *>(master), addr);
+            assert(master->getDeviceFlags() & ClockedDevice_CPU);
+            return doCPUInternalRead<T>(*static_cast<ARMv6MCore *>(master), addr);
     }
 
-    if(std::holds_alternative<ARMv6MCore *>(master))
-        std::get<ARMv6MCore *>(master)->fault("Memory read");
+    if(master->getDeviceFlags() & ClockedDevice_CPU)
+        static_cast<ARMv6MCore *>(master)->fault("Memory read");
 
     return doOpenRead<T>(addr);
 }
 
 template<class T>
-void MemoryBus::write(BusMasterPtr master, uint32_t addr, T data, int &cycles)
+void MemoryBus::write(ClockedDevice *master, uint32_t addr, T data, int &cycles)
 {
-    auto &masterClock = std::holds_alternative<ARMv6MCore *>(master) ?
-        std::get<ARMv6MCore *>(master)->getClock() :
-        std::get<DMA *>(master)->getClock();
-
     auto accessCycles = [&cycles, this](int c)
     {
         cycles += c;
@@ -288,31 +283,31 @@ void MemoryBus::write(BusMasterPtr master, uint32_t addr, T data, int &cycles)
 
         case Region_APBPeriph:
             accessCycles(4);
-            doAPBPeriphWrite<T>(masterClock, addr, data);
+            doAPBPeriphWrite<T>(master->getClock(), addr, data);
             return;
 
         case Region_AHBPeriph:
             accessCycles(1);
-            doAHBPeriphWrite<T>(masterClock, addr, data);
+            doAHBPeriphWrite<T>(master->getClock(), addr, data);
             return;
 
         case Region_IOPORT:
         {
-            assert(std::holds_alternative<ARMv6MCore *>(master));
-            int core = std::get<ARMv6MCore *>(master) - cpuCores;
-            doIOPORTWrite<T>(masterClock, core, addr, data);
+            assert(master->getDeviceFlags() & ClockedDevice_CPU);
+            int core = static_cast<ARMv6MCore *>(master) - cpuCores;
+            doIOPORTWrite<T>(master->getClock(), core, addr, data);
             return;
         }   
 
         case Region_CPUInternal:
             accessCycles(1);
-            assert(std::holds_alternative<ARMv6MCore *>(master));
-            doCPUInternalWrite<T>(*std::get<ARMv6MCore *>(master), addr, data);
+            assert(master->getDeviceFlags() & ClockedDevice_CPU);
+            doCPUInternalWrite<T>(*static_cast<ARMv6MCore *>(master), addr, data);
             return;
     }
 
-    if(std::holds_alternative<ARMv6MCore *>(master))
-        std::get<ARMv6MCore *>(master)->fault("Memory write");
+    if(master->getDeviceFlags() & ClockedDevice_CPU)
+        static_cast<ARMv6MCore *>(master)->fault("Memory write");
 }
 
 const uint8_t *MemoryBus::mapAddress(uint32_t addr) const
@@ -385,29 +380,53 @@ void MemoryBus::updatePC(uint32_t pc)
 
 void MemoryBus::peripheralUpdate(uint64_t target)
 {
-    pwm.update(target);
-    gpio.update(target);
-    watchdog.update(target);
-    timer.update(target);
+    ClockedDevice *devices[]
+    {
+        &pwm,
+        &timer,
+        &dma,
+        &usb,
+        &pio[0],
+        &pio[1],
+    };
+    syncDevices(target, devices, std::size(devices));
 
-    dma.update(target);
-    usb.update(target);
-    pio[0].update(target);
-    pio[1].update(target);
+    gpio.update(target);
 }
 
 void MemoryBus::gpioUpdate(uint64_t target)
 {
     // update anything that might affect outputs before GPIO
-    // TODO: need to ensure correct ordering...
-    pwm.update(target);
-
-    // technically affects IO, but not implemented yet
-    // would also need to sync DMA most of the time
-    //pio[0].update(target);
-    //pio[1].update(target);
+    ClockedDevice *devices[]
+    {
+        &pwm,
+        // technically affects IO, but not implemented yet
+        // would also need to sync DMA most of the time
+        &pio[0],
+        &pio[1],
+    };
+    syncDevices(target, devices, std::size(devices));
 
     gpio.update(target);
+}
+
+void MemoryBus::syncDMA(uint64_t target)
+{
+    ClockedDevice *devices[3];
+    int numDevices = 0;
+
+    devices[numDevices++] = &dma;
+
+    // also sync DREQ-generating periphs
+    auto dmaTREQMask = dma.getActiveTREQMask();
+    
+    if(dmaTREQMask & (0xF << DREQ_PIO0_TX0 | 0xF << DREQ_PIO0_RX0))
+        devices[numDevices++] = &pio[0];
+
+    if(dmaTREQMask & (0xF << DREQ_PIO1_TX0 | 0xF << DREQ_PIO1_RX0))
+        devices[numDevices++] = &pio[1];
+
+    syncDevices(target, devices, numDevices);
 }
 
 void MemoryBus::peripheralUpdate(uint64_t target, uint32_t irqMask, ARMv6MCore *core)
@@ -420,25 +439,53 @@ void MemoryBus::peripheralUpdate(uint64_t target, uint32_t irqMask, ARMv6MCore *
         cpuCores[1].update(target);
 
     // only update things that might cause interrupts
-    
+    ClockedDevice *devices[6];
+    int numDevices = 0;
+
+    auto dmaTREQMask = dma.getActiveTREQMask();
+    // DMA and anything that can generate a DREQ
+    // (incomplete)
+    const auto dmaMask = 1 << PWM_IRQ_WRAP | 1 << PIO0_IRQ_0 | 1 << PIO0_IRQ_1 | 1 << PIO1_IRQ_0 | 1 << PIO1_IRQ_1 | 1 << DMA_IRQ_0 | 1 << DMA_IRQ_1;
+    uint32_t forcedMask = 0;
+
+    // if there are active DMA transfers with a DREQ and DMA or any periph that might generate a DREQ has an enabled IRQ
+    // force syncing all of them
+    if(dmaTREQMask && (irqMask & dmaMask))
+    {
+        forcedMask = 1 << DMA_IRQ_0;
+        if(dmaTREQMask & (0xF << DREQ_PIO0_TX0 | 0xF << DREQ_PIO0_RX0))
+            forcedMask |= 1 << PIO0_IRQ_0;
+        if(dmaTREQMask & (0xF << DREQ_PIO1_TX0 | 0xF << DREQ_PIO1_RX0))
+            forcedMask |= 1 << PIO1_IRQ_0;
+        if(dmaTREQMask & (0xFF << DREQ_PWM_WRAP0))
+            forcedMask |= 1 << PWM_IRQ_WRAP;
+    }
+
     const auto timerIRQs = 1 << TIMER_IRQ_0 | 1 << TIMER_IRQ_1 | 1 << TIMER_IRQ_2 | 1 << TIMER_IRQ_3;
-    if(irqMask & timerIRQs)
-        timer.updateForInterrupts(target);
+    if((irqMask & timerIRQs) && timer.needUpdateForInterrupts())
+        devices[numDevices++] = &timer;
 
-    if(irqMask & (1 << PWM_IRQ_WRAP))
-        pwm.updateForInterrupts(target);
+    const auto pwmIRQs = 1 << PWM_IRQ_WRAP;
+    if(((irqMask & pwmIRQs) && pwm.needUpdateForInterrupts()) || (forcedMask & pwmIRQs))
+        devices[numDevices++] = &pwm;
 
-    if(irqMask & (1 << DMA_IRQ_0 | 1 << DMA_IRQ_1))
-        dma.updateForInterrupts(target);
+    const auto dmaIRQs = 1 << DMA_IRQ_0 | 1 << DMA_IRQ_1;
+    if(((irqMask & dmaIRQs) && dma.needUpdateForInterrupts()) || (forcedMask & dmaIRQs))
+        devices[numDevices++] = &dma;
 
-    if(irqMask & (1 << USBCTRL_IRQ))
-        usb.updateForInterrupts(target);
+    if((irqMask & (1 << USBCTRL_IRQ)) && usb.needUpdateForInterrupts())
+        devices[numDevices++] = &usb;
 
-    if(irqMask & (1 << PIO0_IRQ_0 | 1 << PIO0_IRQ_1))
-        pio[0].update(target);
+    const auto pio0IRQs = 1 << PIO0_IRQ_0 | 1 << PIO0_IRQ_1;
+    if(((irqMask & pio0IRQs) && pio[0].needUpdateForInterrupts()) || (forcedMask & pio0IRQs))
+        devices[numDevices++] = &pio[0];
 
-    if(irqMask & (1 << PIO1_IRQ_0 | 1 << PIO1_IRQ_1))
-        pio[1].update(target);
+    const auto pio1IRQs = 1 << PIO1_IRQ_0 | 1 << PIO1_IRQ_1;
+    if(((irqMask & pio1IRQs) && pio[1].needUpdateForInterrupts()) || (forcedMask & pio1IRQs))
+        devices[numDevices++] = &pio[1];
+
+    if(numDevices)
+        syncDevices(target, devices, numDevices);
 }
 
 void MemoryBus::calcNextInterruptTime()
@@ -528,6 +575,61 @@ void MemoryBus::popInterpolator(interp_hw_t &interp)
 
     // calculate next values
     updateInterpolatorResult(interp);
+}
+
+bool MemoryBus::syncDevices(uint64_t target, ClockedDevice **devices, int numDevices)
+{
+    if(numDevices == 1)
+    {
+        devices[0]->update(target);
+        return true;
+    }
+
+    // sort devices (most behind first)
+    auto first = devices, last = devices + numDevices;
+    for(auto it = first + 1; it != last; ++it)
+    {
+        auto temp = it;
+        while(temp != first && (*temp)->getClock().getTime() < (*(temp - 1))->getClock().getTime())
+        {
+            std::swap(*temp, *(temp - 1));
+            temp--;
+        }
+    }
+
+    int devIndex = 0;
+
+    bool didUpdate = false;
+
+    while(numDevices)
+    {
+        auto dev = devices[devIndex];
+        auto time = dev->getClock().getTime();
+        auto nextTarget = devIndex == numDevices - 1 ? target : devices[devIndex + 1]->getClock().getTime();
+
+        dev->update(nextTarget);
+
+        if(dev->getClock().getTime() == time)
+        {
+            // no progress
+            if(devIndex == numDevices - 1)
+            {
+                // if this was the last (most up-to-date), we've reached the target, so drop this dev
+                devIndex--;
+                numDevices--;
+            }
+            else if(devIndex > 0 && didUpdate)
+                devIndex--; // walk back up
+            else
+                devIndex++;
+
+            didUpdate = false;
+        }
+        else
+            didUpdate = true;
+    }
+
+    return true;
 }
 
 template<class T, size_t size>
@@ -933,16 +1035,13 @@ uint32_t MemoryBus::doAPBPeriphRead(ClockTarget &masterClock, uint32_t addr)
             return i2c[1].regRead(periphAddr);
 
         case APBPeripheral::PWM:
-            pwm.update(masterClock.getTime());
-            return pwm.regRead(periphAddr);
+            return pwm.regRead(masterClock.getTime(), periphAddr);
 
         case APBPeripheral::Timer:
-            timer.update(masterClock.getTime());
-            return timer.regRead(periphAddr);
+            return timer.regRead(masterClock.getTime(), periphAddr);
 
         case APBPeripheral::Watchdog:
-            watchdog.update(masterClock.getTime());
-            return watchdog.regRead(periphAddr);
+            return watchdog.regRead(masterClock.getTime(), periphAddr);
 
         case APBPeripheral::RTC:
             if(periphAddr == RTC_CTRL_OFFSET)
@@ -1060,19 +1159,16 @@ void MemoryBus::doAPBPeriphWrite(ClockTarget &masterClock, uint32_t addr, T data
             return;
 
         case APBPeripheral::PWM:
-            pwm.update(masterClock.getTime());
-            pwm.regWrite(periphAddr, data);
+            pwm.regWrite(masterClock.getTime(), periphAddr, data);
             return;
 
         case APBPeripheral::Timer:
-            timer.update(masterClock.getTime());
-            timer.regWrite(periphAddr, data);
+            timer.regWrite(masterClock.getTime(), periphAddr, data);
             calcNextInterruptTime();
             return;
 
         case APBPeripheral::Watchdog:
-            watchdog.update(masterClock.getTime());
-            watchdog.regWrite(periphAddr, data);
+            watchdog.regWrite(masterClock.getTime(), periphAddr, data);
             return;
 
         case APBPeripheral::RTC:
@@ -1113,13 +1209,13 @@ uint32_t MemoryBus::doAHBPeriphRead(ClockTarget &masterClock, uint32_t addr)
 
     // update DMA for any periph read
     // TODO: any access that DMA could affect, possibly filter by dest addrs
-    dma.update(masterClock.getTime());
+    if(peripheral != AHBPeripheral::DMA)
+        syncDMA(masterClock.getTime());
 
     switch(peripheral)
     {
         case AHBPeripheral::DMA:
-            //dma.update(masterClock.getTime());
-            return dma.regRead(periphAddr);
+            return dma.regRead(masterClock.getTime(), periphAddr);
 
         case AHBPeripheral::USB:
         {
@@ -1129,20 +1225,16 @@ uint32_t MemoryBus::doAHBPeriphRead(ClockTarget &masterClock, uint32_t addr)
                 return *reinterpret_cast<const uint32_t *>(usb.getRAM() + (addr & 0xFFF));
             }
             else if(addr >= USBCTRL_REGS_BASE)
-            {
-                usb.update(masterClock.getTime());
-                return usb.regRead(periphAddr);
-            }
+                return usb.regRead(masterClock.getTime(), periphAddr);
+
             break;
         }
         
         case AHBPeripheral::PIO0:
-            pio[0].update(masterClock.getTime());
-            return pio[0].regRead(periphAddr);
+            return pio[0].regRead(masterClock.getTime(), periphAddr);
 
         case AHBPeripheral::PIO1:
-            pio[1].update(masterClock.getTime());
-            return pio[1].regRead(periphAddr);
+            return pio[1].regRead(masterClock.getTime(), periphAddr);
 
         case AHBPeripheral::XIPAux:
             logf(LogLevel::NotImplemented, logComponent, "AHBP XIP_AUX R %08X", addr);
@@ -1190,8 +1282,7 @@ void MemoryBus::doAHBPeriphWrite(ClockTarget &masterClock, uint32_t addr, T data
     switch(peripheral)
     {
         case AHBPeripheral::DMA:
-            dma.update(masterClock.getTime());
-            dma.regWrite(periphAddr, data);
+            dma.regWrite(masterClock.getTime(), periphAddr, data);
             calcNextInterruptTime();
             return;
 
@@ -1206,8 +1297,7 @@ void MemoryBus::doAHBPeriphWrite(ClockTarget &masterClock, uint32_t addr, T data
             }
             else if(addr >= USBCTRL_REGS_BASE)
             {
-                usb.update(masterClock.getTime());
-                usb.regWrite(periphAddr, data);
+                usb.regWrite(masterClock.getTime(), periphAddr, data);
                 return;
             }
             break;
@@ -1215,14 +1305,12 @@ void MemoryBus::doAHBPeriphWrite(ClockTarget &masterClock, uint32_t addr, T data
         
         case AHBPeripheral::PIO0:
         {
-            pio[0].update(masterClock.getTime());
-            pio[0].regWrite(periphAddr, data);
+            pio[0].regWrite(masterClock.getTime(), periphAddr, data);
             return;
         }
         case AHBPeripheral::PIO1:
         {
-            pio[1].update(masterClock.getTime());
-            pio[1].regWrite(periphAddr, data);
+            pio[1].regWrite(masterClock.getTime(), periphAddr, data);
             return;
         }
 
@@ -1249,7 +1337,6 @@ uint32_t MemoryBus::doIOPORTRead(ClockTarget &masterClock, int core, uint32_t ad
             return core;
 
         case SIO_GPIO_IN_OFFSET:
-            gpioUpdate(masterClock.getTime());
             return gpio.getInputs(masterClock.getTime());
 
         case SIO_GPIO_HI_IN_OFFSET:
@@ -1266,7 +1353,7 @@ uint32_t MemoryBus::doIOPORTRead(ClockTarget &masterClock, int core, uint32_t ad
             return (vld ? SIO_FIFO_ST_VLD_BITS : 0) | (rdy ? SIO_FIFO_ST_RDY_BITS : 0); // TODO: error flags
         }
         case SIO_FIFO_RD_OFFSET:
-            return coreFIFO[1 - core].pop();
+            return coreFIFO[1 - core].popOrDefault();
 
         case SIO_DIV_UDIVIDEND_OFFSET:
         case SIO_DIV_SDIVIDEND_OFFSET:
@@ -1459,7 +1546,7 @@ void MemoryBus::doIOPORTWrite(ClockTarget &masterClock, int core, uint32_t addr,
             return;
 
         case SIO_FIFO_WR_OFFSET:
-            coreFIFO[core].push(data);
+            coreFIFO[core].pushIfNotFull(data);
             // at least one status flag got set here...
             setPendingIRQ(SIO_IRQ_PROC0 + core);
             return;

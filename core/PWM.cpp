@@ -166,8 +166,10 @@ uint64_t PWM::getNextInterruptTime(uint64_t target)
     return target;
 }
 
-uint32_t PWM::regRead(uint32_t addr)
+uint32_t PWM::regRead(uint64_t time, uint32_t addr)
 {
+    update(time);
+
     if(addr < PWM_EN_OFFSET)
     {
         int slice = addr / 20;
@@ -196,8 +198,10 @@ uint32_t PWM::regRead(uint32_t addr)
     return 0;
 }
 
-void PWM::regWrite(uint32_t addr, uint32_t data)
+void PWM::regWrite(uint64_t time, uint32_t addr, uint32_t data)
 {
+    update(time);
+
     int atomic = addr >> 12;
     addr &= 0xFFF;
 

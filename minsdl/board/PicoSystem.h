@@ -1,6 +1,8 @@
 #pragma once
 #include "Board.h"
 
+#include "../Main.h"
+
 #include "ClockTarget.h"
 
 class GPIO;
@@ -9,7 +11,7 @@ class PIO;
 class PicoSystemBoard final : public Board
 {
 public:
-    PicoSystemBoard(MemoryBus &mem);
+    PicoSystemBoard(MemoryBus &mem, const Options &options);
 
     void getScreenSize(int &w, int &h) override;
     int getScreenFormat() override;
@@ -58,5 +60,6 @@ private:
     uint64_t onGetNextInterruptTime(uint64_t time);
 
     void onPWMUpdate(uint64_t time, uint16_t pwm);
-    void onPIOUpdate(uint64_t time, PIO &pio);
+
+    void onPIOTX(uint64_t time, PIO &pio, int sm, uint32_t data);
 };

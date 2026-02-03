@@ -1,14 +1,14 @@
 #pragma once
 #include "Board.h"
 
-#include "ClockTarget.h"
+#include "../Main.h"
 
 class PIO;
 
 class Interstate75Board final : public Board
 {
 public:
-    Interstate75Board(MemoryBus &mem);
+    Interstate75Board(MemoryBus &mem, const Options &options);
 
     void getScreenSize(int &w, int &h) override;
     int getScreenFormat() override;
@@ -32,9 +32,7 @@ private:
     int column = 0;
     bool bottom = false; // bottom/top half
 
-    // workaround for missing PIO timing
-    ClockTarget rowClock;
     uint32_t rowCycles = 0;
 
-    void onPIOUpdate(uint64_t time, PIO &pio);
+    void onPIOTX(uint64_t time, PIO &pio, int sm, uint32_t data);
 };

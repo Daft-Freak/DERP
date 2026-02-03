@@ -105,8 +105,10 @@ uint64_t Timer::getNextInterruptTime(uint64_t target)
     return target;
 }
 
-uint32_t Timer::regRead(uint32_t addr)
+uint32_t Timer::regRead(uint64_t time, uint32_t addr)
 {
+    update(time);
+
     switch(addr)
     {
         case TIMER_TIMEHR_OFFSET:
@@ -122,9 +124,9 @@ uint32_t Timer::regRead(uint32_t addr)
         case TIMER_ARMED_OFFSET:
             return armed;
         case TIMER_TIMERAWH_OFFSET:
-            return time >> 32;
+            return this->time >> 32;
         case TIMER_TIMERAWL_OFFSET:
-            return time & 0xFFFFFFFF;
+            return this->time & 0xFFFFFFFF;
         case TIMER_INTE_OFFSET:
             return interruptEnables;
     }
@@ -133,8 +135,10 @@ uint32_t Timer::regRead(uint32_t addr)
     return 0;
 }
 
-void Timer::regWrite(uint32_t addr, uint32_t data)
+void Timer::regWrite(uint64_t time, uint32_t addr, uint32_t data)
 {
+    update(time);
+
     int atomic = addr >> 12;
     addr &= 0xFFF;
 
@@ -142,9 +146,9 @@ void Timer::regWrite(uint32_t addr, uint32_t data)
     {
         case TIMER_TIMEHW_OFFSET:
         {
-            uint32_t h = time;
+            uint32_t h = this->time;
             updateReg(h, data, atomic);
-            time = static_cast<uint64_t>(h) << 32 | writeLowTime;
+            this->time = static_cast<uint64_t>(h) << 32 | writeLowTime;
             return;
         }
         case TIMER_TIMELW_OFFSET:
@@ -197,4 +201,10 @@ void Timer::regWrite(uint32_t addr, uint32_t data)
     }
 
     logf(LogLevel::NotImplemented, logComponent, "W %04X = %08X", addr, data);
+}
+
+ClockTarget &Timer::getClock()
+{
+    // bit hacky, but should work as our update always calls watchdog update first
+    return mem.getWatchdog().getClock();
 }
