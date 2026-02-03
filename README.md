@@ -32,16 +32,16 @@ picotool save -r 0 4000 bootrom.bin
 |  Feature   | Status  | Details 
 |------------|---------|---------
 | Cortex-M0+ | Partial | Copied from GBA emu, so some details are still an ARM7
-| DMA        | Minimal | Implemented just enough for PicoSystem display updates
+| DMA        | Partial | Missing priority, ring, chaining, sniffer...
 | Clocks     | Partial |
 | XOSC       | Minimal | Fixed 12MHz
 | ROSC       | Minimal | Fixed 6MHz
 | PLL        | Partial |
 | GPIO       | Partial | Missing overrides, partial interrupt handling
-| PIO        | Minimal | Some status flags, fakes TX progress
+| PIO        | Partial | Not all instructions implemented, some hacks for speed by default
 | USB        | Partial | Optional device enumeration and USBIP server
 | UART       | Minimal | Prints TX data
-| I2C        | Minimal | Some registers stubbed
+| I2C        | Minimal | Provides a write hook for PicoVision
 | SPI        | Minimal | SPI0 TNF always set
 | PWM        | Partial | Enough for PicoSystem beeps
 | Timer      | Partial |
@@ -57,6 +57,7 @@ Additional boards with some support:
 |--------------|-------------------------|--------
 | Pico         | `pico` or default       | No extra peripherals, so no output
 | Interstate75 | `pimoroni_interstate75` | Emulates a single 32x32 panel.
+| PicoVision   | `pimoroni_picovision`   | Not the fastest
 | Tufty2040    | `pimoroni_tufty2040`    | Similar display hacks to PicoSystem
 
 ## GDB Server
@@ -102,3 +103,8 @@ usbip attach -r localhost -b 1-1
 Launching without a .uf2 file does allow using the bootrom's loader. Though this is probably not a good idea...
 
 (Low level transfers/timings are not implemented so the transfer rate for USB data is... unpredictable)
+
+## Other options
+
+- `--iolog` Log all IO to a file (the format is a 32bit mask of all IOs and a 32bit number of cycles elapsed)
+- `--no-pio-hacks` Emulate each PIO instruction instead of trying to estimate data throughput
