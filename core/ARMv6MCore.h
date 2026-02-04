@@ -178,7 +178,9 @@ private:
     uint32_t sysTickCSR, sysTickReload, sysTickCurrent, sysTickCalib;
     uint32_t nvicEnabled, nvicPriority[8];
     uint32_t scbRegs[10]; // ED00-ED24
-    uint32_t mpuRegs[5]; // ED90-EDA0
+    uint32_t mpuRegs[3]; // ED90-ED98
+    uint32_t mpuBase[8];
+    uint32_t mpuAttribSize[8];
 
     MemoryBus &mem;
 };

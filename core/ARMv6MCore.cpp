@@ -272,11 +272,19 @@ uint32_t ARMv6MCore::readReg(uint32_t addr)
         case CPU_MPU_TYPE_OFFSET:
         case CPU_MPU_CTRL_OFFSET:
         case CPU_MPU_RNR_OFFSET:
+            return mpuRegs[((addr & 0xFF) - 0x90) / 4];
         case CPU_MPU_RBAR_OFFSET:
+        {
+            int index = mpuRegs[2] & 7;
+            return mpuBase[index];
+        }
 #ifndef RP2350
         case M0PLUS_MPU_RASR_OFFSET:
+        {
+            int index = mpuRegs[2] & 7;
+            return mpuAttribSize[index];
+        }
 #endif
-            return mpuRegs[((addr & 0xFF) - 0x90) / 4];
     }
 
     logf(LogLevel::NotImplemented, logComponent,"CPUI R %08X", addr);
@@ -342,12 +350,24 @@ void ARMv6MCore::writeReg(uint32_t addr, uint32_t data)
         case CPU_MPU_TYPE_OFFSET:
         case CPU_MPU_CTRL_OFFSET:
         case CPU_MPU_RNR_OFFSET:
-        case CPU_MPU_RBAR_OFFSET:
-#ifndef RP2350
-        case M0PLUS_MPU_RASR_OFFSET:
-#endif
             mpuRegs[((addr & 0xFF) - 0x90) / 4] = data;
             return;
+
+        case CPU_MPU_RBAR_OFFSET:
+        {
+            int index = mpuRegs[2] & 7;
+            mpuBase[index] = data;
+            return;
+        }
+    
+#ifndef RP2350
+        case M0PLUS_MPU_RASR_OFFSET:
+        {
+            int index = mpuRegs[2] & 7;
+            mpuAttribSize[index] = data;
+            return;
+        }
+#endif
     }
 
     logf(LogLevel::NotImplemented, logComponent, "CPUI W %08X = %08X", addr, data);
