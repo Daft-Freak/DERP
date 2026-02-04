@@ -1887,7 +1887,87 @@ int ARMv6MCore::doTHUMB32BitLoadStoreMultiple(uint32_t opcode, uint32_t pc)
 
 int ARMv6MCore::doTHUMB32BitLoadStoreDualEx(uint32_t opcode, uint32_t pc)
 {
-    logf(LogLevel::Error, logComponent, "Unhandled load/store dual/exclusive opcode %08X @%08X", opcode, pc - 6);
+    auto op1 = (opcode >> 23) & 3;
+    auto op2 = (opcode >> 20) & 3;
+    auto op3 = (opcode >> 4) & 0xF;
+
+    auto baseReg = static_cast<Reg>((opcode >> 16) & 0xF);
+
+    if(op1 == 1 && op2 == 1)
+    {
+        if(!(op3 & 0b1110)) // TBB/TBH
+        {
+            assert((opcode & 0xFF00) == 0xF000);
+
+            auto indexReg = static_cast<Reg>(opcode & 0xF);
+
+            auto addr = loReg(baseReg);
+
+            if(baseReg == Reg::PC)
+                addr -= 2;
+
+            int cycles = pcSCycles;
+
+            int offset;
+            if(op3 & 1) // TBH
+                offset = readMem16(addr + loReg(indexReg) * 2, cycles);
+            else
+                offset = readMem8(addr + loReg(indexReg), cycles);
+
+            updateTHUMBPC((pc - 2) + offset * 2);
+
+            return cycles;
+        }
+
+    }
+    else if(((op1 & 2) || (op2 & 2)) && (op2 & 1) == 0) // STRD (immediate)
+    {
+        auto offset = (opcode & 0xFF) << 2;
+        auto dstReg = static_cast<Reg>((opcode >> 12) & 0xF);
+        auto dstReg2 = static_cast<Reg>((opcode >> 8) & 0xF);
+
+        bool writeback = opcode & (1 << 21);
+        bool add = opcode & (1 << 23);
+        bool index = opcode & (1 << 24);
+
+        uint32_t offsetAddr = add ? loReg(baseReg) + offset : loReg(baseReg) - offset;
+        uint32_t addr = index ? offsetAddr : loReg(baseReg);
+
+        int cycles = pcSCycles;
+
+        writeMem32(addr, loReg(dstReg), cycles);
+        writeMem32(addr + 4, loReg(dstReg2), cycles);
+
+        if(writeback)
+            loReg(baseReg) = offsetAddr;
+
+        return cycles;
+    }
+    else if(((op1 & 2) || (op2 & 2)) && (op2 & 1)) // LDRD (immediate)
+    {
+        auto offset = (opcode & 0xFF) << 2;
+        auto dstReg = static_cast<Reg>((opcode >> 12) & 0xF);
+        auto dstReg2 = static_cast<Reg>((opcode >> 8) & 0xF);
+
+        bool writeback = opcode & (1 << 21);
+        bool add = opcode & (1 << 23);
+        bool index = opcode & (1 << 24);
+
+        uint32_t offsetAddr = add ? loReg(baseReg) + offset : loReg(baseReg) - offset;
+        uint32_t addr = index ? offsetAddr : loReg(baseReg);
+
+        int cycles = pcSCycles;
+
+        loReg(dstReg) = readMem32(addr, cycles);
+        loReg(dstReg2) = readMem32(addr + 4, cycles);
+
+        if(writeback)
+            loReg(baseReg) = offsetAddr;
+
+        return cycles;
+    }
+
+    logf(LogLevel::Error, logComponent, "Unhandled load/store dual/exclusive opcode %08X (%X %X %X) @%08X", opcode, op1, op2, op3, pc - 6);
     fault("Undefined instruction");
     return pcSCycles;
 }
