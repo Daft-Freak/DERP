@@ -66,7 +66,13 @@ private:
         // control
         Flag_T = (1 << 24), // thumb
 
+        Flag_GE0 = (1 << 16),
+        Flag_GE1 = (1 << 17),
+        Flag_GE2 = (1 << 18),
+        Flag_GE3 = (1 << 19),
+
         // condition codes
+        Flag_Q = (1 << 27),
         Flag_V = (1 << 28),
         Flag_C = (1 << 29),
         Flag_Z = (1 << 30),
@@ -117,8 +123,17 @@ private:
     int doTHUMB1617(uint16_t opcode, uint32_t pc);
     int doTHUMB18UncondBranch(uint16_t opcode, uint32_t pc);
 
+    uint32_t getShiftedReg(uint32_t opcode, bool &carry);
+    int doDataProcessing(int op, Reg nReg, uint32_t op2, Reg dReg, bool carry, bool setFlags);
+
     int doTHUMB32BitInstruction(uint16_t opcode, uint32_t pc);
 
+    int doTHUMB32BitLoadStoreMultiple(uint32_t opcode, uint32_t pc);
+    int doTHUMB32BitLoadStoreDualEx(uint32_t opcode, uint32_t pc);
+    int doTHUMB32BitDataProcessingShiftedReg(uint32_t opcode, uint32_t pc);
+    int doTHUMB32BitCoprocessor(uint32_t opcode, uint32_t pc);
+    int doTHUMB32BitDataProcessingModifiedImm(uint32_t opcode, uint32_t pc);
+    int doTHUMB32BitDataProcessingPlainImm(uint32_t opcode, uint32_t pc);
     int doTHUMB32BitBranchMisc(uint32_t opcode, uint32_t pc);
 
     void updateTHUMBPC(uint32_t pc);
