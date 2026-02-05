@@ -19,6 +19,7 @@
 #include "hardware/structs/usb.h" // USB_DPRAM_SIZE
 
 #ifdef RP2350
+#include "hardware/regs/bootram.h"
 #include "hardware/regs/qmi.h" // TODO
 #else
 #include "hardware/regs/rtc.h" // TODO
@@ -217,6 +218,10 @@ void MemoryBus::reset()
     pwm.reset();
     timer.reset();
     watchdog.reset();
+
+#ifdef RP2350
+    bootramOnce[0] = bootramOnce[1] = 0;
+#endif
 
     dma.reset();
     usb.reset();
@@ -1191,6 +1196,9 @@ uint32_t MemoryBus::doAPBPeriphRead(ClockTarget &masterClock, uint32_t addr)
         {
             if(periphAddr < sizeof(bootRAM))
                 return bootRAM[periphAddr >> 2];
+            else if(periphAddr <= BOOTRAM_WRITE_ONCE1_OFFSET)
+                return bootramOnce[(periphAddr >> 2) & 1];
+
             break;
         }
 #else
@@ -1333,6 +1341,11 @@ void MemoryBus::doAPBPeriphWrite(ClockTarget &masterClock, uint32_t addr, T data
             if(periphAddr < sizeof(bootRAM))
             {
                 bootRAM[periphAddr >> 2] = data;
+                return;
+            }
+            else if(periphAddr <= BOOTRAM_WRITE_ONCE1_OFFSET)
+            {
+                bootramOnce[(periphAddr >> 2) & 1] |= data;
                 return;
             }
             break;

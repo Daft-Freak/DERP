@@ -178,6 +178,10 @@ private:
 
     Timer timer; // depends on watchdog
 
+#ifdef RP2350
+    uint32_t bootramOnce[2];
+#endif
+
     DMA dma;
 
     USB usb;
