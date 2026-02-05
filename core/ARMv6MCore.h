@@ -180,7 +180,12 @@ private:
     uint32_t scbRegs[10]; // ED00-ED24
     uint32_t mpuRegs[3]; // ED90-ED98
     uint32_t mpuBase[8];
-    uint32_t mpuAttribSize[8];
+    uint32_t mpuAttribSize[8]; // limit on 2350
+
+#ifdef RP2350
+    uint8_t sauRegion = 0; // EDD8
+    uint32_t sauBase[8]; // EDDC
+#endif
 
     MemoryBus &mem;
 };

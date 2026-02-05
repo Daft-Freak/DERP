@@ -275,15 +275,22 @@ uint32_t ARMv6MCore::readReg(uint32_t addr)
             return mpuRegs[((addr & 0xFF) - 0x90) / 4];
         case CPU_MPU_RBAR_OFFSET:
         {
-            int index = mpuRegs[2] & 7;
+            int index = mpuRegs[2];
             return mpuBase[index];
         }
-#ifndef RP2350
+#ifdef RP2350
+        case M33_MPU_RLAR_OFFSET:
+#else
         case M0PLUS_MPU_RASR_OFFSET:
+#endif
         {
-            int index = mpuRegs[2] & 7;
+            int index = mpuRegs[2];
             return mpuAttribSize[index];
         }
+
+#ifdef RP2350
+        case M33_SAU_RBAR_OFFSET:
+            return sauBase[sauRegion];
 #endif
     }
 
@@ -349,24 +356,61 @@ void ARMv6MCore::writeReg(uint32_t addr, uint32_t data)
 
         case CPU_MPU_TYPE_OFFSET:
         case CPU_MPU_CTRL_OFFSET:
-        case CPU_MPU_RNR_OFFSET:
             mpuRegs[((addr & 0xFF) - 0x90) / 4] = data;
+            return;
+        case CPU_MPU_RNR_OFFSET:
+            mpuRegs[2] = data & 7;
             return;
 
         case CPU_MPU_RBAR_OFFSET:
         {
-            int index = mpuRegs[2] & 7;
+            int index = mpuRegs[2];
             mpuBase[index] = data;
             return;
         }
     
-#ifndef RP2350
+#ifdef RP2350
+        case M33_MPU_RLAR_OFFSET:
+#else
         case M0PLUS_MPU_RASR_OFFSET:
+#endif
         {
-            int index = mpuRegs[2] & 7;
+            int index = mpuRegs[2];
+#ifdef RP2350
+            data &= ~(1 << 4);
+#endif
             mpuAttribSize[index] = data;
             return;
         }
+
+#ifdef RP2350
+        case M33_MPU_RBAR_A1_OFFSET:
+        case M33_MPU_RBAR_A2_OFFSET:
+        case M33_MPU_RBAR_A3_OFFSET:
+        {
+            // overwrite low bits
+            int index = (mpuRegs[2] & 4) + ((addr & 0xFF) - 0x9C) / 8;
+            mpuBase[index] = data;
+            return;
+        }
+        case M33_MPU_RLAR_A1_OFFSET:
+        case M33_MPU_RLAR_A2_OFFSET:
+        case M33_MPU_RLAR_A3_OFFSET:
+        {
+            // overwrite low bits
+            int index = (mpuRegs[2] & 4) + ((addr & 0xFF) - 0xA0) / 8;
+            mpuAttribSize[index] = data & ~(1 << 4);
+            return;
+        }
+
+        // SAU
+        case M33_SAU_RNR_OFFSET:
+            sauRegion = data;
+            return;
+
+        case M33_SAU_RBAR_OFFSET:
+            sauBase[sauRegion] = data & M33_SAU_RBAR_BADDR_BITS;
+            return;
 #endif
     }
 
