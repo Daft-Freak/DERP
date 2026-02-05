@@ -20,7 +20,9 @@
 
 #ifdef RP2350
 #include "hardware/regs/bootram.h"
+#include "hardware/regs/powman.h" // TODO
 #include "hardware/regs/qmi.h" // TODO
+#include "hardware/regs/trng.h" // TODO
 #else
 #include "hardware/regs/rtc.h" // TODO
 #include "hardware/regs/ssi.h" // TODO: move
@@ -1234,6 +1236,24 @@ uint32_t MemoryBus::doAPBPeriphRead(ClockTarget &masterClock, uint32_t addr)
             else if(periphAddr <= BOOTRAM_WRITE_ONCE1_OFFSET)
                 return bootramOnce[(periphAddr >> 2) & 1];
 
+            break;
+        }
+
+        case APBPeripheral::TRNG:
+        {
+            if(periphAddr >= TRNG_EHR_DATA0_OFFSET && periphAddr <= TRNG_EHR_DATA5_OFFSET)
+                return 0x0F1E2D3C; // very random
+            if(periphAddr == TRNG_TRNG_SW_RESET_OFFSET)
+                return 0;
+            if(periphAddr == TRNG_TRNG_BUSY_OFFSET)
+                return 0;
+            break;
+        }
+
+        case APBPeripheral::POWMAN:
+        {
+            if(periphAddr == POWMAN_CHIP_RESET_OFFSET)
+                return 0;
             break;
         }
 #else
