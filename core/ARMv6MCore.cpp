@@ -1082,6 +1082,21 @@ int ARMv6MCore::doTHUMBMisc(uint16_t opcode, uint32_t pc)
         case 0x0: // add/sub imm to SP
             return doTHUMB13SPOffset(opcode, pc);
 
+        case 0x1: // CBZ
+        case 0x3:
+        case 0x9: // CBNZ
+        case 0xB:
+        {
+            bool nz = opcode & (1 << 11);
+            int offset = (opcode & 0xF8) >> 2 | (opcode & (1 << 9)) >> 3;
+            auto src = loReg(static_cast<Reg>(opcode & 7));
+
+            if(!!src == nz)
+                updateTHUMBPC(pc + offset);
+
+            return pcSCycles;
+        }
+
         case 0x2:
         {
             auto src = loReg(static_cast<Reg>((opcode >> 3) & 7));
@@ -2329,8 +2344,10 @@ int ARMv6MCore::doTHUMB32BitBranchMisc(uint32_t opcode, uint32_t pc)
     auto op1 = (opcode >> 20) & 0x7F;
     auto op2 = (opcode >> 12) & 0x7;
 
-    if((op2 & 0b101) == 0b101) // BL
+    if(op2 & 1) // B/BL
     {
+        bool link = (op2 & 0b100);
+
         auto imm11 = opcode & 0x7FF;
         auto imm10 = (opcode >> 16) & 0x3FF;
 
@@ -2349,13 +2366,83 @@ int ARMv6MCore::doTHUMB32BitBranchMisc(uint32_t opcode, uint32_t pc)
         if(s)
             offset |= 0xFF000000; // sign extend
 
-        loReg(Reg::LR) = (pc - 2) | 1; // magic switch to thumb bit...
+        if(link)
+            loReg(Reg::LR) = (pc - 2) | 1; // magic switch to thumb bit...
         updateTHUMBPC((pc - 2) + offset);
 
         return pcNCycles + pcSCycles * 3;
     }
 
-    assert((op2 & 0b101) == 0);
+    assert((op2 & 0b100) == 0);
+
+    if((op1 & 0b111000) != 0b111000) // B
+    {
+        auto cond = (op1 >> 2) & 0xF;
+
+        auto imm11 = opcode & 0x7FF;
+        auto imm6 = (opcode >> 16) & 0x3F;
+
+        auto s = opcode & (1 << 26);
+        auto i1 = (opcode >> 13) & 1;
+        auto i2 = (opcode >> 11) & 1;
+
+        uint32_t offset = imm11 << 1 | imm6 << 12 | i2 << 18 | i1 << 19;
+
+        if(s)
+            offset |= 0xFFF00000; // sign extend
+
+        bool condVal = false;
+        switch(cond)
+        {
+            case 0x0: // BEQ
+                condVal = cpsr & Flag_Z;
+                break;
+            case 0x1: // BNE
+                condVal = !(cpsr & Flag_Z);
+                break;
+            case 0x2: // BCS
+                condVal = cpsr & Flag_C;
+                break;
+            case 0x3: // BCC
+                condVal = !(cpsr & Flag_C);
+                break;
+            case 0x4: // BMI
+                condVal = cpsr & Flag_N;
+                break;
+            case 0x5: // BPL
+                condVal = !(cpsr & Flag_N);
+                break;
+            case 0x6: // BVS
+                condVal = cpsr & Flag_V;
+                break;
+            case 0x7: // BVC
+                condVal = !(cpsr & Flag_V);
+                break;
+            case 0x8: // BHI
+                condVal = (cpsr & Flag_C) && !(cpsr & Flag_Z);
+                break;
+            case 0x9: // BLS
+                condVal = !(cpsr & Flag_C) || (cpsr & Flag_Z);
+                break;
+            case 0xA: // BGE
+                condVal = !!(cpsr & Flag_N) == !!(cpsr & Flag_V);
+                break;
+            case 0xB: // BLT
+                condVal = !!(cpsr & Flag_N) != !!(cpsr & Flag_V);
+                break;
+            case 0xC: // BGT
+                condVal = !(cpsr & Flag_Z) && !!(cpsr & Flag_N) == !!(cpsr & Flag_V);
+                break;
+            case 0xD: // BLE
+                condVal = (cpsr & Flag_Z) || !!(cpsr & Flag_N) != !!(cpsr & Flag_V);
+                break;
+        }
+
+        if(condVal)
+            updateTHUMBPC((pc - 2) + offset);
+
+        return pcSCycles;
+    }
 
     switch(op1)
     {
