@@ -156,6 +156,7 @@ private:
 
 #ifdef RP2350
     uint8_t sram[520 * 1024]; // first 512k pre-striped
+    uint32_t bootRAM[256];
 #else
     uint8_t sram[264 * 1024]; // first 256k pre-striped
 #endif

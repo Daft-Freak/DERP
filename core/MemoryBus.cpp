@@ -1171,8 +1171,14 @@ uint32_t MemoryBus::doAPBPeriphRead(ClockTarget &masterClock, uint32_t addr)
 
         case APBPeripheral::Watchdog:
             return watchdog.regRead(masterClock.getTime(), periphAddr);
-
-#ifndef RP2350
+#ifdef RP2350
+        case APBPeripheral::BootRAM:
+        {
+            if(periphAddr < sizeof(bootRAM))
+                return bootRAM[periphAddr >> 2];
+            break;
+        }
+#else
         case APBPeripheral::RTC:
             if(periphAddr == RTC_CTRL_OFFSET)
                 return rtcCtrl | (rtcCtrl & 1) << 1; // RTC_ACTIVE = RTC_ENABLE
@@ -1306,7 +1312,17 @@ void MemoryBus::doAPBPeriphWrite(ClockTarget &masterClock, uint32_t addr, T data
             watchdog.regWrite(masterClock.getTime(), periphAddr, data);
             return;
 
-#ifndef RP2350
+#ifdef RP2350
+        case APBPeripheral::BootRAM:
+        {
+            if(periphAddr < sizeof(bootRAM))
+            {
+                bootRAM[periphAddr >> 2] = data;
+                return;
+            }
+            break;
+        }
+#else
         case APBPeripheral::RTC:
             if(periphAddr == RTC_CTRL_OFFSET)
             {
