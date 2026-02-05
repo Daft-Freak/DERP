@@ -249,7 +249,9 @@ T MemoryBus::read(ClockedDevice *master, uint32_t addr, int &cycles)
             return doROMRead<T>(addr);
 
         case Region_XIP:
-#ifndef RP2350
+#ifdef RP2350
+        case Region_XIP_NoCNoANoT:
+#else
         case Region_XIP_NoAlloc: // TODO: implement the cache
         case Region_XIP_NoCache:
 #endif
@@ -319,7 +321,31 @@ void MemoryBus::write(ClockedDevice *master, uint32_t addr, T data, int &cycles)
         case Region_ROM:
             accessCycles(1);
             return;
-#ifndef RP2350 // TODO: the SRAM is at the end of the XIP region
+
+#ifdef RP2350
+        // the SRAM can be pinned, usually at the end of the XIP region
+        case Region_XIP + 3:
+        {
+            if(addr >= XIP_SRAM_BASE)
+            {
+                doWrite<T>(xipCache, addr, data);
+                return;
+            }
+            break;
+        }
+
+        case Region_XIP_Maint:
+        case Region_XIP_Maint + 1:
+        case Region_XIP_Maint + 2:
+        case Region_XIP_Maint + 3:
+        {
+            auto maintAddr = addr & 0x3FFFFF8;
+            auto op = addr & 7; 
+            accessCycles(1);
+            logf(LogLevel::NotImplemented, logComponent, "XIP maintenance op %i at %08X", op, maintAddr);
+            return;
+        }
+#else
         case Region_XIP_Ctrl:
             accessCycles(1);
             doXIPCtrlWrite<T>(addr, data);
@@ -1188,6 +1214,15 @@ uint32_t MemoryBus::doAPBPeriphRead(ClockTarget &masterClock, uint32_t addr)
 
         case APBPeripheral::Timer:
             return timer.regRead(masterClock.getTime(), periphAddr);
+
+#ifdef RP2350
+        case APBPeripheral::XIP_QMI:
+        {
+            if(periphAddr == QMI_DIRECT_CSR_OFFSET)
+                return QMI_DIRECT_CSR_RXEMPTY_BITS | QMI_DIRECT_CSR_TXEMPTY_BITS;
+            break;
+        }
+#endif
 
         case APBPeripheral::Watchdog:
             return watchdog.regRead(masterClock.getTime(), periphAddr);
