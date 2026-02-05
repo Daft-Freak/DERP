@@ -419,6 +419,13 @@ uint8_t *MemoryBus::mapAddress(uint32_t addr)
             break;
         }
 
+        case Region_APBPeriph:
+        {
+            if(addr >= BOOTRAM_BASE && addr < BOOTRAM_BASE + BOOTRAM_SIZE)
+                return reinterpret_cast<uint8_t *>(bootRAM) + (addr & 0x3FF);
+            break;
+        }
+
         case Region_AHBPeriph:
         {
             if(addr >= USBCTRL_DPRAM_BASE && addr < USBCTRL_DPRAM_BASE + USB_DPRAM_SIZE)
