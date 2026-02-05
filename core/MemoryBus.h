@@ -154,8 +154,11 @@ private:
     uint8_t qspiFlash[16 * 1024 * 1024]; // max
     uint8_t xipCache[16 * 1024];
 
+#ifdef RP2350
+    uint8_t sram[520 * 1024]; // first 512k pre-striped
+#else
     uint8_t sram[264 * 1024]; // first 256k pre-striped
-
+#endif
     uint32_t dummy = 0xBADADD55;
 
     ARMv6MCore *cpuCores = nullptr;
