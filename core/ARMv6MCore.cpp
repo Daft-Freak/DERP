@@ -2154,31 +2154,31 @@ int ARMv6MCore::doTHUMB32BitDataProcessingPlainImm(uint32_t opcode, uint32_t pc)
 
     switch(op)
     {
-        case 0x0:
+        case 0x0:// ADR/ADDW
         {
-            if(nReg == Reg::PC) // ADR
-            {}
-            else // ADDW
-            {
-                auto imm = ((opcode >> 15) & 0x800) | ((opcode >> 4) & 0x700) | (opcode & 0xFF);
+            auto imm = ((opcode >> 15) & 0x800) | ((opcode >> 4) & 0x700) | (opcode & 0xFF);
 
-                loReg(dstReg) = loReg(nReg) + imm;
-                return pcSCycles;
-            }
-            break;
+            auto v = loReg(nReg);
+
+            // align if ADR
+            if(nReg == Reg::PC)
+                v &= ~2;
+    
+            loReg(dstReg) = v + imm;
+            return pcSCycles;
         }
-        case 0x5:
+        case 0x5: // ADR/SUBW
         {
-            if(nReg == Reg::PC) // ADR
-            {}
-            else // SUBW
-            {
-                auto imm = ((opcode >> 15) & 0x800) | ((opcode >> 4) & 0x700) | (opcode & 0xFF);
+            auto imm = ((opcode >> 15) & 0x800) | ((opcode >> 4) & 0x700) | (opcode & 0xFF);
 
-                loReg(dstReg) = loReg(nReg) - imm;
-                return pcSCycles;
-            }
-            break;
+            auto v = loReg(nReg);
+
+            // align if ADR
+            if(nReg == Reg::PC)
+                v &= ~2;
+
+            loReg(dstReg) = v - imm;
+            return pcSCycles;
         }
         case 0x2: // MOVW
         {
