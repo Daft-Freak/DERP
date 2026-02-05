@@ -374,7 +374,11 @@ const uint8_t *MemoryBus::mapAddress(uint32_t addr) const
     switch(addr >> 24)
     {
         case Region_ROM:
+#ifdef RP2350
+            return bootROM ? bootROM + (addr & 0x7FFF) : nullptr;
+#else
             return bootROM ? bootROM + (addr & 0x3FFF) : nullptr;
+#endif
 
         case Region_XIP:
             return qspiFlash + (addr & 0xFFFFFF);
@@ -738,7 +742,11 @@ T MemoryBus::doROMRead(uint32_t addr) const
     if(!bootROM)
         return 0; 
 
+#ifdef RP2350
+    const size_t size = 0x8000;
+#else
     const size_t size = 0x4000;
+#endif
     return *reinterpret_cast<const T *>(bootROM + (addr & (size - 1)));
 }
 
