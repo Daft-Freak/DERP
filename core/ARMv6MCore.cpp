@@ -2206,10 +2206,13 @@ int ARMv6MCore::doTHUMB32BitDataProcessingShiftedReg(uint32_t opcode, uint32_t p
 
 int ARMv6MCore::doTHUMB32BitCoprocessor(uint32_t opcode, uint32_t pc)
 {
-    bool op = opcode & (1 << 4);
     auto coproc = (opcode >> 8) & 0xF;
-    auto op1 = (opcode >> 20) & 0x3F;
 
+    if(coproc == 7) // RCP
+        return doRCPOp(opcode, pc);
+
+    bool op = opcode & (1 << 4);
+    auto op1 = (opcode >> 20) & 0x3F;
     //if(coproc != 0xA && coproc != 0xB) // VFP
     {
         logf(LogLevel::Error, logComponent, "Unhandled coprocessor %X (opcode %08X) @%08X", coproc, opcode, pc - 6);
@@ -3149,6 +3152,110 @@ int ARMv6MCore::doTHUMB32BitDataProcessingReg(uint32_t opcode, uint32_t pc)
     }
 
     logf(LogLevel::Error, logComponent, "Unhandled dp reg opcode %08X (%X %X) @%08X", opcode, op1, op2, pc - 6);
+    fault("Undefined instruction");
+    return pcSCycles;
+}
+
+int ARMv6MCore::doRCPOp(uint32_t opcode, uint32_t pc)
+{
+    bool op0 = opcode & (1 << 25);
+    auto op1 = (opcode >> 21) & 0xF;
+    bool op2 = opcode & (1 << 4);
+
+    // really should implement some of these, but not doing so allows us to continue doing everything wrong
+    if(!op0)
+    {
+        if((op1 & 0x0b1101) == 0) // MCRR(2)/MRRC(2)
+        {
+            bool l = opcode & (1 << 20);
+            auto t2Reg = static_cast<Reg>((opcode >> 16) & 0xF);
+            auto tReg = static_cast<Reg>((opcode >> 12) & 0xF);
+            auto opc1 = (opcode >> 4) & 0xF;
+
+            if(l) // MRRC
+            {
+            }
+            else // MCRR
+            {
+                if(opc1 == 0) // rcp_b2valid
+                    return pcSCycles;
+                else if(opc1 == 2) // rcp_b2or
+                    return pcSCycles;
+                else if(opc1 == 3) // rcp_bxorvalid
+                    return pcSCycles;
+                else if(opc1 == 7) // rcp_iequal
+                {
+                    if(reg(tReg) != reg(t2Reg))
+                        logf(LogLevel::NotImplemented, logComponent, "rcp_iequal %08X %08X", reg(tReg), reg(t2Reg));
+                    return pcSCycles;
+                }
+            }
+        }
+        else // LDC(2)/STC(2)
+        {}
+    }
+    else if(!op2) // CDP(2)
+    {
+        bool is2 = opcode & (1 << 28);
+        auto opc1 = (opcode >> 20) & 0xF;
+        auto opc2 = (opcode >> 5) & 7;
+
+        auto nReg = (opcode >> 16) & 0xF;
+        auto dReg = (opcode >> 12) & 0xF;
+        auto mReg = opcode & 0xF;
+
+        logf(LogLevel::NotImplemented, logComponent, "RCP CDP%s %i %i %i %i %i", is2 ? "2" : "", opc1, dReg, nReg, mReg, opc2);
+    }
+    else // MCR(2)/MRC(2)
+    {
+        //bool is2 = opcode & (1 << 28); // 0 = random delay, 1 = no delay
+        auto opc1 = (opcode >> 21) & 7;
+        bool l = opcode & (1 << 20);
+        auto opc2 = (opcode >> 5) & 7;
+
+        if(l) // MRC
+        {
+            auto dReg = static_cast<Reg>((opcode >> 12) & 0xF);
+            if(opc1 == 0 && opc2 == 1) // rcp_canary_get
+            {
+                reg(dReg) = 0;
+                return pcSCycles;
+            }
+            else if(opc1 == 1 && opc2 == 0) // rcp_canary_status
+            {
+                // always return true
+                if(dReg == Reg::PC)
+                    cpsr |= Flag_N | Flag_C;
+                else
+                    reg(dReg) = 0xa500a500; // true
+
+                return pcSCycles;
+            }
+            else if(opc1 == 2 && opc2 == 0) // rcp_random_byte
+            {
+                reg(dReg) = 4; // random
+                return pcSCycles;
+            }
+        }
+        else // MCR
+        {
+            // value would be in the two reg fields
+            if(opc1 == 0 && opc2 == 1) // rcp_canary_check
+                return pcSCycles;
+            else if(opc1 == 1 && opc2 == 0) // rcp_bvalid
+                return pcSCycles;
+            else if(opc1 == 2 && opc2 == 0) // rcp_btrue
+                return pcSCycles;
+            else if(opc1 == 3 && opc2 == 1) // rcp_bfalse
+                return pcSCycles;
+            else if(opc1 == 4 && opc2 == 0) // rcp_count_set
+                return pcSCycles;
+            else if(opc1 == 5 && opc2 == 1) // rcp_count_check
+                return pcSCycles;
+        }
+    }
+
+    logf(LogLevel::Error, logComponent, "Unhandled RCP %i %X %i (opcode %08X) @%08X", op0, op1, op2, opcode, pc - 6);
     fault("Undefined instruction");
     return pcSCycles;
 }

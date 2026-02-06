@@ -161,6 +161,8 @@ private:
     int doTHUMB32BitStoreSingle(uint32_t opcode, uint32_t pc);
     int doTHUMB32BitDataProcessingReg(uint32_t opcode, uint32_t pc);
 
+    int doRCPOp(uint32_t opcode, uint32_t pc);
+
     void updateTHUMBPC(uint32_t pc);
 
     void updateCurSP();
