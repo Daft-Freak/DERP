@@ -1303,6 +1303,9 @@ int ARMv6MCore::doTHUMBMisc(uint16_t opcode, uint32_t pc)
                     case 4: // SEV
                         mem.sendEvent(this);
                         return pcSCycles;
+
+                    default: // anything reserved behaves as a NOP
+                        return pcSCycles;
                 }
             }
         }
