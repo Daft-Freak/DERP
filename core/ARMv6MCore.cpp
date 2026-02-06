@@ -2047,7 +2047,43 @@ int ARMv6MCore::doTHUMB32BitLoadStoreDualEx(uint32_t opcode, uint32_t pc)
 
     auto baseReg = static_cast<Reg>((opcode >> 16) & 0xF);
 
-    if(op1 == 1 && op2 == 1)
+    if(op1 == 0 && !(op2 & 2))
+    {
+        if(((opcode >> 12) & 0xF) == 0xF)
+        {
+            // TT/TTT/TTA/TTAT
+            bool t = opcode & (1 << 6); // unprivileged
+            bool a = opcode & (1 << 7); // alternate domain
+            auto dstReg = static_cast<Reg>((opcode >> 8) & 0xF);
+            auto nReg = static_cast<Reg>((opcode >> 16) & 0xF);
+
+            logf(LogLevel::NotImplemented, logComponent, "TT%s%s R%i R%i (%08X)", a ? "A" : "", t ? "T" : "", dstReg, nReg, reg(nReg));
+        
+            // trick bootrom into continuing
+            auto addr = reg(nReg);
+            reg(dstReg) = 2 << 24 /*IREGION*/
+                        | 1 << 23 /*IRVALID*/
+                        | 1 << 22 /*S*/
+                        | 1 << 19 /*RW*/
+                        | 1 << 18 /*R*/
+                        | 1 << 17 /*SRVALID*/
+                        | 7 <<  8 /*SREGION*/;
+
+            if(addr == 0x7FC1) // after MPU setup
+            {
+                reg(dstReg) |= 1 << 16 /*MRVALID*/
+                            |  3       /*MREGION*/;
+                reg(dstReg) &= ~(1 << 19);
+            }
+                        
+            return pcSCycles;
+        }
+        else
+        {
+            // exclusive
+        }
+    }
+    else if(op1 == 1 && op2 == 1)
     {
         if(!(op3 & 0b1110)) // TBB/TBH
         {
