@@ -158,6 +158,8 @@ private:
     int doTHUMB32BitDataProcessingModifiedImm(uint32_t opcode, uint32_t pc);
     int doTHUMB32BitDataProcessingPlainImm(uint32_t opcode, uint32_t pc);
     int doTHUMB32BitBranchMisc(uint32_t opcode, uint32_t pc);
+    int doTHUMB32BitStoreSingle(uint32_t opcode, uint32_t pc);
+    int doTHUMB32BitDataProcessingReg(uint32_t opcode, uint32_t pc);
 
     void updateTHUMBPC(uint32_t pc);
 
