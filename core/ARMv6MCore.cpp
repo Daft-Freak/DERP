@@ -2051,6 +2051,7 @@ int ARMv6MCore::doTHUMB32BitLoadStoreDualEx(uint32_t opcode, uint32_t pc)
     {
         if(((opcode >> 12) & 0xF) == 0xF)
         {
+#ifdef RP2350
             // TT/TTT/TTA/TTAT
             bool t = opcode & (1 << 6); // unprivileged
             bool a = opcode & (1 << 7); // alternate domain
@@ -2077,6 +2078,7 @@ int ARMv6MCore::doTHUMB32BitLoadStoreDualEx(uint32_t opcode, uint32_t pc)
             }
                         
             return pcSCycles;
+#endif
         }
         else
         {
@@ -2110,6 +2112,7 @@ int ARMv6MCore::doTHUMB32BitLoadStoreDualEx(uint32_t opcode, uint32_t pc)
         }
 
     }
+#ifdef RP2350
     else if((opcode & 0x1FFFFF) == 0x1FE97F) // SG
     {
         // assume we can do this
@@ -2122,6 +2125,7 @@ int ARMv6MCore::doTHUMB32BitLoadStoreDualEx(uint32_t opcode, uint32_t pc)
         }
         return pcSCycles;
     }
+#endif
     else if(((op1 & 2) || (op2 & 2)) && (op2 & 1) == 0) // STRD (immediate)
     {
         auto offset = (opcode & 0xFF) << 2;
