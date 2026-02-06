@@ -246,7 +246,14 @@ uint32_t ARMv6MCore::readReg(uint32_t addr)
         case CPU_SYST_CALIB_OFFSET:
             updateSysTick();
             return sysTickCalib;
-#ifndef RP2350 // FIXME: two of these
+#ifdef RP2350 // FIXME: two of these
+        case M33_NVIC_ISER0_OFFSET:
+        case M33_NVIC_ICER0_OFFSET:
+            return nvicEnabled;
+        case M33_NVIC_ISPR0_OFFSET:
+        case M33_NVIC_ICPR0_OFFSET:
+            return exceptionPending >> 16;
+#else
         case M0PLUS_NVIC_ISER_OFFSET:
         case M0PLUS_NVIC_ICER_OFFSET:
             return nvicEnabled;
@@ -324,7 +331,27 @@ void ARMv6MCore::writeReg(uint32_t addr, uint32_t data)
             sysTickCurrent = sysTickReload;
             return;
 
-#ifndef RP2350 // FIXME: two of these
+#ifdef RP2350
+        // FIXME: two of these
+        // will need to extend nvicEnabled
+        // also exceptionPending will only fit 0-47 (so no room for SPARE2-5...)
+        case M33_NVIC_ISER0_OFFSET:
+            nvicEnabled |= data;
+            checkPendingExceptions();
+            return;
+        case M33_NVIC_ICER0_OFFSET:
+            nvicEnabled &= ~data;
+            checkPendingExceptions();
+            return;
+        case M33_NVIC_ISPR0_OFFSET:
+            exceptionPending |= static_cast<uint64_t>(data) << 16;
+            checkPendingExceptions();
+            return;
+        case M33_NVIC_ICPR0_OFFSET:
+            exceptionPending &= ~(static_cast<uint64_t>(data) << 16);
+            checkPendingExceptions();
+            return;
+#else
         case M0PLUS_NVIC_ISER_OFFSET:
             nvicEnabled |= data;
             checkPendingExceptions();
