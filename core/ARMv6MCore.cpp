@@ -438,16 +438,12 @@ uint8_t ARMv6MCore::readMem8(uint32_t addr, int &cycles, bool sequential)
 
 uint16_t ARMv6MCore::readMem16(uint32_t addr, int &cycles, bool sequential)
 {
-    assert((addr & 1) == 0);
-
     return mem.read<uint16_t>(this, addr, cycles);
 }
 
 
 uint32_t ARMv6MCore::readMem32(uint32_t addr, int &cycles, bool sequential)
 {
-    assert((addr & 3) == 0);
-
     return mem.read<uint32_t>(this, addr, cycles);
 }
 
