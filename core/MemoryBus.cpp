@@ -456,12 +456,14 @@ uint8_t *MemoryBus::mapAddress(uint32_t addr)
             break;
         }
 
+#ifdef RP2350
         case Region_APBPeriph:
         {
             if(addr >= BOOTRAM_BASE && addr < BOOTRAM_BASE + BOOTRAM_SIZE)
                 return reinterpret_cast<uint8_t *>(bootRAM) + (addr & 0x3FF);
             break;
         }
+#endif
 
         case Region_AHBPeriph:
         {
