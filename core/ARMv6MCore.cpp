@@ -90,6 +90,12 @@ void ARMv6MCore::reset()
     sleeping = false;
     eventFlag = false;
 
+#ifdef RP2350
+    isSecure = true;
+    primaskNS = controlNS = 0;
+    vtorNS = 0;
+#endif
+
     clock.reset();
 
     exceptionActive = exceptionPending = 0;
@@ -162,7 +168,7 @@ void ARMv6MCore::update(uint64_t target)
         {
             // interrupts?
 
-            if(!(primask & 1) && needException)
+            if(!(getPrimask() & 1) && needException)
                 exec += handleException();
 
             clock.addCycles(exec);
@@ -182,7 +188,7 @@ void ARMv6MCore::update(uint64_t target)
 
             if(sleeping && curTime < target)
             {
-                if(!(primask & 1) && needException)
+                if(!(getPrimask() & 1) && needException)
                     exec = 1; // wake up for irq
                 else
                 {
@@ -291,6 +297,9 @@ uint32_t ARMv6MCore::readReg(uint32_t addr)
 #ifdef RP2350
         case M33_SAU_RBAR_OFFSET:
             return sauBase[sauRegion];
+
+        case 0x20000 | CPU_VTOR_OFFSET:
+            return vtorNS;
 #endif
     }
 
@@ -410,6 +419,11 @@ void ARMv6MCore::writeReg(uint32_t addr, uint32_t data)
 
         case M33_SAU_RBAR_OFFSET:
             sauBase[sauRegion] = data & M33_SAU_RBAR_BADDR_BITS;
+            return;
+
+        case 0x20000 | CPU_VTOR_OFFSET:
+            if(isSecure)
+                vtorNS = data;
             return;
 #endif
     }
@@ -905,14 +919,30 @@ int ARMv6MCore::doTHUMB05HiReg(uint16_t opcode, uint32_t pc)
             if(h1) // BLX
                 loReg(Reg::LR) = (pc - 2) | 1; 
 
-            assert(src & 1);
+#ifdef RP2350
+            bool ns = opcode & (1 << 2);
+#else
+            bool ns = false;
+#endif
+            assert(src & 1 || ns);
+
             int cycles = pcSCycles * 2 + pcNCycles;
 
             if(src >> 28 == 0xF)
                 cycles += handleExceptionReturn(src);
             else
-                updateTHUMBPC(src & ~1);
+            {
+#ifdef RP2350
+                if(ns && isSecure)
+                {
+                    isSecure = src & 1;
+                    updateCurSP();
+                    assert(!h1); // BLXNS
+                }
 
+#endif
+                updateTHUMBPC(src & ~1);
+            }
             return cycles;
         }
 
@@ -1173,10 +1203,10 @@ int ARMv6MCore::doTHUMBMisc(uint16_t opcode, uint32_t pc)
         case 0x6: // CPS
         {
             assert((opcode & 0xFFEF) == 0xB662);
-            bool isPrivileged = (cpsr & 0x3F) != 0 || !(control & (1 << 0));
+            bool isPrivileged = (cpsr & 0x3F) != 0 || !(getControl() & (1 << 0));
 
             if(isPrivileged)
-                primask = (opcode & (1 << 4)) ? 1 : 0;
+                getPrimask() = (opcode & (1 << 4)) ? 1 : 0;
 
             return pcSCycles;
         }
@@ -1999,6 +2029,18 @@ int ARMv6MCore::doTHUMB32BitLoadStoreDualEx(uint32_t opcode, uint32_t pc)
         }
 
     }
+    else if((opcode & 0x1FFFFF) == 0x1FE97F) // SG
+    {
+        // assume we can do this
+        if(!isSecure)
+        {
+            logf(LogLevel::Debug, logComponent, "SG -> S");
+            isSecure = true;
+            updateCurSP();
+            reg(Reg::LR) &= ~1;
+        }
+        return pcSCycles;
+    }
     else if(((op1 & 2) || (op2 & 2)) && (op2 & 1) == 0) // STRD (immediate)
     {
         auto offset = (opcode & 0xFF) << 2;
@@ -2495,7 +2537,7 @@ int ARMv6MCore::doTHUMB32BitBranchMisc(uint32_t opcode, uint32_t pc)
         {
             auto srcReg = static_cast<Reg>((opcode >> 16) & 0xF);
             auto sysm = opcode & 0xFF;
-            bool isPrivileged = (cpsr & 0x3F) != 0 || !(control & (1 << 0));
+            bool isPrivileged = (cpsr & 0x3F) != 0 || !(getControl() & (1 << 0));
 
             if((sysm >> 3) == 0)
             {
@@ -2531,13 +2573,27 @@ int ARMv6MCore::doTHUMB32BitBranchMisc(uint32_t opcode, uint32_t pc)
                 if(isPrivileged)
                 {
                     if(sysm == 0x10)
-                        primask = reg(srcReg) & 1;
+                        getPrimask() = reg(srcReg) & 1;
                     else if(sysm == 0x14 && (cpsr & 0x3F) == 0)
-                        control = reg(srcReg) & 3;
+                        getControl() = reg(srcReg) & 3;
                 }
                 return pcSCycles * 2 + 1;
             }
-
+#ifdef RP2350
+            // the other ones need updated for NS...
+            else if((sysm >> 3) == 0x11)
+            {
+                // write NS MSP/PSP
+                if(isPrivileged && isSecure)
+                {
+                    if(sysm == 0x88)
+                        loReg(Reg::MSP_NS) = reg(srcReg) & ~3;
+                    else if(sysm == 0x89)
+                        loReg(Reg::PSP_NS) = reg(srcReg) & ~3;
+                }
+                return pcSCycles * 2 + 1;
+            }
+#endif
             break;
         }
 
@@ -2590,12 +2646,24 @@ int ARMv6MCore::doTHUMB32BitBranchMisc(uint32_t opcode, uint32_t pc)
             {
                 // PRIMASK/CONTROL
                 if(sysm == 0x10)
-                    reg(dstReg) = primask & 1;
+                    reg(dstReg) = getPrimask() & 1;
                 else if(sysm == 0x14)
-                    reg(dstReg) = control & 3;
+                    reg(dstReg) = getControl() & 3;
 
                 return pcSCycles * 2 + 1;
             }
+#ifdef RP2350
+            else if((sysm >> 3) == 0x12)
+            {
+                // NS PRIMASK/CONTROL
+                if(sysm == 0x90)
+                    reg(dstReg) = primaskNS & 1;
+                else if(sysm == 0x94)
+                    reg(dstReg) = controlNS & 3;
+
+                return pcSCycles * 2 + 1;
+            }
+#endif
             break;
         }
     }
@@ -2651,6 +2719,25 @@ void ARMv6MCore::updateTHUMBPC(uint32_t pc)
     loReg(Reg::PC) = pc + 2; // pointing at last fetch
 }
 
+void ARMv6MCore::updateCurSP()
+{
+#ifdef RP2350
+    if(!isSecure)
+    {
+        if((cpsr & 0x3F) == 0 && controlNS & (1 << 1))
+            curSP = Reg::PSP_NS;
+        else
+            curSP = Reg::MSP_NS;
+        return;
+    }
+#endif
+
+    if((cpsr & 0x3F) == 0 && control & (1 << 1))
+        curSP = Reg::PSP;
+    else
+        curSP = Reg::MSP;
+}
+
 int ARMv6MCore::handleException()
 {
     // get cur priority
@@ -2702,7 +2789,7 @@ int ARMv6MCore::handleException()
 
     if(cpsr & 0x3F) // in handler
         loReg(Reg::LR) = 0xFFFFFFF1;
-    else if(control & (1 << 1)/*SPSEL*/)
+    else if(getControl() & (1 << 1)/*SPSEL*/)
         loReg(Reg::LR) = 0xFFFFFFFD;
     else
         loReg(Reg::LR) = 0xFFFFFFF9;
@@ -2719,7 +2806,12 @@ int ARMv6MCore::handleException()
     if(sleeping)
         sleeping = false;
 
+#ifdef RP2350
+    auto vtor = isSecure ? scbRegs[2] : vtorNS;
+#else
     auto vtor = scbRegs[2];
+#endif
+
     auto addr = readMem32(vtor + newException * 4, cycles);
 
     assert(addr & 1);
@@ -2733,7 +2825,21 @@ int ARMv6MCore::handleExceptionReturn(uint32_t excRet)
     assert((excRet & 0xFFFFFF0) == 0xFFFFFF0);
 
     int exception = cpsr & 0x3F;
+
+    // figure out which stack to use
+#ifdef RP2350
+    Reg spReg;
+
+    if(isSecure)
+        spReg = (excRet & 0xF) == 0xD ? Reg::PSP : Reg::MSP;
+    else
+        spReg = (excRet & 0xF) == 0xD ? Reg::PSP_NS : Reg::MSP_NS;
+
+    auto &sp = loReg(spReg);
+
+#else
     auto &sp = loReg((excRet & 0xF) == 0xD ? Reg::PSP : Reg::MSP);
+#endif
 
     exceptionActive &= ~(1ull << exception);
 

@@ -54,6 +54,10 @@ private:
         // the other SP
         PSP,
 
+        // non secure
+        MSP_NS,
+        PSP_NS,
+
         // aliases
         SP = R13,
         MSP = SP,
@@ -81,14 +85,33 @@ private:
 
     Reg mapReg(Reg r) const
     {
-        if(r == Reg::SP && (cpsr & 0x3F) == 0 && control & (1 << 1))
-            return Reg::PSP;
-
+        if(r == Reg::SP)
+        {
+#ifdef RP2350
+            if(!isSecure)
+            {
+                if((cpsr & 0x3F) == 0 && controlNS & (1 << 1))
+                    return Reg::PSP_NS;
+                else
+                    return Reg::MSP_NS;
+            }
+#endif
+            if((cpsr & 0x3F) == 0 && control & (1 << 1))
+                return Reg::PSP;
+        }
         return r;
     }
 
     uint32_t reg(Reg r) const {return regs[static_cast<int>(mapReg(r))];}
     uint32_t &reg(Reg r) {return regs[static_cast<int>(mapReg(r))];}
+
+#ifdef RP2350
+    uint32_t &getControl() {return isSecure ? control : controlNS;}
+    uint32_t &getPrimask() {return isSecure ? primask : primaskNS;}
+#else
+    uint32_t &getControl() {return control;}
+    uint32_t &getPrimask() {return primask;}
+#endif
 
     // THUMB, first 8 regs, also used when we don't want to map
     uint32_t loReg(Reg r) const {return regs[static_cast<int>(r)];}
@@ -138,6 +161,8 @@ private:
 
     void updateTHUMBPC(uint32_t pc);
 
+    void updateCurSP();
+
     int handleException();
     int handleExceptionReturn(uint32_t excRet);
     int getExceptionPriority(int exception) const;
@@ -148,9 +173,10 @@ private:
     static const uint32_t signBit = 0x80000000;
 
     // registers
-    uint32_t regs[17]{};
+    uint32_t regs[19]{};
     uint32_t cpsr;
     uint32_t primask, control;
+    uint32_t primaskNS, controlNS;
 
     Reg curSP = Reg::SP;
 
@@ -162,6 +188,10 @@ private:
 
     // internal state
     bool sleeping, eventFlag;
+
+#ifdef RP2350
+    bool isSecure;
+#endif
 
     // exceptions
     uint64_t exceptionPending, exceptionActive;
@@ -185,6 +215,8 @@ private:
 #ifdef RP2350
     uint8_t sauRegion = 0; // EDD8
     uint32_t sauBase[8]; // EDDC
+
+    uint32_t vtorNS;
 #endif
 
     MemoryBus &mem;
